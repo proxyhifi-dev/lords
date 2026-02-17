@@ -20,9 +20,46 @@ class FyersAPIError(RuntimeError):
 
 
 class FyersClient:
+    """
+    Unified FYERS v3 Client
+
+    • Uses TRADING URL for:
+        - profile
+        - funds
+        - orders
+        - positions
+
+    • Uses DATA URL for:
+        - history
+        - quotes
+        - option chain
+    """
+
     def __init__(self, auth_service: Any) -> None:
         self.settings = get_settings()
         self.auth = auth_service
+
+    # ------------------------------------------------------------
+    # URL Router
+    # ------------------------------------------------------------
+
+    def _resolve_base_url(self, endpoint: str) -> str:
+        """
+        Automatically select correct base URL.
+        """
+
+        endpoint = endpoint.lstrip("/")
+
+        # Data APIs
+        if endpoint.startswith(("history", "quotes", "options")):
+            return str(self.settings.fyers_data_url).rstrip("/")
+
+        # Trading APIs
+        return str(self.settings.fyers_trading_url).rstrip("/")
+
+    # ------------------------------------------------------------
+    # Request Wrapper
+    # ------------------------------------------------------------
 
     async def request(
         self,
@@ -32,10 +69,13 @@ class FyersClient:
         params: dict[str, Any] | None = None,
         data: dict[str, Any] | list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+
         if not self.auth.access_token:
             raise FyersAPIError("Access token missing. Complete login first.")
 
-        url = f"{str(self.settings.fyers_base_url).rstrip('/')}/{endpoint.lstrip('/')}"
+        base_url = self._resolve_base_url(endpoint)
+        url = f"{base_url}/{endpoint.lstrip('/')}"
+
         headers = {
             "Authorization": f"{self.settings.fyers_app_id}:{self.auth.access_token}",
             "Content-Type": "application/json",
@@ -52,11 +92,16 @@ class FyersClient:
 
         try:
             payload = response.json()
-        except ValueError as exc:
+        except ValueError:
+            logger.error(
+                "Non-JSON FYERS response (status %s): %s",
+                response.status_code,
+                response.text[:300],
+            )
             raise FyersAPIError(
                 f"Non-JSON FYERS response: {response.text[:200]}",
                 status_code=response.status_code,
-            ) from exc
+            )
 
         if response.status_code >= 400:
             raise FyersAPIError(
@@ -67,7 +112,7 @@ class FyersClient:
 
         if payload.get("s") == "error":
             raise FyersAPIError(
-                payload.get("message", "FYERS returned an error"),
+                payload.get("message", "FYERS returned error"),
                 status_code=response.status_code,
                 code=payload.get("code"),
             )
