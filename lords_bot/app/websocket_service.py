@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 
 import websockets
 
-from app.auth import AuthService
+from lords_bot.app.auth import AuthService
 
 logger = logging.getLogger(__name__)
 
