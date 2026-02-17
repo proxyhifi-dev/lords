@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException
 
-from app.account_service import AccountService
-from app.auth import AuthService
-from app.fyers_client import FyersAPIError, FyersClient
-from app.order_service import OrderService
-from app.schemas import OrderRequest
+from lords_bot.app.account_service import AccountService
+from lords_bot.app.auth import AuthService
+from lords_bot.app.fyers_client import FyersAPIError, FyersClient
+from lords_bot.app.order_service import OrderService
+from lords_bot.app.schemas import OrderRequest
 
 app = FastAPI(title="Lords FYERS Bot", version="1.0.0")
 auth_service = AuthService()
@@ -16,7 +16,8 @@ order_service = OrderService(client)
 @app.post("/auth/validate")
 async def validate(auth_code: str) -> dict:
     tokens = await auth_service.validate_auth_code(auth_code)
-    return {"status": "ok", "access_token": tokens.access_token[:8] + "..."}
+    token = str(tokens.get("access_token", ""))
+    return {"status": "ok", "access_token": token[:8] + "..." if token else ""}
 
 
 @app.get("/account/profile")

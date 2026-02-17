@@ -2,7 +2,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from app.config import get_settings
+from lords_bot.app.config import get_settings
 
 
 def configure_logging() -> None:

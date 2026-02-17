@@ -1,4 +1,4 @@
-from app.fyers_client import FyersClient
+from lords_bot.app.fyers_client import FyersClient
 
 
 class AccountService:

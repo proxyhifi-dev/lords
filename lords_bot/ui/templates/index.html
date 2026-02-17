@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lords Bot</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; background: #f5f6f8; color: #222; }
+    .card { background: #fff; border-radius: 10px; padding: 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    button { padding: 10px 14px; margin-right: 10px; border: 0; border-radius: 6px; cursor: pointer; }
+    .primary { background: #2b65d9; color: #fff; }
+    .success { background: #177a3f; color: #fff; }
+    pre { background: #1f2937; color: #e5e7eb; padding: 12px; border-radius: 8px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>Lords ORB Bot</h1>
+
+  <div class="card">
+    <h3>Account</h3>
+    <p><strong>Mode:</strong> {{ mode }}</p>
+    <p><strong>Capital:</strong> {{ '%.2f'|format(capital) }}</p>
+    <p><strong>Total PnL:</strong> {{ '%.2f'|format(pnl) }}</p>
+  </div>
+
+  <div class="card">
+    <button class="primary" onclick="scanMarket()">Scan</button>
+    <button class="success" onclick="approveTrade()">Approve Trade</button>
+    <button onclick="monitorTrade()">Monitor</button>
+    <button onclick="location.reload()">Refresh</button>
+    <button onclick="resetDay()">Reset Daily State</button>
+  </div>
+
+  <div class="card">
+    <h3>Signal</h3>
+    <pre id="signalBox">{{ signal | tojson(indent=2) if signal else 'No signal yet' }}</pre>
+  </div>
+
+  <div class="card">
+    <h3>Active Trade</h3>
+    <pre id="tradeBox">{{ trade | tojson(indent=2) if trade else 'No active trade' }}</pre>
+  </div>
+
+  <div class="card">
+    <h3>Monitor Result</h3>
+    <pre id="monitorBox">{{ monitor_result | tojson(indent=2) if monitor_result else 'Not started' }}</pre>
+  </div>
+
+  <script>
+    async function scanMarket() {
+      const res = await fetch('/scan', { method: 'POST' });
+      const data = await res.json();
+      document.getElementById('signalBox').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function approveTrade() {
+      const res = await fetch('/approve', { method: 'POST' });
+      const data = await res.json();
+      document.getElementById('tradeBox').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function monitorTrade() {
+      const res = await fetch('/monitor');
+      const data = await res.json();
+      document.getElementById('monitorBox').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function resetDay() {
+      await fetch('/reset-day', { method: 'POST' });
+      location.reload();
+    }
+  </script>
+</body>
+</html>
