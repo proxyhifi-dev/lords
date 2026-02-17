@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 
 from app.account_service import AccountService
 from app.auth import AuthService
@@ -13,28 +12,40 @@ async def bootstrap() -> None:
     configure_logging()
     logger = logging.getLogger("lords_bot")
 
-    auth_code = os.getenv("FYERS_AUTH_CODE")
-    if not auth_code:
-        raise RuntimeError("Set FYERS_AUTH_CODE in environment for first-time login.")
+    logger.info("Starting Lords Bot...")
 
+    # -------------------------
+    # Autonomous Login System
+    # -------------------------
     auth = AuthService()
-    await auth.validate_auth_code(auth_code)
+    await auth.auto_login()
 
+    logger.info("Authentication successful")
+
+    # -------------------------
+    # Initialize Client
+    # -------------------------
     client = FyersClient(auth)
     account_service = AccountService(client)
     order_service = OrderService(client)
 
+    # -------------------------
+    # Fetch Account Data
+    # -------------------------
     profile = await account_service.get_profile()
     funds = await account_service.get_funds()
 
     logger.info("Profile response: %s", profile)
     logger.info("Funds response: %s", funds)
 
+    # -------------------------
+    # Sample Order Template
+    # -------------------------
     sample_order = {
         "symbol": "NSE:SBIN-EQ",
         "qty": 1,
-        "type": 2,
-        "side": 1,
+        "type": 2,  # Market Order
+        "side": 1,  # Buy
         "productType": "INTRADAY",
         "limitPrice": 0,
         "stopPrice": 0,
@@ -43,14 +54,17 @@ async def bootstrap() -> None:
         "offlineOrder": False,
         "stopLoss": 0,
         "takeProfit": 0,
-        "orderTag": "lords-bot",
+        "orderTag": "lordsbot",
+        "isSliceOrder": False,
     }
 
-    # Uncomment after validating credentials and live trading restrictions.
+    logger.info("Sample order prepared but not executed.")
+
+    # Uncomment only when ready for live trading
     # order_response = await order_service.place_order(sample_order)
     # logger.info("Order response: %s", order_response)
-    _ = order_service
-    _ = sample_order
+
+    logger.info("Lords Bot initialized successfully.")
 
 
 if __name__ == "__main__":
