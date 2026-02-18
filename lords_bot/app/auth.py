@@ -28,9 +28,12 @@ class AuthService:
         raw = f"{self.settings.fyers_app_id}:{self.settings.fyers_secret}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+    def _auth_base_url(self) -> str:
+        return str(getattr(self.settings, "fyers_auth_url", "https://api-t1.fyers.in/api/v3")).rstrip("/")
+
     def _login_url(self) -> str:
         return (
-            "https://api-t1.fyers.in/api/v3/generate-authcode"
+            f"{self._auth_base_url()}/generate-authcode"
             f"?client_id={self.settings.fyers_app_id}"
             f"&redirect_uri={self.settings.fyers_redirect_uri}"
             "&response_type=code"
@@ -40,24 +43,70 @@ class AuthService:
     async def validate_auth_code(self, auth_code: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
-                "https://api-t1.fyers.in/api/v3/validate-authcode",
-                json={
-                    "grant_type": "authorization_code",
-                    "appIdHash": self._app_id_hash(),
-                    "code": auth_code,
-                },
+                f"{self._auth_base_url()}/validate-authcode",
+                json={"grant_type": "authorization_code", "appIdHash": self._app_id_hash(), "code": auth_code},
             )
 
-        payload = response.json()
+        payload = response.json() if "application/json" in response.headers.get("content-type", "") else {}
         if response.status_code >= 400 or payload.get("s") == "error":
-            message = payload.get("message", "validate-authcode failed")
-            raise RuntimeError(message)
+            raise RuntimeError(payload.get("message", "validate-authcode failed"))
 
         self.access_token = payload["access_token"]
         self.refresh_token = payload.get("refresh_token")
         TokenStore.save(payload)
         logger.info("FYERS access token generated and stored.")
         return payload
+
+    async def _attempt_refresh(self, client: httpx.AsyncClient, endpoint: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """Try one refresh endpoint/payload combo; return payload on success, else None."""
+        url = f"{self._auth_base_url()}/{endpoint.lstrip('/')}"
+        response = await client.post(url, json=payload)
+        if response.status_code == 404:
+            logger.debug("Refresh endpoint not found: %s", url)
+            return None
+        body = response.json() if "application/json" in response.headers.get("content-type", "") else {}
+        if response.status_code >= 400 or body.get("s") == "error":
+            logger.debug("Refresh attempt failed at %s: status=%s message=%s", url, response.status_code, body.get("message"))
+            return None
+        return body
+
+    async def refresh_access_token(self) -> dict[str, Any]:
+        """Refresh token safely with lock; supports FYERS endpoint variations."""
+        async with self._refresh_lock:
+            if not self.refresh_token:
+                cached = TokenStore.load() or {}
+                self.refresh_token = cached.get("refresh_token")
+            if not self.refresh_token:
+                raise RuntimeError("Refresh token unavailable; complete login flow")
+
+            # FYERS deployments vary by route; try common variants in order.
+            candidates: list[tuple[str, dict[str, Any]]] = [
+                ("validate-refresh-token", {"grant_type": "refresh_token", "appIdHash": self._app_id_hash(), "refresh_token": self.refresh_token}),
+                ("token", {"grant_type": "refresh_token", "appIdHash": self._app_id_hash(), "refresh_token": self.refresh_token}),
+                ("token/refresh", {"grant_type": "refresh_token", "refresh_token": self.refresh_token}),
+            ]
+
+            async with httpx.AsyncClient(timeout=30) as client:
+                refreshed: dict[str, Any] | None = None
+                for endpoint, payload in candidates:
+                    try:
+                        refreshed = await self._attempt_refresh(client, endpoint, payload)
+                    except httpx.HTTPError as exc:
+                        logger.debug("Refresh transport failure on %s: %s", endpoint, exc)
+                        continue
+                    if refreshed:
+                        break
+
+            if not refreshed:
+                raise RuntimeError("token refresh failed")
+
+            self.access_token = refreshed.get("access_token")
+            self.refresh_token = refreshed.get("refresh_token", self.refresh_token)
+            if not self.access_token:
+                raise RuntimeError("Refresh response missing access_token")
+            TokenStore.save({"access_token": self.access_token, "refresh_token": self.refresh_token})
+            logger.info("FYERS token refreshed.")
+            return refreshed
 
     async def auto_login(self) -> None:
         token_data = TokenStore.load()
@@ -67,6 +116,14 @@ class AuthService:
             if self.access_token:
                 logger.info("Using cached FYERS access token.")
                 return
+
+        if token_data and token_data.get("refresh_token"):
+            self.refresh_token = token_data.get("refresh_token")
+            try:
+                await self.refresh_access_token()
+                return
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Cached refresh failed, falling back to auth-code login: %s", exc)
 
         logger.info("No valid token found; starting FYERS auth-code login flow.")
         auth_code = await self._capture_auth_code()
@@ -80,7 +137,6 @@ class AuthService:
         async def callback(request: Request) -> dict[str, str]:
             auth_code = request.query_params.get("auth_code")
             if not auth_code:
-                # Some setups return a full redirect URI in one query param.
                 redirect_uri = request.query_params.get("redirect")
                 if redirect_uri:
                     auth_code = parse_qs(urlparse(redirect_uri).query).get("auth_code", [None])[0]
