@@ -28,9 +28,12 @@ class AuthService:
         raw = f"{self.settings.fyers_app_id}:{self.settings.fyers_secret}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+    def _auth_base_url(self) -> str:
+        return str(getattr(self.settings, "fyers_auth_url", "https://api-t1.fyers.in/api/v3")).rstrip("/")
+
     def _login_url(self) -> str:
         return (
-            "https://api-t1.fyers.in/api/v3/generate-authcode"
+            f"{self._auth_base_url()}/generate-authcode"
             f"?client_id={self.settings.fyers_app_id}"
             f"&redirect_uri={self.settings.fyers_redirect_uri}"
             "&response_type=code"
@@ -40,11 +43,12 @@ class AuthService:
     async def validate_auth_code(self, auth_code: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
+                f"{self._auth_base_url()}/validate-authcode",
                 "https://api-t1.fyers.in/api/v3/validate-authcode",
                 json={"grant_type": "authorization_code", "appIdHash": self._app_id_hash(), "code": auth_code},
             )
 
-        payload = response.json()
+        payload = response.json() if "application/json" in response.headers.get("content-type", "") else {}
         if response.status_code >= 400 or payload.get("s") == "error":
             raise RuntimeError(payload.get("message", "validate-authcode failed"))
 
@@ -79,6 +83,7 @@ class AuthService:
                 raise RuntimeError("Refresh response missing access_token")
             TokenStore.save({"access_token": self.access_token, "refresh_token": self.refresh_token})
             logger.info("FYERS token refreshed.")
+            return refreshed
             return payload
 
     async def auto_login(self) -> None:
