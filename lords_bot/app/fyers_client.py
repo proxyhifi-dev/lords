@@ -129,11 +129,21 @@ class FyersClient:
             )
 
     async def _refresh_token(self) -> None:
-        """Refresh expired token once; raises if auth service cannot refresh."""
-        if not hasattr(self.auth, "refresh_access_token"):
-            raise FyersAPIError("Auth service does not support token refresh")
-        await self.auth.refresh_access_token()
-        api_logger.info("Access token refreshed after 401.")
+        """Refresh expired token once; fallback to auto_login if refresh is invalid."""
+        if hasattr(self.auth, "refresh_access_token"):
+            try:
+                await self.auth.refresh_access_token()
+                api_logger.info("Access token refreshed after 401.")
+                return
+            except Exception as exc:  # noqa: BLE001
+                api_logger.warning("Refresh after 401 failed: %s", exc)
+
+        if hasattr(self.auth, "auto_login"):
+            await self.auth.auto_login()
+            api_logger.info("Access token restored via auto_login after 401.")
+            return
+
+        raise FyersAPIError("Auth service could not restore token", status_code=401)
 
     @staticmethod
     def _safe_parse_json(response: httpx.Response) -> dict[str, Any]:

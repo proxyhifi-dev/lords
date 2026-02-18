@@ -23,21 +23,7 @@ class Settings(BaseSettings):
     fyers_base_url: AnyHttpUrl = Field(default="https://api-t1.fyers.in/api/v3", alias="FYERS_BASE_URL")
     fyers_data_url: AnyHttpUrl = Field(default="https://api.fyers.in/data-rest/v3", alias="FYERS_DATA_URL")
 
-    # Websocket defaults used by websocket_service and docs.
-    fyers_data_ws_url: str = Field(default="wss://api.fyers.in/socket/v2/data/", alias="FYERS_DATA_WS_URL")
-    fyers_order_ws_url: str = Field(default="wss://api.fyers.in/socket/v2/order/", alias="FYERS_ORDER_WS_URL")
-    fyers_position_ws_url: str = Field(default="wss://api.fyers.in/socket/v2/position/", alias="FYERS_POSITION_WS_URL")
-    fyers_trade_ws_url: str = Field(default="wss://api.fyers.in/socket/v2/trade/", alias="FYERS_TRADE_WS_URL")
-
-    fyers_ws_ssl_verify: bool = Field(default=True, alias="FYERS_WS_SSL_VERIFY")
-    fyers_ws_stop_on_ssl_error: bool = Field(default=False, alias="FYERS_WS_STOP_ON_SSL_ERROR")
-    fyers_ws_max_retry_delay: float = Field(default=60.0, alias="FYERS_WS_MAX_RETRY_DELAY")
-
-    # Explicit split between trade vs market-data REST hosts.
-    fyers_base_url: AnyHttpUrl = Field(default="https://api-t1.fyers.in/api/v3", alias="FYERS_BASE_URL")
-    fyers_data_url: AnyHttpUrl = Field(default="https://api.fyers.in/data-rest/v3", alias="FYERS_DATA_URL")
-
-    # Websocket defaults used by websocket_service and docs.
+    # Websocket defaults used by websocket_service.
     fyers_data_ws_url: str = Field(default="wss://api.fyers.in/socket/v2/data/", alias="FYERS_DATA_WS_URL")
     fyers_order_ws_url: str = Field(default="wss://api.fyers.in/socket/v2/order/", alias="FYERS_ORDER_WS_URL")
     fyers_position_ws_url: str = Field(default="wss://api.fyers.in/socket/v2/position/", alias="FYERS_POSITION_WS_URL")
@@ -58,6 +44,10 @@ class Settings(BaseSettings):
     api_failure_threshold: int = Field(default=5, alias="API_FAILURE_THRESHOLD")
     api_failure_window_seconds: int = Field(default=60, alias="API_FAILURE_WINDOW_SECONDS")
     api_pause_seconds: int = Field(default=120, alias="API_PAUSE_SECONDS")
+
+    max_trades_per_day: int = Field(default=3, alias="MAX_TRADES_PER_DAY")
+    daily_max_loss: float = Field(default=2500.0, alias="DAILY_MAX_LOSS")
+    max_risk_pct_per_trade: float = Field(default=1.0, alias="MAX_RISK_PCT_PER_TRADE")
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

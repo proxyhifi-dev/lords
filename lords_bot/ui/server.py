@@ -33,16 +33,24 @@ def _safe_context(request: Request, risk_engine: RiskEngine, signal: dict[str, A
     }
 
 
-def create_ui_app(client, order_service, trading_mode: str) -> FastAPI:
+def create_ui_app(
+    client,
+    order_service,
+    trading_mode: str,
+    *,
+    strategy: ORBStrategy | None = None,
+    risk_engine: RiskEngine | None = None,
+) -> FastAPI:
     app = FastAPI(title="Lords Bot UI")
     templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
-    strategy = ORBStrategy(client)
+    strategy = strategy or ORBStrategy(client)
     selector = OptionSelector(client)
-    risk_engine = RiskEngine(client, order_service, trading_mode)
+    risk_engine = risk_engine or RiskEngine(client, order_service, trading_mode)
 
     app.state.signal = None
     app.state.strategy = strategy
+    app.state.risk_engine = risk_engine
 
     @app.on_event("startup")
     async def startup_reconcile() -> None:
