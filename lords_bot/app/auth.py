@@ -44,6 +44,7 @@ class AuthService:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 f"{self._auth_base_url()}/validate-authcode",
+                "https://api-t1.fyers.in/api/v3/validate-authcode",
                 json={"grant_type": "authorization_code", "appIdHash": self._app_id_hash(), "code": auth_code},
             )
 
@@ -57,21 +58,8 @@ class AuthService:
         logger.info("FYERS access token generated and stored.")
         return payload
 
-    async def _attempt_refresh(self, client: httpx.AsyncClient, endpoint: str, payload: dict[str, Any]) -> dict[str, Any] | None:
-        """Try one refresh endpoint/payload combo; return payload on success, else None."""
-        url = f"{self._auth_base_url()}/{endpoint.lstrip('/')}"
-        response = await client.post(url, json=payload)
-        if response.status_code == 404:
-            logger.debug("Refresh endpoint not found: %s", url)
-            return None
-        body = response.json() if "application/json" in response.headers.get("content-type", "") else {}
-        if response.status_code >= 400 or body.get("s") == "error":
-            logger.debug("Refresh attempt failed at %s: status=%s message=%s", url, response.status_code, body.get("message"))
-            return None
-        return body
-
     async def refresh_access_token(self) -> dict[str, Any]:
-        """Refresh token safely with lock; supports FYERS endpoint variations."""
+        """Refresh token safely with lock; avoids parallel refresh storms from concurrent 401s."""
         async with self._refresh_lock:
             if not self.refresh_token:
                 cached = TokenStore.load() or {}
@@ -79,34 +67,24 @@ class AuthService:
             if not self.refresh_token:
                 raise RuntimeError("Refresh token unavailable; complete login flow")
 
-            # FYERS deployments vary by route; try common variants in order.
-            candidates: list[tuple[str, dict[str, Any]]] = [
-                ("validate-refresh-token", {"grant_type": "refresh_token", "appIdHash": self._app_id_hash(), "refresh_token": self.refresh_token}),
-                ("token", {"grant_type": "refresh_token", "appIdHash": self._app_id_hash(), "refresh_token": self.refresh_token}),
-                ("token/refresh", {"grant_type": "refresh_token", "refresh_token": self.refresh_token}),
-            ]
-
             async with httpx.AsyncClient(timeout=30) as client:
-                refreshed: dict[str, Any] | None = None
-                for endpoint, payload in candidates:
-                    try:
-                        refreshed = await self._attempt_refresh(client, endpoint, payload)
-                    except httpx.HTTPError as exc:
-                        logger.debug("Refresh transport failure on %s: %s", endpoint, exc)
-                        continue
-                    if refreshed:
-                        break
+                response = await client.post(
+                    "https://api-t1.fyers.in/api/v3/token/refresh",
+                    json={"grant_type": "refresh_token", "refresh_token": self.refresh_token},
+                )
+            payload = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+            if response.status_code >= 400 or payload.get("s") == "error":
+                raise RuntimeError(payload.get("message", "token refresh failed"))
 
-            if not refreshed:
-                raise RuntimeError("token refresh failed")
-
-            self.access_token = refreshed.get("access_token")
-            self.refresh_token = refreshed.get("refresh_token", self.refresh_token)
+            # refresh endpoint may or may not rotate refresh token.
+            self.access_token = payload.get("access_token")
+            self.refresh_token = payload.get("refresh_token", self.refresh_token)
             if not self.access_token:
                 raise RuntimeError("Refresh response missing access_token")
             TokenStore.save({"access_token": self.access_token, "refresh_token": self.refresh_token})
             logger.info("FYERS token refreshed.")
             return refreshed
+            return payload
 
     async def auto_login(self) -> None:
         token_data = TokenStore.load()

@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     fyers_ws_stop_on_ssl_error: bool = Field(default=False, alias="FYERS_WS_STOP_ON_SSL_ERROR")
     fyers_ws_max_retry_delay: float = Field(default=60.0, alias="FYERS_WS_MAX_RETRY_DELAY")
 
+    # Explicit split between trade vs market-data REST hosts.
+    fyers_base_url: AnyHttpUrl = Field(default="https://api-t1.fyers.in/api/v3", alias="FYERS_BASE_URL")
+    fyers_data_url: AnyHttpUrl = Field(default="https://api.fyers.in/data-rest/v3", alias="FYERS_DATA_URL")
+
+    # Websocket defaults used by websocket_service and docs.
+    fyers_data_ws_url: str = Field(default="wss://api.fyers.in/socket/v2/data/", alias="FYERS_DATA_WS_URL")
+    fyers_order_ws_url: str = Field(default="wss://api.fyers.in/socket/v2/order/", alias="FYERS_ORDER_WS_URL")
+    fyers_position_ws_url: str = Field(default="wss://api.fyers.in/socket/v2/position/", alias="FYERS_POSITION_WS_URL")
+    fyers_trade_ws_url: str = Field(default="wss://api.fyers.in/socket/v2/trade/", alias="FYERS_TRADE_WS_URL")
+
     trading_mode: str = Field(default="PAPER", alias="TRADING_MODE")
     initial_capital: float = Field(default=100000.0, alias="INITIAL_CAPITAL")
     stop_loss_pct: float = Field(default=0.15, alias="STOP_LOSS_PCT")

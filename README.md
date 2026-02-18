@@ -25,10 +25,8 @@ flowchart TD
 ## Configuration (.env)
 
 - `FYERS_APP_ID`, `FYERS_SECRET`, `FYERS_PIN`: broker credentials.
-- `FYERS_AUTH_URL`: auth/token base URL (used for auth code + refresh fallback routes).
 - `FYERS_BASE_URL`: trading API base URL.
 - `FYERS_DATA_URL`: market data base URL.
-- `FYERS_WS_SSL_VERIFY`: set `false` when local/corporate SSL interception breaks websocket cert validation.
 - `TRADING_MODE`: `PAPER` or `LIVE`.
 - `INITIAL_CAPITAL`, `STOP_LOSS_PCT`, `TARGET_PCT`: risk defaults.
 - `LOG_LEVEL`, `LOG_FILE`: logging configuration.
@@ -161,8 +159,6 @@ pytest -q
 
 - **401 errors**: ensure refresh token exists and credentials are valid.
 - **503 errors**: check broker availability; client retries then opens circuit.
-- **WebSocket SSL verify failed**: set `FYERS_WS_SSL_VERIFY=false` (or install corporate CA).
-- **Refresh 404**: bot now auto-tries multiple FYERS refresh routes; verify `FYERS_AUTH_URL` for your account region.
 - **UI missing data**: monitor/scan now return safe default payloads.
 
 ## FAQ

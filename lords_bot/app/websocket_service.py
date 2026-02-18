@@ -18,6 +18,7 @@ MessageHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
 class WebsocketService:
     """Live market-data websocket with reconnect, SSL controls, and graceful degrade mode."""
+    """Live market-data websocket with safe reconnect and tick dispatch."""
 
     def __init__(self, client: FyersClient) -> None:
         self.client = client
@@ -37,11 +38,15 @@ class WebsocketService:
         return ctx
 
     async def _subscribe(self, ws: websockets.WebSocketClientProtocol, symbols: list[str]) -> None:
+
+    async def _subscribe(self, ws: websockets.WebSocketClientProtocol, symbols: list[str]) -> None:
+        # FYERS subscription frame can vary; this version keeps compatibility with current feed format.
         payload = {"T": "SUB_DATA", "L2LIST": symbols, "SUB_T": 1}
         await ws.send(json.dumps(payload))
 
     async def connect_and_listen(self, symbols: list[str], message_handler: MessageHandler) -> None:
         """Reconnect with bounded backoff; optionally stop after unrecoverable SSL misconfiguration."""
+        """Reconnect forever with bounded backoff while service is running."""
         self._running = True
         retry_delay = 1.0
 
@@ -58,6 +63,7 @@ class WebsocketService:
                     ping_interval=20,
                     ssl=self._ssl_context(),
                 ) as ws:
+                async with websockets.connect(self.client.data_ws_url, additional_headers=headers, ping_interval=20) as ws:
                     await self._subscribe(ws, symbols)
                     logger.info("Websocket connected and subscribed: %s", symbols)
                     retry_delay = 1.0
@@ -85,6 +91,10 @@ class WebsocketService:
                 logger.warning("Websocket disconnected; retrying in %.1fs (%s)", retry_delay, exc)
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(self.max_retry_delay, retry_delay * 2)
+            except Exception as exc:  # noqa: BLE001 - keep service alive.
+                logger.warning("Websocket disconnected; retrying in %.1fs (%s)", retry_delay, exc)
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(30.0, retry_delay * 2)
 
     async def start(self, symbols: list[str], message_handler: MessageHandler) -> None:
         if self._task and not self._task.done():
