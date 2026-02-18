@@ -4,106 +4,146 @@ import asyncio
 import json
 import logging
 import ssl
-from collections.abc import Awaitable, Callable
-from contextlib import suppress
-from typing import Any
+from typing import Callable, Awaitable
 
-import websockets
-
-from lords_bot.app.fyers_client import FyersClient
+import certifi
+from websockets import connect, WebSocketException
 
 logger = logging.getLogger("lords_bot.websocket")
-MessageHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
 
 class WebsocketService:
-    """Live market-data websocket with reconnect, SSL controls, and graceful degrade mode."""
-    """Live market-data websocket with safe reconnect and tick dispatch."""
+    """
+    Production-ready FYERS WebSocket manager.
+    Handles:
+    - SSL verification
+    - Authentication
+    - Auto-reconnect with exponential backoff
+    - Clean shutdown
+    """
 
-    def __init__(self, client: FyersClient) -> None:
+    def __init__(self, client) -> None:
         self.client = client
-        self._running = False
+        self.ws_url = "wss://api.fyers.in/socket/v2/data/"
         self._task: asyncio.Task | None = None
+        self._running = False
 
-        self.max_retry_delay = float(getattr(self.client.settings, "fyers_ws_max_retry_delay", 60.0) or 60.0)
-        self.ssl_verify = bool(getattr(self.client.settings, "fyers_ws_ssl_verify", True))
-        self.stop_on_ssl_error = bool(getattr(self.client.settings, "fyers_ws_stop_on_ssl_error", False))
+        # Proper SSL context using certifi CA bundle
+        self.ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-    def _ssl_context(self) -> ssl.SSLContext | bool | None:
-        if self.ssl_verify:
-            return None
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
-
-    async def _subscribe(self, ws: websockets.WebSocketClientProtocol, symbols: list[str]) -> None:
-
-    async def _subscribe(self, ws: websockets.WebSocketClientProtocol, symbols: list[str]) -> None:
-        # FYERS subscription frame can vary; this version keeps compatibility with current feed format.
-        payload = {"T": "SUB_DATA", "L2LIST": symbols, "SUB_T": 1}
-        await ws.send(json.dumps(payload))
-
-    async def connect_and_listen(self, symbols: list[str], message_handler: MessageHandler) -> None:
-        """Reconnect with bounded backoff; optionally stop after unrecoverable SSL misconfiguration."""
-        """Reconnect forever with bounded backoff while service is running."""
-        self._running = True
-        retry_delay = 1.0
-
-        while self._running:
-            if self.client.is_trading_paused():
-                await asyncio.sleep(1)
-                continue
-
-            try:
-                headers = {"Authorization": f"{self.client.settings.fyers_app_id}:{self.client.auth.access_token}"}
-                async with websockets.connect(
-                    self.client.data_ws_url,
-                    additional_headers=headers,
-                    ping_interval=20,
-                    ssl=self._ssl_context(),
-                ) as ws:
-                async with websockets.connect(self.client.data_ws_url, additional_headers=headers, ping_interval=20) as ws:
-                    await self._subscribe(ws, symbols)
-                    logger.info("Websocket connected and subscribed: %s", symbols)
-                    retry_delay = 1.0
-
-                    async for raw in ws:
-                        if not self._running:
-                            break
-                        try:
-                            data = json.loads(raw)
-                        except json.JSONDecodeError:
-                            logger.warning("Dropping non-JSON websocket payload")
-                            continue
-                        await message_handler(data)
-            except ssl.SSLCertVerificationError as exc:
-                logger.error(
-                    "Websocket SSL verification failed: %s. "
-                    "If you are behind a corporate proxy/self-signed chain, set FYERS_WS_SSL_VERIFY=false.",
-                    exc,
-                )
-                if self.stop_on_ssl_error:
-                    logger.warning("Stopping websocket service due to SSL error (FYERS_WS_STOP_ON_SSL_ERROR=true).")
-                    break
-                await asyncio.sleep(self.max_retry_delay)
-            except Exception as exc:  # noqa: BLE001 - keep service alive.
-                logger.warning("Websocket disconnected; retrying in %.1fs (%s)", retry_delay, exc)
-                await asyncio.sleep(retry_delay)
-                retry_delay = min(self.max_retry_delay, retry_delay * 2)
-            except Exception as exc:  # noqa: BLE001 - keep service alive.
-                logger.warning("Websocket disconnected; retrying in %.1fs (%s)", retry_delay, exc)
-                await asyncio.sleep(retry_delay)
-                retry_delay = min(30.0, retry_delay * 2)
-
-    async def start(self, symbols: list[str], message_handler: MessageHandler) -> None:
-        if self._task and not self._task.done():
+    async def start(
+        self,
+        symbols: list[str],
+        on_tick: Callable[[dict], Awaitable[None]],
+    ) -> None:
+        """
+        Starts WebSocket background loop.
+        """
+        if self._running:
             return
-        self._task = asyncio.create_task(self.connect_and_listen(symbols, message_handler))
+
+        self._running = True
+        self._task = asyncio.create_task(
+            self._connect_loop(symbols, on_tick)
+        )
 
     async def stop(self) -> None:
+        """
+        Gracefully stop websocket.
+        """
         self._running = False
         if self._task:
             self._task.cancel()
-            with suppress(asyncio.CancelledError):
+            with asyncio.suppress(asyncio.CancelledError):
                 await self._task
+
+    async def _connect_loop(
+        self,
+        symbols: list[str],
+        on_tick: Callable[[dict], Awaitable[None]],
+    ) -> None:
+        """
+        Main reconnect loop.
+        """
+        delay = 1.0
+
+        while self._running:
+            try:
+                await self._connect_once(symbols, on_tick)
+                delay = 1.0  # reset delay after successful connection
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("WebSocket disconnected: %s", exc)
+
+            if not self._running:
+                break
+
+            logger.info("Reconnecting WebSocket in %.1fs...", delay)
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 30)
+
+    async def _connect_once(
+        self,
+        symbols: list[str],
+        on_tick: Callable[[dict], Awaitable[None]],
+    ) -> None:
+        """
+        Single WebSocket connection session.
+        """
+
+        if not self.client.auth.access_token:
+            logger.error("Cannot start WebSocket: no access token.")
+            return
+
+        headers = {
+            "Authorization": f"{self.client.settings.fyers_app_id}:{self.client.auth.access_token}"
+        }
+
+        async with connect(
+            self.ws_url,
+            ssl=self.ssl_context,
+            extra_headers=headers,
+            ping_interval=20,
+            ping_timeout=20,
+        ) as ws:
+            logger.info("WebSocket connected.")
+
+            await self._subscribe(ws, symbols)
+
+            async for message in ws:
+                await self._handle_message(message, on_tick)
+
+    async def _subscribe(self, ws, symbols: list[str]) -> None:
+        """
+        Subscribe to symbols.
+        """
+        payload = {
+            "type": "symbolList",
+            "symbol": symbols,
+        }
+
+        await ws.send(json.dumps(payload))
+        logger.info("Subscribed to symbols: %s", symbols)
+
+    async def _handle_message(
+        self,
+        raw_message: str,
+        on_tick: Callable[[dict], Awaitable[None]],
+    ) -> None:
+        """
+        Parse incoming WebSocket message.
+        """
+        try:
+            data = json.loads(raw_message)
+
+            # FYERS format: {"d": [{"v": {"lp": 22150.25}}]}
+            if isinstance(data.get("d"), list) and data["d"]:
+                value_block = data["d"][0].get("v", {})
+                ltp = value_block.get("lp") or value_block.get("ltP")
+
+                if ltp is not None:
+                    await on_tick({"ltp": float(ltp)})
+
+        except Exception as exc:
+            logger.warning("Failed to parse WS message: %s", exc)
