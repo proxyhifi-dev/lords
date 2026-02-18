@@ -1,104 +1,195 @@
 from __future__ import annotations
-
-import asyncio
 import contextlib
+import asyncio
 import json
 import logging
 import ssl
-from typing import Awaitable, Callable
+from typing import Callable, Awaitable, TYPE_CHECKING
 
 import certifi
-from websockets import connect
+from websockets import connect, WebSocketException
+
+if TYPE_CHECKING:
+    from lords_bot.app.fyers_client import FyersClient
 
 logger = logging.getLogger("lords_bot.websocket")
 
 
 class WebsocketService:
-    """Crash-safe FYERS data websocket with exponential reconnect."""
+    """
+    Websocket manager for FYERS live market data.
 
-    def __init__(self, client) -> None:
+    Handles:
+    - SSL verification with certifi
+    - Authenticated connection
+    - Exponential reconnect backoff
+    - Graceful shutdown
+    - LTP extraction per tick
+    """
+
+    def __init__(
+        self,
+        client: "FyersClient",
+        on_message: Callable[[dict], None] = None,
+        on_error: Callable[[str], None] = None,
+        on_close: Callable[[str], None] = None,
+        on_open: Callable[[], None] = None,
+    ) -> None:
         self.client = client
-        self.ws_url = "wss://api.fyers.in/socket/v2/data/"
-        self.ssl_context = ssl.create_default_context(cafile=certifi.where())
-        self._running = False
         self._task: asyncio.Task | None = None
+        self._running = False
 
-    async def start(self, symbols: list[str], on_tick: Callable[[float], Awaitable[None]]) -> None:
+        # Build SSL context from certifi bundle:
+        self.ssl_context = ssl.create_default_context(cafile=certifi.where())
+
+        # Base WS URL from settings
+        self.ws_url = self.client.data_ws_url
+
+        # User callbacks
+        self.on_message = on_message
+        self.on_error = on_error
+        self.on_close = on_close
+        self.on_open = on_open
+
+    async def start(
+        self,
+        symbols: list[str],
+        on_tick: Callable[[dict[str, float]], Awaitable[None]],
+    ) -> None:
+        """
+        Begin the WebSocket loop.
+        This method returns immediately; internal loop runs as task.
+        """
         if self._running:
+            logger.warning("WebSocket already running.")
             return
+
         self._running = True
-        self._task = asyncio.create_task(self._connect_loop(symbols, on_tick))
+        self._task = asyncio.create_task(
+            self._connect_loop(symbols, on_tick)
+        )
 
     async def stop(self) -> None:
+        """
+        Stop WebSocket gracefully.
+        """
         self._running = False
-        if self._task is not None:
+        if self._task:
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            self._task = None
+            logger.info("WebSocket stopped.")
 
-    async def _connect_loop(self, symbols: list[str], on_tick: Callable[[float], Awaitable[None]]) -> None:
-        delay = 1
+    async def _connect_loop(
+        self,
+        symbols: list[str],
+        on_tick: Callable[[dict[str, float]], Awaitable[None]],
+    ) -> None:
+        """
+        Main reconnect logic with exponential backoff.
+        """
+        retry_delay = 1.0
+
         while self._running:
             try:
-                await self._connect_once(symbols, on_tick)
-                delay = 1
+                await self._session_connect(symbols, on_tick)
+                retry_delay = 1.0
             except asyncio.CancelledError:
-                raise
-            except Exception as exc:  # noqa: BLE001
+                break
+            except Exception as exc:
                 logger.warning("WebSocket disconnected: %s", exc)
 
             if not self._running:
                 break
 
-            await asyncio.sleep(delay)
-            delay = min(delay * 2, 30)
+            logger.info("Reconnecting WebSocket in %.1fs ...", retry_delay)
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 30.0)
 
-    async def _connect_once(self, symbols: list[str], on_tick: Callable[[float], Awaitable[None]]) -> None:
-        token = getattr(self.client.auth, "access_token", None)
-        if not token:
-            logger.error("WebSocket start skipped: access token unavailable")
-            return
+    async def _session_connect(
+        self,
+        symbols: list[str],
+        on_tick: Callable[[dict[str, float]], Awaitable[None]],
+    ) -> None:
+        """
+        Single WebSocket session — connect → subscribe → receive loop.
+        """
 
-        headers = {"Authorization": f"{self.client.settings.fyers_app_id}:{token}"}
+        # Must have a valid token
+        if not self.client.auth.access_token:
+            raise RuntimeError("WebSocket: missing access token")
 
-        async with connect(
-            self.ws_url,
-            ssl=self.ssl_context,
-            additional_headers=headers,
-            ping_interval=20,
-            ping_timeout=20,
-        ) as ws:
-            logger.info("WebSocket connected.")
-            await ws.send(json.dumps({"type": "symbolList", "symbol": symbols}))
+        # Build connection URL including auth
+        auth_token = f"{self.client.settings.fyers_app_id}:{self.client.auth.access_token}"
+        connection_url = f"{self.ws_url}?access_token={auth_token}"
 
-            async for raw_message in ws:
-                ltp = self._extract_ltp(raw_message)
-                if ltp is not None:
-                    await on_tick(ltp)
+        logger.info("WebSocket connecting to %s", connection_url)
+        try:
+            async with connect(
+                connection_url,
+                ssl=self.ssl_context,
+                ping_interval=20,
+                ping_timeout=10,
+            ) as ws:
+                logger.info("WebSocket connected to FYERS.")
+                if self.on_open:
+                    self.on_open()
 
-    @staticmethod
-    def _extract_ltp(raw_message: str) -> float | None:
+                # Subscribe to provided symbols
+                await self._subscribe(ws, symbols)
+
+                async for raw_message in ws:
+                    await self._handle_message(raw_message, on_tick)
+        except Exception as exc:
+            logger.warning("WebSocket error: %s", exc)
+            if self.on_error:
+                self.on_error(str(exc))
+            raise
+        finally:
+            if self.on_close:
+                self.on_close("WebSocket connection closed")
+
+    async def _subscribe(self, ws, symbols: list[str]) -> None:
+        """
+        Send subscription request per FYERS WebSocket spec.
+        """
+        subscribe_payload = {
+            "type": "symbolList",
+            "symbol": symbols,
+        }
+        await ws.send(json.dumps(subscribe_payload))
+        logger.info("WebSocket subscribed to symbols: %s", symbols)
+
+    async def _handle_message(
+        self,
+        raw_message: str,
+        on_tick: Callable[[dict[str, float]], Awaitable[None]],
+    ) -> None:
+        """
+        Parse incoming WebSocket message and extract Last Traded Price.
+        """
         try:
             data = json.loads(raw_message)
-        except json.JSONDecodeError:
-            return None
 
-        if not isinstance(data, dict):
-            return None
+            # FYERS d-array format
+            # Example: {"d":[{"v":{"lp":12344.0,...}}],...}
+            ltp: float | None = None
 
-        entries = data.get("d")
-        if not isinstance(entries, list):
-            return None
+            if isinstance(data.get("d"), list) and data["d"]:
+                v = data["d"][0].get("v", {})
+                if isinstance(v, dict):
+                    # 'lp' stands for last price
+                    raw_ltp = v.get("lp") or v.get("ltP")
+                    if raw_ltp is not None:
+                        ltp = float(raw_ltp)
 
-        for entry in entries:
-            value = entry.get("v", {}) if isinstance(entry, dict) else {}
-            raw_ltp = value.get("lp", value.get("ltP"))
-            if raw_ltp is None:
-                continue
-            try:
-                return float(raw_ltp)
-            except (TypeError, ValueError):
-                continue
+            if ltp is not None:
+                await on_tick({"ltp": ltp})
 
-        return None
+            if self.on_message:
+                self.on_message(data)
+
+        except Exception as exc:
+            logger.warning("WebSocket message parse failure: %s", exc)
+            if self.on_error:
+                self.on_error(f"Parse error: {exc}")

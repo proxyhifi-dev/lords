@@ -2,102 +2,129 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from dataclasses import dataclass, field
-from typing import Any
 from zoneinfo import ZoneInfo
+from typing import TYPE_CHECKING
 
-strategy_logger = logging.getLogger("lords_bot.strategy")
+if TYPE_CHECKING:
+    # Helps static typing without import cycles
+    from lords_bot.app.fyers_client import FyersClient
+
+logger = logging.getLogger("lords_bot.strategy")
+
+# India Standard Time zone
 IST = ZoneInfo("Asia/Kolkata")
 
 
-@dataclass
-class TickState:
-    high: float | None = None
-    low: float | None = None
-    last_price: float | None = None
-    last_ts: dt.datetime | None = None
-    samples: list[float] = field(default_factory=list)
-
-
 class ORBStrategy:
-    """ORB strategy fed primarily by websocket ticks to avoid history overload at market open."""
+    """
+    Opening Range Breakout (ORB) Strategy.
 
-    def __init__(self, client) -> None:
+    Collects live ticks between 9:15–9:30 AM IST and
+    locks range_high and range_low.
+
+    After 9:30 AM, uses range to check breakout
+    based on current LTP.
+    """
+
+    def __init__(self, client: "FyersClient", symbol: str = "NSE:NIFTY50-INDEX") -> None:
         self.client = client
-        self.range_date: dt.date | None = None
+        self.symbol = symbol
+
         self.range_high: float | None = None
         self.range_low: float | None = None
-        self.signal: dict[str, Any] | None = None
-        self.tick_state = TickState()
+        self.live_ticks: list[float] = []
+        self.range_locked = False
 
-    def on_tick(self, tick: dict[str, Any]) -> None:
-        """Consume incoming ticks; safe parser supports both flattened and nested FYERS frames."""
-        now = dt.datetime.now(tz=IST)
-        try:
-            price = float(tick.get("ltp") or tick.get("lp") or tick.get("v", {}).get("lp"))
-        except Exception:
+    def _current_ist_time(self) -> dt.time:
+        """Get current time in IST."""
+        return dt.datetime.now(tz=IST).time()
+
+    async def on_new_tick(self, tick_data: dict[str, float]) -> None:
+        """
+        Called when a new WebSocket tick arrives.
+        tick_data contains at least {"ltp": float}.
+        """
+
+        ltp = tick_data.get("ltp")
+        if ltp is None:
             return
 
-        self.tick_state.last_price = price
-        self.tick_state.last_ts = now
-        if dt.time(9, 15) <= now.time() < dt.time(9, 30):
-            self.tick_state.samples.append(price)
-            self.tick_state.high = price if self.tick_state.high is None else max(self.tick_state.high, price)
-            self.tick_state.low = price if self.tick_state.low is None else min(self.tick_state.low, price)
+        now = self._current_ist_time()
 
-        # Lock ORB once window closes.
-        if now.time() >= dt.time(9, 30) and self.range_date != now.date() and self.tick_state.samples:
-            self.range_date = now.date()
-            self.range_high = self.tick_state.high
-            self.range_low = self.tick_state.low
-            strategy_logger.info("ORB locked from ticks: high=%s low=%s", self.range_high, self.range_low)
+        # Collect ticks during 9:15–9:30
+        if dt.time(9, 15) <= now < dt.time(9, 30):
+            self.live_ticks.append(ltp)
 
-    async def _fallback_quote(self) -> float | None:
-        """Fallback uses quotes endpoint, never history, so bot still works if websocket has a gap."""
-        try:
-            quote = await self.client.request("GET", "/quotes", params={"symbols": "NSE:NIFTY50-INDEX"})
-            return float(quote.get("d", [{}])[0].get("v", {}).get("lp"))
-        except Exception as exc:  # noqa: BLE001
-            strategy_logger.warning("Quote fallback unavailable: %s", exc)
-            return None
-
-    async def check_breakout(self) -> dict[str, Any] | None:
-        now = dt.datetime.now(tz=IST)
-        if now.time() < dt.time(9, 30) or now.time() > dt.time(15, 15):
-            return None
-
-        if self.range_date != now.date() or self.range_high is None or self.range_low is None:
-            # Safe fallback if websocket never provided enough opening ticks.
-            if self.tick_state.samples:
-                self.range_date = now.date()
-                self.range_high = self.tick_state.high
-                self.range_low = self.tick_state.low
+        # After 9:30 lock range once
+        if now >= dt.time(9, 30) and not self.range_locked:
+            if self.live_ticks:
+                self.range_high = max(self.live_ticks)
+                self.range_low = min(self.live_ticks)
+                self.range_locked = True
+                logger.info(
+                    "ORB range locked for %s: High=%s Low=%s",
+                    self.symbol,
+                    self.range_high,
+                    self.range_low,
+                )
             else:
-                strategy_logger.info("Skipping breakout; ORB range unavailable yet")
-                return None
+                logger.warning("No ticks collected for ORB range.")
 
-        ltp = self.tick_state.last_price or await self._fallback_quote()
-        if ltp is None:
+    async def fetch_quote_ltp(self) -> float | None:
+        """
+        Fetch the current LTP from REST as a fallback when needed.
+        Uses safe request; returns None on error.
+        """
+        try:
+            response = await self.client.request(
+                method="GET",
+                endpoint="/quotes",
+                params={"symbols": self.symbol},
+            )
+
+            # Fyers quotes payload
+            # Most often under response["d"][0]["v"]["lp"]
+            data_d = response.get("d")
+            if isinstance(data_d, list) and data_d:
+                v = data_d[0].get("v", {})
+                raw_ltp = v.get("lp") or v.get("ltP")
+                if raw_ltp is not None:
+                    return float(raw_ltp)
+        except Exception as exc:
+            logger.warning("ORB fetch_quote_ltp failed: %s", exc)
+
+        return None
+
+    async def check_breakout(self) -> dict[str, object] | None:
+        """
+        Check for breakout relative to the locked ORB range.
+
+        Returns:
+            {"direction": "CALL"|"PUT", "price": ltp}
+            OR None if no signal or no ORB range yet.
+        """
+
+        # Must have a range locked
+        if not self.range_locked:
+            logger.debug("ORB range not locked yet.")
             return None
 
-        if ltp > float(self.range_high):
-            self.signal = {
-                "direction": "CALL",
-                "price": ltp,
-                "range_high": self.range_high,
-                "range_low": self.range_low,
-                "source": "websocket_or_quote",
-            }
-            return self.signal
+        # Try getting LTP from REST fallback
+        ltp = await self.fetch_quote_ltp()
 
-        if ltp < float(self.range_low):
-            self.signal = {
-                "direction": "PUT",
-                "price": ltp,
-                "range_high": self.range_high,
-                "range_low": self.range_low,
-                "source": "websocket_or_quote",
-            }
-            return self.signal
+        if ltp is None:
+            logger.debug("ORB breakout check skipped — LTP unavailable.")
+            return None
 
+        # Breakout above range
+        if self.range_high is not None and ltp > self.range_high:
+            logger.info("ORB breakout CALL @ %s (above %s)", ltp, self.range_high)
+            return {"direction": "CALL", "price": ltp}
+
+        # Breakdown below range
+        if self.range_low is not None and ltp < self.range_low:
+            logger.info("ORB breakdown PUT @ %s (below %s)", ltp, self.range_low)
+            return {"direction": "PUT", "price": ltp}
+
+        # No signal
         return None
