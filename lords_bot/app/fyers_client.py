@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from lords_bot.app.config import get_settings
+from lords_bot.app.auth import AuthService
 
 api_logger = logging.getLogger("lords_bot.api")
 retry_logger = logging.getLogger("lords_bot.retry")
@@ -19,8 +20,7 @@ circuit_logger = logging.getLogger("lords_bot.circuit")
 
 
 class FyersAPIError(RuntimeError):
-    """Raised when FYERS API cannot serve a valid success payload."""
-
+    """Raised when FYERS API cannot serve a valid payload."""
     def __init__(self, message: str, *, status_code: int | None = None, code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
@@ -29,59 +29,68 @@ class FyersAPIError(RuntimeError):
 
 @dataclass(slots=True)
 class CircuitState:
-    """In-memory circuit breaker state to prevent endless retries on broker outages."""
-
+    """Holds circuit breaker state."""
     opened_until: float = 0.0
     failures: int = 0
 
 
 class FyersClient:
-    """
-    Unified FYERS client for trading and market-data APIs.
+    """Centralized FYERS client with retries, circuit breaker, and auth fallback."""
 
-    Why this exists:
-    - Centralize auth headers, URL routing, retry, and error normalization.
-    - Protect the bot from broker instability (503s, malformed payloads, token expiry).
-    - Offer explicit websocket endpoint helpers used by websocket_service.
-    """
-
-    def __init__(self, auth_service: Any) -> None:
+    def __init__(self, auth_service: AuthService) -> None:
         self.settings = get_settings()
         self.auth = auth_service
 
-        # Retry policy protects against short-lived broker/network issues.
+        # Retry parameters
         self.retry_statuses = {429, 500, 502, 503, 504}
-        self.max_retries = int(getattr(self.settings, "fyers_max_retries", 3) or 3)
-        self.base_backoff_seconds = float(getattr(self.settings, "fyers_retry_backoff_seconds", 0.5) or 0.5)
-        self.max_backoff_seconds = float(getattr(self.settings, "fyers_max_backoff_seconds", 8.0) or 8.0)
+        self.max_retries = self.settings.fyers_max_retries or 3
+        self.base_backoff = self.settings.fyers_retry_backoff_seconds or 0.5
+        self.max_backoff = self.settings.fyers_max_backoff_seconds or 8.0
 
-        # Circuit breaker protects the rest of the system from repeated upstream failures.
-        self.failure_threshold = int(getattr(self.settings, "api_failure_threshold", 5) or 5)
-        self.failure_window_seconds = int(getattr(self.settings, "api_failure_window_seconds", 60) or 60)
-        self.pause_seconds = int(getattr(self.settings, "api_pause_seconds", 120) or 120)
+        # Circuit breaker
+        self.failure_threshold = self.settings.api_failure_threshold or 5
+        self.failure_window = self.settings.api_failure_window_seconds or 60
+        self.pause_seconds = self.settings.api_pause_seconds or 120
+
         self._state = CircuitState()
         self._failure_timestamps: deque[float] = deque()
 
+    #
+    # WebSocket endpoint properties
+    #
+
     @property
     def data_ws_url(self) -> str:
-        return str(getattr(self.settings, "fyers_data_ws_url", "wss://api.fyers.in/socket/v2/data/"))
+        """WebSocket endpoint for market data."""
+        return str(self.settings.fyers_data_ws_url)
 
     @property
     def order_ws_url(self) -> str:
-        return str(getattr(self.settings, "fyers_order_ws_url", "wss://api.fyers.in/socket/v2/order/"))
+        """WebSocket endpoint for order events."""
+        return str(self.settings.fyers_order_ws_url)
 
     @property
     def position_ws_url(self) -> str:
-        return str(getattr(self.settings, "fyers_position_ws_url", "wss://api.fyers.in/socket/v2/position/"))
+        """WebSocket endpoint for position updates."""
+        return str(self.settings.fyers_position_ws_url)
 
     @property
     def trade_ws_url(self) -> str:
-        return str(getattr(self.settings, "fyers_trade_ws_url", "wss://api.fyers.in/socket/v2/trade/"))
+        """WebSocket endpoint for trade updates."""
+        return str(self.settings.fyers_trade_ws_url)
+
+    #
+    # Internal client helpers
+    #
 
     def _resolve_base_url(self, endpoint: str) -> str:
-        """Route endpoint to FYERS trade or data host."""
+        """
+        Decide whether this is a data or trade endpoint.
+        Data endpoints (history, quotes) go to data URL.
+        Others go to trading URL.
+        """
         ep = endpoint.lstrip("/")
-        data_prefixes = ("quotes", "history", "optionchain", "symbol_master", "market_depth")
+        data_prefixes = ("history", "quotes", "optionchain", "symbol_master", "market_depth")
         base = self.settings.fyers_data_url if ep.startswith(data_prefixes) else self.settings.fyers_base_url
         return str(base).rstrip("/")
 
@@ -93,6 +102,10 @@ class FyersClient:
             "Content-Type": "application/json",
         }
 
+    #
+    # Circuit Breaker
+    #
+
     def is_trading_paused(self) -> bool:
         return time.time() < self._state.opened_until
 
@@ -103,18 +116,18 @@ class FyersClient:
     def reset_circuit_breaker(self) -> None:
         self._state = CircuitState()
         self._failure_timestamps.clear()
-        circuit_logger.info("Circuit breaker reset manually.")
+        circuit_logger.info("Circuit breaker manually reset.")
 
     def _record_success(self) -> None:
         self._state.failures = 0
         now = time.time()
-        while self._failure_timestamps and now - self._failure_timestamps[0] > self.failure_window_seconds:
+        while self._failure_timestamps and now - self._failure_timestamps[0] > self.failure_window:
             self._failure_timestamps.popleft()
 
     def _record_failure(self) -> None:
         now = time.time()
         self._failure_timestamps.append(now)
-        while self._failure_timestamps and now - self._failure_timestamps[0] > self.failure_window_seconds:
+        while self._failure_timestamps and now - self._failure_timestamps[0] > self.failure_window:
             self._failure_timestamps.popleft()
 
         self._state.failures = len(self._failure_timestamps)
@@ -125,39 +138,48 @@ class FyersClient:
                 "Circuit opened for %ss after %s failures in %ss.",
                 self.pause_seconds,
                 self.failure_threshold,
-                self.failure_window_seconds,
+                self.failure_window,
             )
 
+    #
+    # Auth refresh fallback
+    #
+
     async def _refresh_token(self) -> None:
-        """Refresh expired token once; fallback to auto_login if refresh is invalid."""
-        if hasattr(self.auth, "refresh_access_token"):
-            try:
-                await self.auth.refresh_access_token()
-                api_logger.info("Access token refreshed after 401.")
-                return
-            except Exception as exc:  # noqa: BLE001
-                api_logger.warning("Refresh after 401 failed: %s", exc)
-
-        if hasattr(self.auth, "auto_login"):
+        """
+        Refresh token fallback after a 401.
+        This will attempt auto_login on AuthService.
+        """
+        try:
             await self.auth.auto_login()
-            api_logger.info("Access token restored via auto_login after 401.")
-            return
+            api_logger.info("Access token restored via auto_login.")
+        except Exception as exc:
+            api_logger.warning("Auth auto_login failed: %s", exc)
+            # If auto_login fails, let request fail later
 
-        raise FyersAPIError("Auth service could not restore token", status_code=401)
+    #
+    # JSON parsing helper
+    #
 
     @staticmethod
     def _safe_parse_json(response: httpx.Response) -> dict[str, Any]:
-        """Never trust upstream payload shape; HTML/plain-text should not crash the app."""
+        """
+        Do not trust response.json() — if HTML or malformatted, return safe dict.
+        """
         try:
             payload = response.json()
             return payload if isinstance(payload, dict) else {"raw": payload}
-        except (ValueError, json.JSONDecodeError):
+        except Exception:
             return {
                 "s": "error",
                 "message": "Non-JSON response from FYERS",
-                "raw": response.text[:500],
+                "raw": response.text[:300],
                 "status": response.status_code,
             }
+
+    #
+    # Perform HTTP request
+    #
 
     async def request(
         self,
@@ -165,23 +187,24 @@ class FyersClient:
         endpoint: str,
         *,
         params: dict[str, Any] | None = None,
-        data: dict[str, Any] | list[dict[str, Any]] | None = None,
+        data: dict[str, Any] | None = None,
         timeout: float = 30.0,
     ) -> dict[str, Any]:
         """
-        Perform one protected request with finite retries and circuit breaker checks.
-
-        Recovery behaviors:
-        - 401 triggers one token refresh then request replay.
-        - retryable statuses/network errors get exponential backoff with jitter.
-        - bad JSON returns normalized error payload and raises FyersAPIError.
+        Perform request with:
+        - retries for transient failures
+        - auth fallback on 401
+        - circuit breaker protection
         """
         if self.is_trading_paused():
-            raise FyersAPIError(f"Circuit open; retry in {self.trading_pause_remaining_seconds}s")
+            raise FyersAPIError(
+                f"Circuit open; skip request for {self.trading_pause_remaining_seconds}s"
+            )
 
+        # Build URL for REST call
         url = f"{self._resolve_base_url(endpoint)}/{endpoint.lstrip('/')}"
-        last_error: FyersAPIError | None = None
         refresh_attempted = False
+        last_error: FyersAPIError | None = None
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             for attempt in range(self.max_retries + 1):
@@ -195,26 +218,24 @@ class FyersClient:
                     )
                 except httpx.HTTPError as exc:
                     self._record_failure()
-                    last_error = FyersAPIError(f"Network error: {exc}")
-                    retry_logger.warning("HTTP transport error on %s %s: %s", method.upper(), endpoint, exc)
+                    last_error = FyersAPIError(f"Network transport error: {exc}")
+                    retry_logger.warning("%s %s transport error: %s", method, endpoint, exc)
                 else:
                     payload = self._safe_parse_json(response)
 
+                    # On 401 unauthorized → auth fallback once
                     if response.status_code == 401 and not refresh_attempted:
                         refresh_attempted = True
-                        try:
-                            await self._refresh_token()
-                        except Exception as exc:  # noqa: BLE001 - normalize to API error.
-                            self._record_failure()
-                            raise FyersAPIError(f"Token refresh failed: {exc}", status_code=401) from exc
+                        await self._refresh_token()
                         continue
 
+                    # Retryable HTTP statuses
                     if response.status_code in self.retry_statuses and attempt < self.max_retries:
                         self._record_failure()
-                        delay = min(self.max_backoff_seconds, self.base_backoff_seconds * (2**attempt))
+                        delay = min(self.max_backoff, self.base_backoff * (2**attempt))
                         delay += random.uniform(0, 0.2 * delay)
                         retry_logger.warning(
-                            "Retrying %s %s for status=%s in %.2fs (%s/%s)",
+                            "%s %s status=%s, retry in %.2f (attempt %s/%s)",
                             method.upper(),
                             endpoint,
                             response.status_code,
@@ -225,17 +246,21 @@ class FyersClient:
                         await asyncio.sleep(delay)
                         continue
 
+                    # If error
                     if response.status_code >= 400 or payload.get("s") == "error":
                         self._record_failure()
-                        message = payload.get("message", f"FYERS error status={response.status_code}")
-                        raise FyersAPIError(message, status_code=response.status_code, code=payload.get("code"))
+                        message = payload.get("message", response.text[:300])
+                        raise FyersAPIError(message, status_code=response.status_code)
 
+                    # Success
                     self._record_success()
                     api_logger.debug("FYERS %s %s success", method.upper(), endpoint)
                     return payload
 
+                # fallback delay before next retry
                 if attempt < self.max_retries:
-                    delay = min(self.max_backoff_seconds, self.base_backoff_seconds * (2**attempt))
-                    await asyncio.sleep(delay)
+                    backoff = min(self.max_backoff, self.base_backoff * (2**attempt))
+                    await asyncio.sleep(backoff)
 
+        # If all retries exhausted
         raise last_error or FyersAPIError("FYERS request failed after retries")

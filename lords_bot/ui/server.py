@@ -1,127 +1,90 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from lords_bot.app.risk_engine import RiskEngine
-from lords_bot.strategies.option_selector import OptionSelector
-from lords_bot.strategies.orb_strategy import ORBStrategy
+if TYPE_CHECKING:
+    from lords_bot.app.fyers_client import FyersClient
+    from lords_bot.app.order_service import OrderService
+    from lords_bot.app.risk_engine import RiskEngine
+    from lords_bot.strategies.orb_strategy import ORBStrategy
 
-ui_logger = logging.getLogger("lords_bot.ui")
+logger = logging.getLogger("lords_bot.ui")
 
-
-def _safe_context(request: Request, risk_engine: RiskEngine, signal: dict[str, Any] | None) -> dict[str, Any]:
-    """Guarantee template variables exist in every flow to prevent undefined crashes."""
-    return {
-        "request": request,
-        "signal": signal or {},
-        "trade": risk_engine.active_trade or {},
-        "monitor_result": risk_engine.monitor_result or {},
-        "capital": float(risk_engine.current_capital or 0.0),
-        "pnl": float(risk_engine.total_pnl or 0.0),
-        "mode": risk_engine.mode,
-        "risk_status": "shutdown" if risk_engine.shutdown_triggered else "active",
-        "orb": {
-            "high": getattr(getattr(request.app.state, "strategy", None), "range_high", None),
-            "low": getattr(getattr(request.app.state, "strategy", None), "range_low", None),
-        },
-    }
+templates = Jinja2Templates(directory="lords_bot/ui/templates")
 
 
 def create_ui_app(
-    client,
-    order_service,
-    trading_mode: str,
     *,
-    strategy: ORBStrategy | None = None,
-    risk_engine: RiskEngine | None = None,
+    client: "FyersClient",
+    order_service: "OrderService",
+    trading_mode: str,
 ) -> FastAPI:
-    app = FastAPI(title="Lords Bot UI")
-    templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+    """
+    Creates FastAPI UI app.
 
-    strategy = strategy or ORBStrategy(client)
-    selector = OptionSelector(client)
-    risk_engine = risk_engine or RiskEngine(client, order_service, trading_mode)
+    Strategy and RiskEngine are attached to app.state
+    during bootstrap.
+    """
 
-    app.state.signal = None
-    app.state.strategy = strategy
-    app.state.risk_engine = risk_engine
+    app = FastAPI()
 
-    @app.on_event("startup")
-    async def startup_reconcile() -> None:
-        await risk_engine.reconcile_positions_on_startup()
-
+    # -------------------------------
+    # Dashboard
+    # -------------------------------
     @app.get("/", response_class=HTMLResponse)
-    async def home(request: Request):
-        return templates.TemplateResponse("index.html", _safe_context(request, risk_engine, app.state.signal))
+    async def index(request: Request):
+        strat: "ORBStrategy" | None = getattr(request.app.state, "strategy", None)
+        risk: "RiskEngine" | None = getattr(request.app.state, "risk_engine", None)
 
-    @app.post("/scan")
-    async def scan() -> dict[str, Any]:
-        """Safe scan endpoint: returns structured status and never throws upstream to UI."""
-        try:
-            breakout = await strategy.check_breakout()
-            if not breakout:
-                app.state.signal = None
-                return {"status": "no_signal", "signal": {}, "reason": "breakout_not_found"}
+        # Safe defaults
+        initial_capital = float(getattr(client.settings, "initial_capital", 0.0))
+        daily_loss = float(getattr(risk, "daily_loss", 0.0))
 
-            option = await selector.select_option(str(breakout["direction"]))
-            sl, target = order_service.build_sl_target(
-                float(option["ltp"]), risk_engine.settings.stop_loss_pct, risk_engine.settings.target_pct
-            )
-            app.state.signal = {
-                **option,
-                "breakout": breakout,
-                "projected_stop_loss": sl,
-                "projected_target": target,
-                "capital": risk_engine.current_capital,
-            }
-            return {"status": "signal_found", "signal": app.state.signal}
-        except Exception as exc:  # noqa: BLE001
-            ui_logger.exception("Scan failed safely: %s", exc)
-            return {"status": "error", "signal": {}, "reason": str(exc)}
+        # Basic PnL calculation (can later connect to real tracker)
+        pnl = -daily_loss
 
-    @app.post("/approve")
-    async def approve() -> dict[str, Any]:
-        if not app.state.signal:
-            return {"status": "no_signal"}
-        try:
-            result = await risk_engine.execute_trade(app.state.signal)
-            if result.get("status") == "executed":
-                app.state.signal = None
-            return result
-        except Exception as exc:  # noqa: BLE001
-            ui_logger.exception("Approve failed safely: %s", exc)
-            return {"status": "error", "reason": str(exc)}
+        circuit_paused = client.is_trading_paused()
 
-    @app.get("/monitor")
-    async def monitor() -> dict[str, Any]:
-        """Monitor always returns complete, crash-safe payload."""
-        try:
-            status = await risk_engine.monitor_trade()
-        except Exception as exc:  # noqa: BLE001
-            ui_logger.exception("Monitor failed safely: %s", exc)
-            status = {"status": "error", "reason": str(exc)}
-        return {
-            "status": status.get("status", "unknown"),
-            "orb": {"high": strategy.range_high, "low": strategy.range_low},
-            "ltp": strategy.tick_state.last_price,
-            "signal": app.state.signal or {},
-            "positions": risk_engine.active_trade or {},
-            "pnl": risk_engine.total_pnl,
-            "risk_status": "shutdown" if risk_engine.shutdown_triggered else "active",
-            "capital": risk_engine.current_capital,
-            "details": status,
-        }
+        return templates.TemplateResponse(
+            "index.html",
+            {
+                "request": request,
+                "capital": initial_capital,
+                "daily_loss": daily_loss,
+                "pnl": pnl,  # 🔥 FIXED: always defined
+                "circuit_paused": circuit_paused,
+                "range_high": getattr(strat, "range_high", None),
+                "range_low": getattr(strat, "range_low", None),
+                "trading_mode": trading_mode,
+            },
+        )
 
+    # -------------------------------
+    # Reset Daily Risk
+    # -------------------------------
     @app.post("/reset-day")
-    async def reset_day() -> dict[str, Any]:
-        risk_engine._refresh_day()
-        app.state.signal = None
+    async def reset_day(request: Request):
+        risk: "RiskEngine" | None = getattr(request.app.state, "risk_engine", None)
+        if risk:
+            risk.daily_loss = 0.0
+            logger.info("Daily loss reset via UI")
+
         return {"status": "ok"}
+
+    # -------------------------------
+    # Monitoring Endpoint
+    # -------------------------------
+    @app.get("/monitor")
+    async def monitor():
+        return {
+            "trading_paused": client.is_trading_paused(),
+            "trading_pause_remaining": client.trading_pause_remaining_seconds,
+            "trading_mode": trading_mode,
+        }
 
     return app

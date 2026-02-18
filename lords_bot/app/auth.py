@@ -5,7 +5,6 @@ import hashlib
 import logging
 import webbrowser
 from typing import Any
-from urllib.parse import parse_qs, urlparse
 
 import httpx
 import uvicorn
@@ -18,6 +17,8 @@ logger = logging.getLogger("lords_bot.auth")
 
 
 class AuthService:
+    """Handles FYERS authentication, token storage, and auto login flow."""
+
     def __init__(self) -> None:
         self.settings = get_settings()
         self.access_token: str | None = None
@@ -28,122 +29,117 @@ class AuthService:
         raw = f"{self.settings.fyers_app_id}:{self.settings.fyers_secret}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+
     def _auth_base_url(self) -> str:
+        # Always use the dynamic property for the correct environment
         return str(self.settings.fyers_auth_url).rstrip("/")
 
     def _login_url(self) -> str:
+        """
+        FYERS auth code URL.
+        """
         return (
             f"{self._auth_base_url()}/generate-authcode"
             f"?client_id={self.settings.fyers_app_id}"
             f"&redirect_uri={self.settings.fyers_redirect_uri}"
-            "&response_type=code"
-            "&state=lords-bot"
+            f"&response_type=code&state=lords-bot"
         )
 
     @staticmethod
     def _safe_json(response: httpx.Response) -> dict[str, Any]:
         try:
-            payload = response.json()
-            return payload if isinstance(payload, dict) else {}
+            return response.json() if isinstance(response.json(), dict) else {}
         except ValueError:
             return {}
 
     async def validate_auth_code(self, auth_code: str) -> dict[str, Any]:
+        """
+        Exchange auth code for access token & refresh token.
+        """
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 f"{self._auth_base_url()}/validate-authcode",
-                json={"grant_type": "authorization_code", "appIdHash": self._app_id_hash(), "code": auth_code},
+                json={
+                    "grant_type": "authorization_code",
+                    "appIdHash": self._app_id_hash(),
+                    "code": auth_code,
+                },
             )
 
         payload = self._safe_json(response)
+
         if response.status_code >= 400 or payload.get("s") == "error":
             raise RuntimeError(payload.get("message", "validate-authcode failed"))
 
-        access_token = payload.get("access_token")
-        if not access_token:
-            raise RuntimeError("validate-authcode response missing access_token")
-
-        self.access_token = access_token
+        self.access_token = payload.get("access_token")
         self.refresh_token = payload.get("refresh_token")
+
+        if not self.access_token:
+            raise RuntimeError("validate-authcode missing access_token")
+
         TokenStore.save({"access_token": self.access_token, "refresh_token": self.refresh_token})
         logger.info("FYERS access token generated and stored.")
         return payload
 
-    async def refresh_access_token(self) -> dict[str, Any]:
-        """Refresh token safely with lock; on failure caller should fallback to auto_login."""
-        async with self._refresh_lock:
-            if not self.refresh_token:
-                cached = TokenStore.load() or {}
-                self.refresh_token = cached.get("refresh_token")
-            if not self.refresh_token:
-                raise RuntimeError("Refresh token unavailable; complete login flow")
-
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.post(
-                    f"{self._auth_base_url()}/token",
-                    json={"grant_type": "refresh_token", "refresh_token": self.refresh_token},
-                )
-
-            payload = self._safe_json(response)
-            if response.status_code >= 400 or payload.get("s") == "error":
-                raise RuntimeError(payload.get("message", "token refresh failed"))
-
-            access_token = payload.get("access_token")
-            if not access_token:
-                raise RuntimeError("Refresh response missing access_token")
-
-            self.access_token = access_token
-            self.refresh_token = payload.get("refresh_token", self.refresh_token)
-            TokenStore.save({"access_token": self.access_token, "refresh_token": self.refresh_token})
-            logger.info("FYERS token refreshed.")
-            return payload
-
     async def auto_login(self) -> None:
+        """
+        Try to load cached token, if expired or invalid then start auth.
+        Avoid refresh endpoint — FYERS V3 requires full auth code flow.
+        """
+
+        # Try load cached
         token_data = TokenStore.load()
-        if token_data and not TokenStore.is_expired(token_data):
+        if token_data:
             self.access_token = token_data.get("access_token")
             self.refresh_token = token_data.get("refresh_token")
+
             if self.access_token:
                 logger.info("Using cached FYERS access token.")
                 return
 
-        if token_data and token_data.get("refresh_token"):
-            self.refresh_token = token_data.get("refresh_token")
-            try:
-                await self.refresh_access_token()
-                return
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Cached refresh failed, falling back to auth-code login: %s", exc)
-
-        logger.info("No valid token found; starting FYERS auth-code login flow.")
+        # No token or expired → start full login flow
+        logger.info("No valid token; starting login flow.")
         auth_code = await self._capture_auth_code()
         await self.validate_auth_code(auth_code)
 
     async def _capture_auth_code(self) -> str:
+        """
+        Open redirect login flow and get auth_code via local FastAPI callback.
+        """
+
         app = FastAPI()
         state: dict[str, str | None] = {"auth_code": None}
 
         @app.get("/")
         async def callback(request: Request) -> dict[str, str]:
-            auth_code = request.query_params.get("auth_code")
-            if not auth_code:
+            code = request.query_params.get("auth_code")
+            if not code:
+                # fallback attempt to parse from redirect param if present
                 redirect_uri = request.query_params.get("redirect")
                 if redirect_uri:
-                    auth_code = parse_qs(urlparse(redirect_uri).query).get("auth_code", [None])[0]
-            if not auth_code:
-                return {"message": "Missing auth_code in callback."}
-            state["auth_code"] = auth_code
-            return {"message": "Login successful. You can close this tab."}
+                    parsed = redirect_uri.split("auth_code=")
+                    if len(parsed) > 1:
+                        code = parsed[1].split("&")[0]
+            if not code:
+                return {"message": "auth_code missing in callback"}
 
-        config = uvicorn.Config(app=app, host="127.0.0.1", port=8080, log_level="error")
+            state["auth_code"] = code
+            return {"message": "Login successful — you can close this tab."}
+
+        # Run local server
+        config = uvicorn.Config(app=app, host="127.0.0.1", port=self.settings.auth_callback_port, log_level="error")
         server = uvicorn.Server(config)
+
+        # Open user browser to login
         webbrowser.open(self._login_url())
 
+        # Run server until auth_code arrives
         server_task = asyncio.create_task(server.serve())
         try:
             while not state["auth_code"]:
                 await asyncio.sleep(0.2)
         finally:
+            # Trigger shutdown
             server.should_exit = True
             await server_task
 
