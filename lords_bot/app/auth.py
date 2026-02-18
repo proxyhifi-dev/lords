@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from lords_bot.app.config import get_settings
 from lords_bot.app.token_store import TokenStore
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("lords_bot.auth")
 
 
 class AuthService:
@@ -29,7 +29,7 @@ class AuthService:
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def _auth_base_url(self) -> str:
-        return str(getattr(self.settings, "fyers_auth_url", "https://api-t1.fyers.in/api/v3")).rstrip("/")
+        return str(self.settings.fyers_auth_url).rstrip("/")
 
     def _login_url(self) -> str:
         return (
@@ -40,26 +40,37 @@ class AuthService:
             "&state=lords-bot"
         )
 
+    @staticmethod
+    def _safe_json(response: httpx.Response) -> dict[str, Any]:
+        try:
+            payload = response.json()
+            return payload if isinstance(payload, dict) else {}
+        except ValueError:
+            return {}
+
     async def validate_auth_code(self, auth_code: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 f"{self._auth_base_url()}/validate-authcode",
-                "https://api-t1.fyers.in/api/v3/validate-authcode",
                 json={"grant_type": "authorization_code", "appIdHash": self._app_id_hash(), "code": auth_code},
             )
 
-        payload = response.json() if "application/json" in response.headers.get("content-type", "") else {}
+        payload = self._safe_json(response)
         if response.status_code >= 400 or payload.get("s") == "error":
             raise RuntimeError(payload.get("message", "validate-authcode failed"))
 
-        self.access_token = payload["access_token"]
+        access_token = payload.get("access_token")
+        if not access_token:
+            raise RuntimeError("validate-authcode response missing access_token")
+
+        self.access_token = access_token
         self.refresh_token = payload.get("refresh_token")
-        TokenStore.save(payload)
+        TokenStore.save({"access_token": self.access_token, "refresh_token": self.refresh_token})
         logger.info("FYERS access token generated and stored.")
         return payload
 
     async def refresh_access_token(self) -> dict[str, Any]:
-        """Refresh token safely with lock; avoids parallel refresh storms from concurrent 401s."""
+        """Refresh token safely with lock; on failure caller should fallback to auto_login."""
         async with self._refresh_lock:
             if not self.refresh_token:
                 cached = TokenStore.load() or {}
@@ -69,21 +80,22 @@ class AuthService:
 
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.post(
-                    "https://api-t1.fyers.in/api/v3/token/refresh",
+                    f"{self._auth_base_url()}/token",
                     json={"grant_type": "refresh_token", "refresh_token": self.refresh_token},
                 )
-            payload = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+
+            payload = self._safe_json(response)
             if response.status_code >= 400 or payload.get("s") == "error":
                 raise RuntimeError(payload.get("message", "token refresh failed"))
 
-            # refresh endpoint may or may not rotate refresh token.
-            self.access_token = payload.get("access_token")
-            self.refresh_token = payload.get("refresh_token", self.refresh_token)
-            if not self.access_token:
+            access_token = payload.get("access_token")
+            if not access_token:
                 raise RuntimeError("Refresh response missing access_token")
+
+            self.access_token = access_token
+            self.refresh_token = payload.get("refresh_token", self.refresh_token)
             TokenStore.save({"access_token": self.access_token, "refresh_token": self.refresh_token})
             logger.info("FYERS token refreshed.")
-            return refreshed
             return payload
 
     async def auto_login(self) -> None:
