@@ -31,6 +31,17 @@
     <button onclick="resetDay()">Reset Daily State</button>
   </div>
 
+
+  <div class="card">
+    <h3>Projected Trade Metrics</h3>
+    <p><strong>ORB High/Low:</strong> <span id="orbRange">NA</span></p>
+    <p><strong>Signal Direction:</strong> <span id="signalDirection">NA</span></p>
+    <p><strong>Risk Amount:</strong> <span id="riskAmount">NA</span></p>
+    <p><strong>Lot Size:</strong> <span id="lotSize">NA</span></p>
+    <p><strong>Projected SL:</strong> <span id="projectedSL">NA</span></p>
+    <p><strong>Projected Target:</strong> <span id="projectedTarget">NA</span></p>
+  </div>
+
   <div class="card">
     <h3>Signal</h3>
     <pre id="signalBox">{{ signal | tojson(indent=2) if signal else 'No signal yet' }}</pre>
@@ -47,10 +58,22 @@
   </div>
 
   <script>
+    function updateProjectedMetrics(payload) {
+      const sig = payload.signal || payload;
+      const breakout = sig.breakout || {};
+      document.getElementById('orbRange').textContent = (breakout.range_high && breakout.range_low) ? `${breakout.range_high} / ${breakout.range_low}` : 'NA';
+      document.getElementById('signalDirection').textContent = sig.direction || breakout.direction || 'NA';
+      document.getElementById('riskAmount').textContent = sig.risk_amount ?? 'NA';
+      document.getElementById('lotSize').textContent = sig.lot_size ?? 'NA';
+      document.getElementById('projectedSL').textContent = sig.projected_stop_loss ?? 'NA';
+      document.getElementById('projectedTarget').textContent = sig.projected_target ?? 'NA';
+    }
+
     async function scanMarket() {
       const res = await fetch('/scan', { method: 'POST' });
       const data = await res.json();
       document.getElementById('signalBox').textContent = JSON.stringify(data, null, 2);
+      if (data.status === 'signal_found') { updateProjectedMetrics(data); }
     }
 
     async function approveTrade() {
