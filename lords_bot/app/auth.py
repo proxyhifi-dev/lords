@@ -41,23 +41,45 @@ class AuthService:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 "https://api-t1.fyers.in/api/v3/validate-authcode",
-                json={
-                    "grant_type": "authorization_code",
-                    "appIdHash": self._app_id_hash(),
-                    "code": auth_code,
-                },
+                json={"grant_type": "authorization_code", "appIdHash": self._app_id_hash(), "code": auth_code},
             )
 
         payload = response.json()
         if response.status_code >= 400 or payload.get("s") == "error":
-            message = payload.get("message", "validate-authcode failed")
-            raise RuntimeError(message)
+            raise RuntimeError(payload.get("message", "validate-authcode failed"))
 
         self.access_token = payload["access_token"]
         self.refresh_token = payload.get("refresh_token")
         TokenStore.save(payload)
         logger.info("FYERS access token generated and stored.")
         return payload
+
+    async def refresh_access_token(self) -> dict[str, Any]:
+        """Refresh token safely with lock; avoids parallel refresh storms from concurrent 401s."""
+        async with self._refresh_lock:
+            if not self.refresh_token:
+                cached = TokenStore.load() or {}
+                self.refresh_token = cached.get("refresh_token")
+            if not self.refresh_token:
+                raise RuntimeError("Refresh token unavailable; complete login flow")
+
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.post(
+                    "https://api-t1.fyers.in/api/v3/token/refresh",
+                    json={"grant_type": "refresh_token", "refresh_token": self.refresh_token},
+                )
+            payload = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+            if response.status_code >= 400 or payload.get("s") == "error":
+                raise RuntimeError(payload.get("message", "token refresh failed"))
+
+            # refresh endpoint may or may not rotate refresh token.
+            self.access_token = payload.get("access_token")
+            self.refresh_token = payload.get("refresh_token", self.refresh_token)
+            if not self.access_token:
+                raise RuntimeError("Refresh response missing access_token")
+            TokenStore.save({"access_token": self.access_token, "refresh_token": self.refresh_token})
+            logger.info("FYERS token refreshed.")
+            return payload
 
     async def auto_login(self) -> None:
         token_data = TokenStore.load()
@@ -67,6 +89,14 @@ class AuthService:
             if self.access_token:
                 logger.info("Using cached FYERS access token.")
                 return
+
+        if token_data and token_data.get("refresh_token"):
+            self.refresh_token = token_data.get("refresh_token")
+            try:
+                await self.refresh_access_token()
+                return
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Cached refresh failed, falling back to auth-code login: %s", exc)
 
         logger.info("No valid token found; starting FYERS auth-code login flow.")
         auth_code = await self._capture_auth_code()
@@ -80,7 +110,6 @@ class AuthService:
         async def callback(request: Request) -> dict[str, str]:
             auth_code = request.query_params.get("auth_code")
             if not auth_code:
-                # Some setups return a full redirect URI in one query param.
                 redirect_uri = request.query_params.get("redirect")
                 if redirect_uri:
                     auth_code = parse_qs(urlparse(redirect_uri).query).get("auth_code", [None])[0]
