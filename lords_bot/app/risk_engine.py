@@ -8,6 +8,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from lords_bot.app.config import get_settings
+from lords_bot.app.fyers_client import FyersAPIError
 from lords_bot.app.pnl_tracker import PnLTracker
 
 risk_logger = logging.getLogger("lords_bot.risk")
@@ -62,6 +63,12 @@ class RiskEngine:
             open_positions = [p for p in positions if abs(float(p.get("netQty", p.get("qty", 0)) or 0)) > 0]
             risk_logger.info("Reconciled %s open positions.", len(open_positions))
             return {"status": "ok", "open_positions": len(open_positions), "positions": open_positions}
+        except FyersAPIError as exc:
+            if exc.status_code == 401:
+                risk_logger.warning("Startup reconciliation skipped: unauthorized (401).")
+                return {"status": "warning", "reason": "unauthorized", "open_positions": 0, "positions": []}
+            risk_logger.warning("Startup reconciliation degraded: %s", exc)
+            return {"status": "warning", "reason": str(exc), "open_positions": 0, "positions": []}
         except Exception as exc:  # noqa: BLE001
             risk_logger.warning("Startup reconciliation degraded: %s", exc)
             return {"status": "warning", "reason": str(exc), "open_positions": 0, "positions": []}
@@ -77,6 +84,8 @@ class RiskEngine:
             return False, "max_trades_per_day_hit"
         if self.active_trade:
             return False, "trade_already_open"
+        if self.client.is_trading_paused():
+            return False, "trading_paused_by_circuit_breaker"
         return True, None
 
     def compute_qty(self, entry: float) -> int:

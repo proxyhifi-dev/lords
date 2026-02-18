@@ -19,7 +19,7 @@
   <div class="card">
     <h3>Account</h3>
     <p><strong>Mode:</strong> {{ mode }}</p>
-    <p><strong>Capital:</strong> {{ '%.2f'|format(capital) }}</p>
+    <p><strong>Capital:</strong> {{ '%.2f'|format(capital|default(0.0)) }}</p>
     <p><strong>Total PnL:</strong> {{ '%.2f'|format(pnl) }}</p>
   </div>
 
