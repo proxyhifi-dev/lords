@@ -61,8 +61,8 @@ class FyersClient:
 
     @property
     def data_ws_url(self) -> str:
-        """WebSocket endpoint for market data."""
-        return str(self.settings.fyers_data_ws_url)
+        """WebSocket endpoint for market data (official FYERS v3, always production endpoint)."""
+        return "wss://api.fyers.in/socket/v2/data/"
 
     @property
     def order_ws_url(self) -> str:
