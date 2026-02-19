@@ -42,7 +42,7 @@ class WebsocketService:
         # Build SSL context from certifi bundle:
         self.ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-        # Base WS URL from settings
+        # WebSocket URL from client settings
         self.ws_url = self.client.data_ws_url
 
         # User callbacks
@@ -112,18 +112,16 @@ class WebsocketService:
         on_tick: Callable[[dict[str, float]], Awaitable[None]],
     ) -> None:
         """
-        Single WebSocket session — connect → subscribe → receive loop.
+        Single WebSocket session — connect → authenticate → subscribe → receive loop.
         """
-
         # Must have a valid token
         if not self.client.auth.access_token:
             raise RuntimeError("WebSocket: missing access token")
 
-        # Build connection URL including auth
-        auth_token = f"{self.client.settings.fyers_app_id}:{self.client.auth.access_token}"
-        connection_url = f"{self.ws_url}?access_token={auth_token}"
-
+        # Connect to correct FYERS v2 WebSocket URL (NO token in URL)
+        connection_url = self.ws_url
         logger.info("WebSocket connecting to %s", connection_url)
+
         try:
             async with connect(
                 connection_url,
@@ -131,15 +129,27 @@ class WebsocketService:
                 ping_interval=20,
                 ping_timeout=10,
             ) as ws:
-                logger.info("WebSocket connected to FYERS.")
+                logger.info("WebSocket connected.")
                 if self.on_open:
                     self.on_open()
 
-                # Subscribe to provided symbols
-                await self._subscribe(ws, symbols)
+                # 🔐 Send Authorization JSON
+                auth_payload = {
+                    "authorization": f"{self.client.settings.fyers_app_id} {self.client.auth.access_token}"
+                }
+                await ws.send(json.dumps(auth_payload))
+
+                # 📡 Subscribe
+                subscribe_payload = {
+                    "symbol": symbols,
+                    "type": "symbolUpdate"
+                }
+                await ws.send(json.dumps(subscribe_payload))
+                logger.info("WebSocket subscribed to symbols: %s", symbols)
 
                 async for raw_message in ws:
                     await self._handle_message(raw_message, on_tick)
+
         except Exception as exc:
             logger.warning("WebSocket error: %s", exc)
             if self.on_error:
@@ -162,13 +172,17 @@ class WebsocketService:
 
     async def _handle_message(
         self,
-        raw_message: str,
+        raw_message: str | bytes,
         on_tick: Callable[[dict[str, float]], Awaitable[None]],
     ) -> None:
         """
         Parse incoming WebSocket message and extract Last Traded Price.
         """
         try:
+            # SAFETY FIX: Ensure we decode binary data if FYERS sends it
+            if isinstance(raw_message, bytes):
+                raw_message = raw_message.decode('utf-8')
+                
             data = json.loads(raw_message)
 
             # FYERS d-array format
