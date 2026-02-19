@@ -54,10 +54,10 @@ class Settings(BaseSettings):
 
     @property
     def fyers_data_ws_url(self) -> str:
-        # Market Data WebSocket MUST always use api (No -t1)
-        return "wss://api.fyers.in/socket/v2/data/"
-
-    @property
+            fyers_data_ws_url: str = Field(
+                default="wss://api.fyers.in/socket/v2/data/",
+                alias="FYERS_DATA_WS_URL"
+            )
     def fyers_order_ws_url(self) -> str:
         return "wss://api.fyers.in/socket/v2/order/"
 
