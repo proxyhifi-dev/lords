@@ -42,7 +42,7 @@ class WebsocketService:
         # Build SSL context from certifi bundle:
         self.ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-        # WebSocket URL from client settings
+        # WebSocket URL from client settings (official FYERS v3: always wss://api.fyers.in/socket/v2/data/)
         self.ws_url = self.client.data_ws_url
 
         # User callbacks
@@ -112,14 +112,12 @@ class WebsocketService:
         on_tick: Callable[[dict[str, float]], Awaitable[None]],
     ) -> None:
         """
-        Single WebSocket session — connect → authenticate → subscribe → receive loop.
+        Official FYERS v3 WebSocket session — clean connect, auth JSON, subscribe JSON.
         """
-        # Must have a valid token
         if not self.client.auth.access_token:
             raise RuntimeError("WebSocket: missing access token")
 
-        # Connect to correct FYERS v2 WebSocket URL (NO token in URL)
-        connection_url = self.ws_url
+        connection_url = self.ws_url  # Always wss://api.fyers.in/socket/v2/data/
         logger.info("WebSocket connecting to %s", connection_url)
 
         try:
@@ -129,22 +127,20 @@ class WebsocketService:
                 ping_interval=20,
                 ping_timeout=10,
             ) as ws:
-                logger.info("WebSocket connected.")
+                logger.info("WebSocket connected to FYERS.")
                 if self.on_open:
                     self.on_open()
 
-                # 🔐 Send Authorization JSON
-                auth_payload = {
+                # Send authorization JSON (official SDK style)
+                await ws.send(json.dumps({
                     "authorization": f"{self.client.settings.fyers_app_id} {self.client.auth.access_token}"
-                }
-                await ws.send(json.dumps(auth_payload))
+                }))
 
-                # 📡 Subscribe
-                subscribe_payload = {
+                # Send subscription JSON (official SDK style)
+                await ws.send(json.dumps({
                     "symbol": symbols,
                     "type": "symbolUpdate"
-                }
-                await ws.send(json.dumps(subscribe_payload))
+                }))
                 logger.info("WebSocket subscribed to symbols: %s", symbols)
 
                 async for raw_message in ws:

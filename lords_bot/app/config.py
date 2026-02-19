@@ -37,11 +37,11 @@ class Settings(BaseSettings):
     # Unified base URL for all Fyers endpoints (T1 or production)
     fyers_env: str = Field(default="t1", alias="FYERS_ENV")  # 't1' or 'prod'
 
+
     @property
     def fyers_base_url(self) -> str:
-        if self.fyers_env == "t1":
-            return "https://api-t1.fyers.in/api/v3"
-        return "https://api.fyers.in/api/v3"
+        # Auth and Orders MUST always use api-t1
+        return "https://api-t1.fyers.in/api/v3"
 
     @property
     def fyers_auth_url(self) -> str:
@@ -49,32 +49,24 @@ class Settings(BaseSettings):
 
     @property
     def fyers_data_url(self) -> str:
-        if self.fyers_env == "t1":
-            return "https://api-t1.fyers.in/data-rest/v3"
-        return "https://api.fyers.in/data-rest/v3"
+        # Data REST calls
+        return "https://api-t1.fyers.in/data-rest/v3"
 
     @property
     def fyers_data_ws_url(self) -> str:
-        if self.fyers_env == "t1":
-            return "wss://api-t1.fyers.in/socket/v2/data/"
+        # Market Data WebSocket MUST always use api (No -t1)
         return "wss://api.fyers.in/socket/v2/data/"
 
     @property
     def fyers_order_ws_url(self) -> str:
-        if self.fyers_env == "t1":
-            return "wss://api-t1.fyers.in/socket/v2/order/"
         return "wss://api.fyers.in/socket/v2/order/"
 
     @property
     def fyers_position_ws_url(self) -> str:
-        if self.fyers_env == "t1":
-            return "wss://api-t1.fyers.in/socket/v2/position/"
         return "wss://api.fyers.in/socket/v2/position/"
 
     @property
     def fyers_trade_ws_url(self) -> str:
-        if self.fyers_env == "t1":
-            return "wss://api-t1.fyers.in/socket/v2/trade/"
         return "wss://api.fyers.in/socket/v2/trade/"
 
 
