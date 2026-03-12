@@ -1,170 +1,73 @@
-# Lords Bot
+# SAMCO NIFTY Option Bot
 
-Production-grade FastAPI + async Python trading bot for NIFTY50 options using an ORB breakout strategy and FYERS APIs.
+Production-ready FastAPI trading bot scaffold using SAMCO Trade API with a minimal real-time dashboard.
 
-## Architecture
+## Project Structure
 
-```mermaid
-flowchart TD
-    UI[FastAPI UI] --> Scan[ORB Strategy]
-    WS[FYERS Data WebSocket] --> Scan
-    Scan --> Risk[Risk Engine]
-    Risk --> Order[Order Service]
-    Order --> TradeAPI[FYERS Trading REST]
-    Scan --> DataAPI[FYERS Data REST Quotes/Optionchain]
-    TradeAPI --> FyersClient[FyersClient retry+circuit+token refresh]
-    DataAPI --> FyersClient
+```text
+project_root/
+├── backend/
+│   ├── main.py
+│   ├── config.py
+│   ├── samco_auth.py
+│   ├── samco_client.py
+│   ├── option_chain_service.py
+│   ├── strategy_engine.py
+│   └── models.py
+├── frontend/
+│   ├── index.html
+│   └── dashboard.js
+└── requirements.txt
 ```
 
-## Installation
+## Features
 
-1. Create venv and install dependencies.
-2. Copy `.env.example` to `.env` and fill values.
-3. Run `python -m lords_bot.main`.
+- SAMCO login (`POST /login`) with in-memory `sessionToken` reuse.
+- Automatic retry with exponential backoff for API requests.
+- Token expiration detection (401/403) and automatic re-login.
+- Option chain polling every 5 seconds using shared async `httpx.AsyncClient`.
+- ATM strike calculation: `round(spot / 50) * 50`.
+- Simple signal strategy:
+  - `CALL` when `CE_OI > PE_OI` at ATM.
+  - `PUT` otherwise.
+- JSON APIs:
+  - `GET /health`
+  - `GET /index-price`
+  - `GET /option-chain`
+  - `GET /signal`
+- Minimal dashboard with Tailwind + JS polling every 5 seconds.
 
-## Configuration (.env)
+## Setup
 
-- `FYERS_APP_ID`, `FYERS_SECRET`, `FYERS_PIN`: broker credentials.
-- `FYERS_BASE_URL`: trading API base URL.
-- `FYERS_DATA_URL`: market data base URL.
-- `TRADING_MODE`: `PAPER` or `LIVE`.
-- `INITIAL_CAPITAL`, `STOP_LOSS_PCT`, `TARGET_PCT`: risk defaults.
-- `LOG_LEVEL`, `LOG_FILE`: logging configuration.
-
-## FYERS API Endpoints
-
-### A) Authentication
-
-1. **GET /authcode**
-   - URL: `https://api-t1.fyers.in/api/v3/generate-authcode`
-   - Purpose: Start auth-code flow.
-   - Example request:
-     ```http
-     GET /api/v3/generate-authcode?client_id=APP&redirect_uri=http://127.0.0.1:8080&response_type=code
-     ```
-   - Example response snippet: redirect URI with `auth_code=...`.
-
-2. **POST /api/v3/token**
-   - URL: `https://api-t1.fyers.in/api/v3/token`
-   - Purpose: exchange auth code for access token.
-   - Example request:
-     ```json
-     {"grant_type":"authorization_code","appIdHash":"...","code":"..."}
-     ```
-   - Example response:
-     ```json
-     {"s":"ok","access_token":"...","refresh_token":"..."}
-     ```
-
-3. **POST /api/v3/token/refresh**
-   - URL: `https://api-t1.fyers.in/api/v3/token/refresh`
-   - Purpose: refresh expired tokens without full login.
-   - Example request:
-     ```json
-     {"grant_type":"refresh_token","refresh_token":"..."}
-     ```
-   - Example response:
-     ```json
-     {"s":"ok","access_token":"new-token"}
-     ```
-
-### B) Trading Orders
-
-- **GET/POST/PUT/DELETE /api/v3/orders**
-  - URL: `${FYERS_BASE_URL}/orders`
-  - Purpose: list/create/modify/cancel orders.
-  - Example POST request:
-    ```json
-    {"symbol":"NSE:NIFTY24OCT23000CE","qty":75,"type":2,"side":1,"productType":"INTRADAY"}
-    ```
-  - Example response:
-    ```json
-    {"s":"ok","id":"24010100000001"}
-    ```
-
-- **GET /api/v3/orders/sync**
-  - URL: `${FYERS_BASE_URL}/orders/sync`
-  - Purpose: sync order state quickly after placement.
-
-- **GET /api/v3/positions**
-  - URL: `${FYERS_BASE_URL}/positions`
-  - Purpose: startup/open-position reconciliation.
-
-- **GET /api/v3/trades**
-  - URL: `${FYERS_BASE_URL}/trades`
-  - Purpose: trade book and fill references.
-
-- **POST /api/v3/exit_positions**
-  - URL: `${FYERS_BASE_URL}/exit_positions`
-  - Purpose: broker-side square-off when required.
-
-### C) Market Data
-
-- **GET /data-rest/v3/quotes**
-  - URL: `${FYERS_DATA_URL}/quotes`
-  - Purpose: live LTP fallback and trade monitoring.
-
-- **GET /data-rest/v3/history** *(historical only)*
-  - URL: `${FYERS_DATA_URL}/history`
-  - Purpose: backfill/analytics, not high-frequency live ORB triggers.
-
-- **GET /data-rest/v3/optionchain**
-  - URL: `${FYERS_DATA_URL}/optionchain`
-  - Purpose: ATM strike selection.
-
-- **GET /data-rest/v3/symbol_master**
-  - URL: `${FYERS_DATA_URL}/symbol_master`
-  - Purpose: instrument metadata.
-
-- **GET /data-rest/v3/market_depth**
-  - URL: `${FYERS_DATA_URL}/market_depth`
-  - Purpose: depth-based diagnostics.
-
-### D) WebSocket Endpoints
-
-- `wss://api.fyers.in/socket/v2/data/` - live price ticks.
-- `wss://api.fyers.in/socket/v2/order/` - order updates.
-- `wss://api.fyers.in/socket/v2/position/` - position updates.
-- `wss://api.fyers.in/socket/v2/trade/` - trade executions.
-
-## Why history API fails during live markets and how this bot avoids it
-
-`/history` is meant for historical bars and can throttle or fail (e.g., 503) during peak load if called repeatedly. Lords Bot builds ORB from websocket ticks (09:15-09:30 IST) and uses `/quotes` fallback only when needed. This avoids aggressive history polling and improves broker stability.
-
-## Running the bot
+1. Create and activate a Python 3.11 virtual environment.
+2. Install dependencies:
 
 ```bash
-python -m lords_bot.main
+pip install -r requirements.txt
 ```
 
-UI endpoints:
-- `POST /scan`
-- `POST /approve`
-- `GET /monitor`
-
-## Risk controls
-
-- Max daily loss lockout.
-- Max trades/day lockout.
-- Risk-based position sizing.
-- Circuit breaker on repeated API failures.
-
-## Testing
+3. Export environment variables (or create `.env`):
 
 ```bash
-pytest -q
+export SAMCO_USER_ID="your_user"
+export SAMCO_PASSWORD="your_password"
+export SAMCO_YOB="YYYY"
+export OPTION_EXPIRY="2026-12-31"
 ```
 
-## Troubleshooting
+4. Run:
 
-- **401 errors**: ensure refresh token exists and credentials are valid.
-- **503 errors**: check broker availability; client retries then opens circuit.
-- **UI missing data**: monitor/scan now return safe default payloads.
+```bash
+python backend/main.py
+```
 
-## FAQ
+5. Open dashboard:
 
-**Q: Does this bot auto-refresh token?**
-A: Yes, on 401 it refreshes once and retries.
+```text
+http://localhost:8000
+```
 
-**Q: Does it trade when risk limits are hit?**
-A: No. Risk engine blocks further trades and sets shutdown state.
+## Notes
+
+- `OPTION_EXPIRY` must match an active NIFTY expiry date.
+- Parser is tolerant to field naming variations in option-chain payloads.
