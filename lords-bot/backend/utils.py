@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+import logging
+from datetime import datetime, time, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
+
+from zoneinfo import ZoneInfo
+
+IST = ZoneInfo('Asia/Kolkata')
 
 
 def utc_now_iso() -> str:
@@ -29,7 +34,15 @@ def write_json_file(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2))
 
 
-async def with_retries(coro_factory, retries: int = 3, delay: float = 0.3):
+def is_market_hours() -> bool:
+    now_ist = datetime.now(IST)
+    if now_ist.weekday() >= 5:
+        return False
+    current = now_ist.time()
+    return time(9, 15) <= current <= time(15, 30)
+
+
+async def with_retries(coro_factory: Callable[[], Awaitable[Any]], retries: int = 3, delay: float = 0.3) -> Any:
     last_error = None
     for attempt in range(retries):
         try:
@@ -39,3 +52,12 @@ async def with_retries(coro_factory, retries: int = 3, delay: float = 0.3):
             if attempt < retries - 1:
                 await asyncio.sleep(delay * (attempt + 1))
     raise RuntimeError(f'All retries failed: {last_error}') from last_error
+
+
+def configure_logging(log_file: Path) -> None:
+    ensure_parent(log_file)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(name)s - %(message)s',
+        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
+    )
