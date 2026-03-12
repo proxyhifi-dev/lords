@@ -1,129 +1,160 @@
-from __future__ import annotations
-
-import asyncio
-import logging
-import random
+import os
 import time
-from datetime import datetime
-
+import asyncio
 import httpx
+from dotenv import load_dotenv
 
-from auth import samco_auth
-from cache import load_cached_snapshot
-from config import settings, yaml_config
-from models import OptionRow
-from utils import with_retries
+load_dotenv()
 
-logger = logging.getLogger(__name__)
+BASE_URL = "https://api.stocknote.com"
+
+API_KEY = os.getenv("SAMCO_API_KEY")
+ACCESS_TOKEN = os.getenv("SAMCO_ACCESS_TOKEN")
+
+HEADERS = {
+    "x-api-key": API_KEY,
+    "Authorization": f"Bearer {ACCESS_TOKEN}",
+    "Content-Type": "application/json"
+}
 
 
 class SamcoClient:
-    def __init__(self) -> None:
-        self.base_url = settings.samco_base_url.rstrip('/')
-        self.timeout = httpx.Timeout(float(yaml_config.api_timeout))
-        self._last_request_ts = 0.0
-        self._min_interval = 0.2
 
-    async def _rate_limit(self) -> None:
-        elapsed = time.time() - self._last_request_ts
-        if elapsed < self._min_interval:
-            await asyncio.sleep(self._min_interval - elapsed)
-        self._last_request_ts = time.time()
+    def __init__(self):
+        self.last_request_time = 0
+        self.rate_limit_seconds = 1
 
-    async def login(self) -> str:
-        return await samco_auth.login()
+    async def _rate_limit(self):
+        now = time.time()
+        diff = now - self.last_request_time
 
-    async def _safe_get(self, path: str, params: dict | None = None) -> dict:
-        token = await self.login()
+        if diff < self.rate_limit_seconds:
+            await asyncio.sleep(self.rate_limit_seconds - diff)
 
-        async def _fetch() -> dict:
-            await self._rate_limit()
-            async with httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout) as client:
-                response = await client.get(path, params=params, headers={'Authorization': f'Bearer {token}'})
-                response.raise_for_status()
-                return response.json()
+        self.last_request_time = time.time()
 
-        return await with_retries(_fetch, retries=3, delay=0.5)
+    async def _request(self, endpoint, params=None):
 
-    async def get_profile(self) -> dict:
+        await self._rate_limit()
+
+        url = f"{BASE_URL}{endpoint}"
+        retries = 3
+
+        async with httpx.AsyncClient(timeout=10) as client:
+
+            for attempt in range(retries):
+
+                try:
+
+                    response = await client.get(
+                        url,
+                        headers=HEADERS,
+                        params=params
+                    )
+
+                    if response.status_code == 200:
+                        return response.json()
+
+                    if response.status_code == 429:
+                        await asyncio.sleep(2)
+                        continue
+
+                    if response.status_code >= 500:
+                        await asyncio.sleep(1)
+                        continue
+
+                except Exception:
+                    await asyncio.sleep(1)
+
+        print(f"WARNING: API failed -> {endpoint}")
+        return {}
+
+    # ----------------------------------
+    # OPTION CHAIN
+    # ----------------------------------
+
+    async def get_option_chain(self, symbol="NIFTY", expiry=None):
+
+        params = {
+            "exchange": "NFO",
+            "searchSymbolName": symbol
+        }
+
+        if expiry:
+            params["expiry"] = expiry
+
+        data = await self._request(
+            "/option/optionChain",
+            params=params
+        )
+
+        if not data:
+            return []
+
+        return data
+
+    # ----------------------------------
+    # UNDERLYING PRICE
+    # ----------------------------------
+
+    async def get_underlying_price(self, symbol="NIFTY"):
+
+        params = {
+            "symbolName": symbol,
+            "exchange": "NSE"
+        }
+
+        data = await self._request(
+            "/market/quote",
+            params=params
+        )
+
         try:
-            return await self._safe_get('/user/profile')
+            # extract price from API response
+            price = float(data["data"]["lastTradedPrice"])
+            return price
         except Exception:
-            return {'status': 'fallback', 'username': settings.samco_username, 'broker': 'SAMCO'}
+            return 0.0
 
-    async def get_funds(self) -> dict:
-        try:
-            return await self._safe_get('/user/funds')
-        except Exception:
-            return {'status': 'fallback', 'available_cash': 100000, 'utilized_margin': 0}
+    # ----------------------------------
+    # PROFILE
+    # ----------------------------------
 
-    async def get_orders(self) -> dict:
-        try:
-            return await self._safe_get('/orders')
-        except Exception:
-            return {'status': 'fallback', 'orders': []}
+    async def get_profile(self):
 
-    async def get_underlying_price(self, symbol: str = 'NIFTY') -> float:
-        try:
-            payload = await self._safe_get('/market/quote', params={'symbolName': symbol, 'exchange': 'NSE'})
-            data = payload.get('data', payload)
-            return float(data.get('ltp') or data.get('lastTradedPrice') or 0)
-        except Exception:
-            cached = load_cached_snapshot().get('underlying_price')
-            return float(cached or 22500.0)
+        data = await self._request("/user/profile")
 
-    async def get_option_chain(self, symbol: str, expiry: str) -> list[dict]:
-        try:
-            payload = await self._safe_get(
-                '/option/optionChain',
-                params={'exchange': 'NFO', 'searchSymbolName': symbol, 'expiry': expiry},
-            )
-            return self._parse_option_chain(payload)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning('Option chain API failed, using fallback cache/mock: %s', exc)
-            cached = load_cached_snapshot().get('option_chain', [])
-            return cached or self._mock_option_chain(symbol)
+        if not data:
+            return {"status": "offline"}
 
-    def _parse_option_chain(self, payload: dict) -> list[dict]:
-        rows: list[dict] = []
-        raw = payload.get('data') or payload.get('optionChain') or []
-        for item in raw:
-            rows.append(
-                OptionRow(
-                    strike_price=float(item.get('strikePrice', item.get('strike_price', 0))),
-                    call_oi=float(item.get('callOI', item.get('call_oi', 0))),
-                    put_oi=float(item.get('putOI', item.get('put_oi', 0))),
-                    call_change_oi=float(item.get('callChangeInOI', item.get('call_change_oi', 0))),
-                    put_change_oi=float(item.get('putChangeInOI', item.get('put_change_oi', 0))),
-                    call_ltp=float(item.get('callLTP', item.get('call_ltp', 0))),
-                    put_ltp=float(item.get('putLTP', item.get('put_ltp', 0))),
-                    volume=float(item.get('volume', 0)),
-                ).model_dump()
-            )
-        return rows
+        return data
 
-    def _mock_option_chain(self, symbol: str) -> list[dict]:
-        seed = datetime.utcnow().second
-        random.seed(seed)
-        spot = 22500
-        step = 50
-        base_strike = int(round(spot / step) * step)
-        rows = []
-        for i in range(-15, 16):
-            strike = base_strike + (i * step)
-            rows.append(
-                OptionRow(
-                    strike_price=float(strike),
-                    call_oi=float(random.randint(1000, 12000)),
-                    put_oi=float(random.randint(1000, 12000)),
-                    call_change_oi=float(random.randint(-500, 800)),
-                    put_change_oi=float(random.randint(-500, 800)),
-                    call_ltp=round(max(5, 200 - abs(i) * 10 + random.uniform(-5, 5)), 2),
-                    put_ltp=round(max(5, 200 - abs(i) * 10 + random.uniform(-5, 5)), 2),
-                    volume=float(random.randint(500, 15000)),
-                ).model_dump()
-            )
-        return rows
+    # ----------------------------------
+    # FUNDS
+    # ----------------------------------
+
+    async def get_funds(self):
+
+        data = await self._request("/user/funds")
+
+        if not data:
+            return {"balance": 0}
+
+        return data
+
+    # ----------------------------------
+    # ORDERS
+    # ----------------------------------
+
+    async def get_orders(self):
+
+        data = await self._request("/order/orders")
+
+        if not data:
+            return []
+
+        return data
 
 
+# GLOBAL INSTANCE
 samco_client = SamcoClient()
