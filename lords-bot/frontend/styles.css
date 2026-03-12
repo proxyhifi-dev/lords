@@ -1,0 +1,5 @@
+body { font-family: Arial, sans-serif; margin: 1rem 2rem; background: #111; color: #eee; }
+pre { background: #1b1b1b; padding: 0.75rem; border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+th, td { border: 1px solid #333; padding: 0.4rem; text-align: right; }
+button { margin: 0.5rem 0; }
