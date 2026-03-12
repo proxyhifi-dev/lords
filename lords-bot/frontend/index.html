@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lords Bot Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Lords Bot</h1>
+    <p>Real-time NIFTY/BANKNIFTY options analysis and paper trading</p>
+  </header>
+
+  <section class="widgets" id="widgets"></section>
+
+  <section class="chart-grid">
+    <canvas id="oiHeatmap"></canvas>
+    <canvas id="oiChangeChart"></canvas>
+  </section>
+
+  <section>
+    <h2>Option Chain</h2>
+    <table id="optionChainTable">
+      <thead>
+        <tr>
+          <th>Strike</th>
+          <th>Call OI</th>
+          <th>Call LTP</th>
+          <th>Put LTP</th>
+          <th>Put OI</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <script src="/static/charts.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
