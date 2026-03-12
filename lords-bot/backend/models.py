@@ -19,11 +19,13 @@ class OptionRow(BaseModel):
 class AnalysisResult(BaseModel):
     symbol: str
     expiry: str
+    underlying_price: float
     pcr: float
     trend: Literal['BULLISH', 'BEARISH', 'SIDEWAYS']
     support: float
     resistance: float
     atm_strike: float
+    oi_buildup: str
     volume_spikes: list[float] = Field(default_factory=list)
     smart_money_bias: Literal['CALL_BUYING', 'PUT_BUYING', 'NEUTRAL']
     generated_at: str
@@ -37,17 +39,19 @@ class SignalResult(BaseModel):
 
 
 class Trade(BaseModel):
-    id: int
+    trade_id: int
     position_type: Literal['CALL', 'PUT']
     symbol: str
     strike: float
     entry_price: float
     exit_price: float | None = None
-    quantity: int = 1
+    quantity: int
     status: Literal['OPEN', 'CLOSED'] = 'OPEN'
     entry_time: str
     exit_time: str | None = None
     pnl: float = 0.0
+    target_price: float = 0.0
+    stop_loss_price: float = 0.0
 
 
 class PnLSnapshot(BaseModel):
@@ -56,3 +60,8 @@ class PnLSnapshot(BaseModel):
     unrealized_pnl: float
     total_pnl: float
     open_positions: int
+    total_trades: int
+
+
+class TradingModeRequest(BaseModel):
+    mode: Literal['PAPER', 'REAL']
