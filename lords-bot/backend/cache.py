@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from config import settings
+from config import settings, yaml_config
 from utils import read_json_file, write_json_file
 
 
@@ -26,8 +26,8 @@ class TTLCache:
         return value
 
 
-cache = TTLCache(ttl_seconds=settings.cache_ttl_seconds)
-cache_file = Path(__file__).resolve().parent.joinpath(settings.data_cache_file)
+cache = TTLCache(ttl_seconds=yaml_config.cache_expiry_seconds)
+cache_file = Path(settings.data_cache_file)
 
 
 def persist_cache_snapshot(snapshot: dict) -> None:
