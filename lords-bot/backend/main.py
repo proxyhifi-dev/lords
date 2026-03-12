@@ -8,32 +8,52 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.api.routes_analysis import router as analysis_router
-from backend.api.routes_dashboard import router as dashboard_router
-from backend.api.routes_funds import router as funds_router
-from backend.api.routes_option_chain import router as option_chain_router
-from backend.api.routes_profile import router as profile_router
-from backend.api.routes_signals import router as signals_router
-from backend.api.routes_trading_mode import router as trading_mode_router
-from backend.config import settings
-from backend.core.logger import configure_logging
-from backend.engine.scheduler import scheduler
+# API routers
+from api.routes_analysis import router as analysis_router
+from api.routes_option_chain import router as option_router
+from api.routes_signals import router as signals_router
+from api.routes_profile import router as profile_router
+from api.routes_funds import router as funds_router
+from api.routes_trading_mode import router as trading_mode_router
+from api.routes_dashboard import router as dashboard_router
 
+# Core modules
+from config import settings
+from core.logger import configure_logging
+from engine.scheduler import scheduler
+
+# Initialize logging
 configure_logging()
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app: FastAPI):
+    """
+    Application startup and shutdown events.
+    """
     await scheduler.start()
     yield
     await scheduler.stop()
 
 
-app = FastAPI(title=settings.app_name, lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
+# Create FastAPI app
+app = FastAPI(
+    title=settings.app_name,
+    lifespan=lifespan
+)
 
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register routers
 for router in [
-    option_chain_router,
+    option_router,
     analysis_router,
     signals_router,
     profile_router,
@@ -43,15 +63,28 @@ for router in [
 ]:
     app.include_router(router)
 
+# Frontend static files
 frontend_path = Path(settings.frontend_dir)
-app.mount('/static', StaticFiles(directory=str(frontend_path)), name='static')
+
+if frontend_path.exists():
+    app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
 
 
-@app.get('/')
+@app.get("/")
 async def root() -> FileResponse:
-    return FileResponse(frontend_path / 'index.html')
+    """
+    Serve frontend dashboard.
+    """
+    return FileResponse(frontend_path / "index.html")
 
 
-@app.get('/health')
+@app.get("/health")
 async def health() -> dict:
-    return {'status': 'ok', 'scheduler_running': scheduler.running, 'interval_seconds': settings.scheduler_interval}
+    """
+    Health check endpoint.
+    """
+    return {
+        "status": "ok",
+        "scheduler_running": scheduler.running,
+        "interval_seconds": settings.scheduler_interval,
+    }
