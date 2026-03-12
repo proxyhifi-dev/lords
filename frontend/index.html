@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SAMCO NIFTY Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-slate-950 text-slate-100 min-h-screen">
+    <div class="max-w-6xl mx-auto p-6 space-y-6">
+      <h1 class="text-2xl font-bold">SAMCO NIFTY Option Bot</h1>
+
+      <div class="grid md:grid-cols-4 gap-4">
+        <div class="bg-slate-900 p-4 rounded-xl">
+          <p class="text-sm text-slate-400">NIFTY Spot</p>
+          <p id="spot" class="text-xl font-semibold">--</p>
+        </div>
+        <div class="bg-slate-900 p-4 rounded-xl">
+          <p class="text-sm text-slate-400">ATM Strike</p>
+          <p id="atm" class="text-xl font-semibold">--</p>
+        </div>
+        <div class="bg-slate-900 p-4 rounded-xl">
+          <p class="text-sm text-slate-400">ATM CE / PE OI</p>
+          <p id="oi" class="text-xl font-semibold">--</p>
+        </div>
+        <div class="bg-slate-900 p-4 rounded-xl">
+          <p class="text-sm text-slate-400">Signal</p>
+          <p id="signal" class="text-xl font-semibold">--</p>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 p-4 rounded-xl">
+        <h2 class="text-lg font-semibold mb-2">Option Chain</h2>
+        <div class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left border-b border-slate-700">
+                <th class="py-2 pr-4">Strike</th>
+                <th class="py-2 pr-4">CE OI</th>
+                <th class="py-2 pr-4">PE OI</th>
+                <th class="py-2 pr-4">CE LTP</th>
+                <th class="py-2 pr-4">PE LTP</th>
+              </tr>
+            </thead>
+            <tbody id="chainRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+  </body>
+</html>

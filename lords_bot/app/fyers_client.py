@@ -161,10 +161,14 @@ class FyersClient:
 
     async def _refresh_token(self) -> None:
         try:
-            await self.auth.auto_login()
-            api_logger.info("Access token refreshed via auto_login.")
+            if hasattr(self.auth, "refresh_access_token"):
+                await self.auth.refresh_access_token()
+                api_logger.info("Access token refreshed via refresh endpoint.")
+            else:
+                await self.auth.auto_login()
+                api_logger.info("Access token refreshed via auto_login.")
         except Exception as exc:
-            api_logger.error("Auto login failed: %s", exc)
+            api_logger.error("Token refresh failed: %s", exc)
             raise
 
     # =====================================

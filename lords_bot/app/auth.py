@@ -81,6 +81,35 @@ class AuthService:
         logger.info("FYERS access token generated and stored.")
         return payload
 
+
+    async def refresh_access_token(self) -> dict[str, Any]:
+        """Refresh access token using FYERS token endpoint when refresh token is available."""
+        if not self.refresh_token:
+            raise RuntimeError("refresh_token missing")
+
+        async with self._refresh_lock:
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.post(
+                    f"{self._auth_base_url()}/token",
+                    json={
+                        "grant_type": "refresh_token",
+                        "refresh_token": self.refresh_token,
+                    },
+                )
+
+            payload = self._safe_json(response)
+            if response.status_code >= 400 or payload.get("s") == "error":
+                raise RuntimeError(payload.get("message", "token refresh failed"))
+
+            access_token = payload.get("access_token")
+            if not access_token:
+                raise RuntimeError("token refresh missing access_token")
+
+            self.access_token = access_token
+            TokenStore.save({"access_token": self.access_token, "refresh_token": self.refresh_token})
+            logger.info("FYERS access token refreshed.")
+            return payload
+
     async def auto_login(self) -> None:
         """
         Try to load cached token, if expired or invalid then start auth.
