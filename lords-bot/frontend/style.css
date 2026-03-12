@@ -1,0 +1,18 @@
+:root { --bullish: #2e7d32; --bearish: #c62828; --sideways: #f9a825; }
+body { font-family: Arial, sans-serif; margin: 0; padding: 16px; background: #0f172a; color: #e2e8f0; }
+header { margin-bottom: 16px; }
+.widgets { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.widget { background: #1e293b; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
+.widget h3 { margin: 0 0 8px; font-size: 12px; color: #94a3b8; text-transform: uppercase; }
+.widget strong { font-size: 18px; }
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+canvas { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 8px; }
+table { width: 100%; border-collapse: collapse; background: #1e293b; }
+th, td { border: 1px solid #334155; padding: 8px; text-align: right; }
+th { background: #334155; }
+tr.atm { background: rgba(251, 191, 36, 0.15); }
+tr.support { box-shadow: inset 3px 0 0 #22c55e; }
+tr.resistance { box-shadow: inset 3px 0 0 #ef4444; }
+.bullish { color: var(--bullish); }
+.bearish { color: var(--bearish); }
+.sideways { color: var(--sideways); }
