@@ -1,47 +1,23 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lords Bot Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <header>
-    <h1>Lords Bot</h1>
-    <p>NIFTY Real-time Options Analytics</p>
-  </header>
-
-  <section class="top-grid">
-    <div class="card"><h3>API Status</h3><p id="apiStatus">-</p></div>
-    <div class="card"><h3>Trading Mode</h3><p id="modeText">-</p><button id="modeToggle">Toggle Mode</button></div>
-    <div class="card"><h3>Profile</h3><pre id="profilePanel"></pre></div>
-    <div class="card"><h3>Funds</h3><pre id="fundsPanel"></pre></div>
-  </section>
-
-  <section class="widgets" id="widgets"></section>
-
-  <section class="chart-grid">
-    <canvas id="oiHeatmap"></canvas>
-    <canvas id="oiChangeChart"></canvas>
-  </section>
-
-  <section>
-    <h2>Option Chain</h2>
-    <p id="emptyMessage" class="hidden">Waiting for market data...</p>
-    <table id="optionChainTable">
-      <thead><tr><th>Strike</th><th>Call OI</th><th>Call LTP</th><th>Put LTP</th><th>Put OI</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </section>
-
-  <section class="card">
-    <h3>Paper Trading</h3>
-    <pre id="paperPanel"></pre>
-  </section>
-
-  <script src="/static/charts.js"></script>
+  <h1>Lords Bot Dashboard</h1>
+  <div id="mode"></div>
+  <button id="toggle">Toggle Trading Mode</button>
+  <pre id="summary"></pre>
+  <canvas id="oiChart" height="100"></canvas>
+  <table>
+    <thead><tr><th>Strike</th><th>Call OI</th><th>Put OI</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <script src="/static/chart.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
