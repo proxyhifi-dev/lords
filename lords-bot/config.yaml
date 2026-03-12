@@ -1,8 +1,0 @@
-scheduler_interval: 3
-pcr_bullish: 1.2
-pcr_bearish: 0.8
-max_risk_per_trade: 0.02
-atm_range: 10
-api_timeout: 5
-lot_size: 50
-cache_expiry_seconds: 10
