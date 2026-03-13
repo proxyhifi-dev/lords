@@ -21,8 +21,19 @@ SYMBOL=NIFTY
 EXPIRY=2026-03-26
 
 SAMCO_BASE_URL=https://api.stocknote.com
-SAMCO_API_KEY=
+
+# Preferred: auto-login flow (StockNoteBridge style)
+SAMCO_USER_ID=
+SAMCO_PASSWORD=
+SAMCO_YOB=
+
+# Optional fallback: provide active session token directly
+SAMCO_SESSION_TOKEN=
+# Backward-compatible alias
 SAMCO_ACCESS_TOKEN=
+
+# Optional legacy header (only if your account setup needs it)
+SAMCO_API_KEY=
 
 TRADING_MODE=PAPER
 ENABLE_REAL_TRADING=false
