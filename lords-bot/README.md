@@ -1,34 +1,43 @@
-# lords-bot
+# Lords Bot
 
-Refactored FastAPI NIFTY options bot with layered architecture, in-memory caching, scheduler strategy loop, dashboard endpoint, and paper/real trading safety controls.
+Plug-and-play FastAPI options dashboard with Samco market data, option scanner, manual trade approval, paper/real mode, and auto stop-loss/target management.
 
-## Run
+## Quick start
 
 ```bash
-cd lords-bot
 pip install -r requirements.txt
-uvicorn backend.main:app --reload
+cd backend
+uvicorn main:app --reload
 ```
 
-## Key API
+Open: `http://127.0.0.1:8000`
 
-- `GET /dashboard` (single UI payload)
-- `GET /option-chain`
-- `GET /analysis`
-- `GET /signals`
-- `GET /profile`
-- `GET /funds`
+## Environment
+
+Create `.env` in project root:
+
+```env
+SYMBOL=NIFTY
+EXPIRY=2026-03-26
+
+SAMCO_BASE_URL=https://api.stocknote.com
+SAMCO_API_KEY=
+SAMCO_ACCESS_TOKEN=
+
+TRADING_MODE=PAPER
+ENABLE_REAL_TRADING=false
+
+SCHEDULER_INTERVAL=15
+
+MAX_TRADES_PER_DAY=5
+MAX_DAILY_LOSS=5000
+```
+
+## Key endpoints
+
+- `GET /dashboard`
+- `POST /trade/approve`
+- `POST /trade/close`
+- `POST /trade/reset`
 - `GET /trading-mode`
 - `POST /trading-mode`
-
-## Caching / Rate Limit Protection
-
-- Option chain TTL: 5 sec
-- Profile TTL: 60 sec
-- Funds TTL: 60 sec
-
-## Trading Safety
-
-- `MAX_TRADES_PER_DAY=5`
-- `MAX_DAILY_LOSS=5000`
-- Real trading is blocked unless `ENABLE_REAL_TRADING=true`.
