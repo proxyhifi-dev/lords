@@ -16,15 +16,16 @@ logger = logging.getLogger(__name__)
 class SamcoClient:
     def __init__(self) -> None:
         self.base_url = settings.samco_base_url.rstrip('/')
-        self.headers = {
-            'x-api-key': settings.samco_api_key,
-            'Authorization': f'Bearer {settings.samco_access_token}',
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-        }
+        self.api_key = settings.samco_api_key
+        self.user_id = settings.samco_user_id or settings.samco_api_key
+        self.password = settings.samco_password
+        self.yob = settings.samco_yob
+        self.session_token = settings.samco_session_token or settings.samco_access_token
+
         self._last_request_ts: dict[str, float] = {}
         self._cooldown_until: dict[str, float] = {}
         self._warned_missing_creds = False
+        self._login_lock = asyncio.Lock()
 
     @staticmethod
     def to_expiry_code(expiry: str) -> str:
@@ -34,8 +35,69 @@ class SamcoClient:
     def to_expiry_dash(expiry: str) -> str:
         return datetime.strptime(expiry, '%Y-%m-%d').strftime('%d-%m-%Y')
 
-    def _has_credentials(self) -> bool:
-        return bool(settings.samco_api_key and settings.samco_access_token)
+    def _headers(self) -> dict[str, str]:
+        headers = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+        }
+        if self.api_key:
+            headers['x-api-key'] = self.api_key
+        if self.session_token:
+            headers['Authorization'] = f'Bearer {self.session_token}'
+        return headers
+
+    def _can_login(self) -> bool:
+        return bool(self.user_id and self.password and self.yob)
+
+    async def _ensure_session_token(self) -> bool:
+        if self.session_token:
+            return True
+
+        if not self._can_login():
+            if not self._warned_missing_creds:
+                logger.warning(
+                    'samco credentials missing; set either SAMCO_SESSION_TOKEN or SAMCO_ACCESS_TOKEN, '
+                    'or set SAMCO_USER_ID/SAMCO_PASSWORD/SAMCO_YOB for auto login',
+                )
+                self._warned_missing_creds = True
+            return False
+
+        async with self._login_lock:
+            if self.session_token:
+                return True
+            return await self._login()
+
+    async def _login(self) -> bool:
+        body = {'userId': self.user_id, 'password': self.password, 'yob': self.yob}
+        timeout = httpx.Timeout(settings.request_timeout)
+        endpoints = ['/login', '/auth/login']
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            for endpoint in endpoints:
+                url = f'{self.base_url}{endpoint}'
+                try:
+                    response = await client.post(url, json=body, headers=self._headers())
+                    response.raise_for_status()
+                    payload = response.json() if response.content else {}
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning('samco login attempt failed endpoint=%s err=%s', endpoint, exc)
+                    continue
+
+                token = ''
+                if isinstance(payload, dict):
+                    token = str(payload.get('sessionToken') or '').strip()
+                    if not token:
+                        data = payload.get('data', {})
+                        if isinstance(data, dict):
+                            token = str(data.get('sessionToken') or '').strip()
+
+                if token:
+                    self.session_token = token
+                    logger.info('samco login successful endpoint=%s', endpoint)
+                    return True
+
+        logger.error('samco login failed; unable to obtain session token')
+        return False
 
     async def _rate_guard(self, endpoint: str) -> bool:
         now = time.time()
@@ -52,10 +114,7 @@ class SamcoClient:
         return True
 
     async def _get(self, endpoint: str, params: dict[str, Any] | None = None) -> tuple[dict[str, Any], int | None]:
-        if not self._has_credentials():
-            if not self._warned_missing_creds:
-                logger.warning('samco credentials missing; skipping live API calls until SAMCO_API_KEY and SAMCO_ACCESS_TOKEN are set')
-                self._warned_missing_creds = True
+        if not await self._ensure_session_token():
             return {}, None
 
         allowed = await self._rate_guard(endpoint)
@@ -68,7 +127,7 @@ class SamcoClient:
         async with httpx.AsyncClient(timeout=timeout) as client:
             for attempt in range(3):
                 try:
-                    response = await client.get(url, params=params, headers=self.headers)
+                    response = await client.get(url, params=params, headers=self._headers())
                     response.raise_for_status()
                     payload = response.json()
                     if isinstance(payload, dict):
@@ -76,6 +135,10 @@ class SamcoClient:
                     return {}, response.status_code
                 except httpx.HTTPStatusError as exc:
                     status = exc.response.status_code
+                    if status == 401 and self._can_login():
+                        self.session_token = ''
+                        if await self._ensure_session_token():
+                            continue
                     if status in {429, 500, 502, 503, 504} and attempt < 2:
                         backoff = 2**attempt
                         logger.warning('samco retry endpoint=%s status=%s sleep=%ss', endpoint, status, backoff)

@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     samco_base_url: str = 'https://api.stocknote.com'
     samco_api_key: str = ''
     samco_access_token: str = ''
+    samco_session_token: str = ''
+    samco_user_id: str = ''
+    samco_password: str = ''
+    samco_yob: str = ''
 
     symbol: str = 'NIFTY'
     expiry: str = '2026-03-26'
