@@ -1,5 +1,96 @@
-body { font-family: Arial, sans-serif; margin: 1rem 2rem; background: #111; color: #eee; }
-pre { background: #1b1b1b; padding: 0.75rem; border-radius: 8px; }
-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-th, td { border: 1px solid #333; padding: 0.4rem; text-align: right; }
-button { margin: 0.5rem 0; }
+:root {
+  --bg: #070b14;
+  --panel: #0f1627;
+  --border: #304264;
+  --text: #e8eefc;
+  --muted: #9db0d3;
+  --good: #22c55e;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, Arial, sans-serif;
+}
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 14px;
+}
+.hero {
+  text-align: center;
+  border: 2px solid var(--border);
+  background: var(--panel);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.card {
+  border: 2px solid var(--border);
+  background: var(--panel);
+  text-align: center;
+  padding: 12px 8px;
+}
+.card .label { color: var(--muted); font-size: 14px; margin-bottom: 6px; }
+.card .value { font-size: 22px; font-weight: 700; }
+.panel-box {
+  border: 2px solid var(--border);
+  background: var(--panel);
+  margin-bottom: 14px;
+}
+.panel-box h2 {
+  margin: 0;
+  text-align: center;
+  padding: 10px;
+  border-bottom: 2px solid var(--border);
+  font-size: 18px;
+  letter-spacing: .5px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  border: 1px solid var(--border);
+  text-align: center;
+  padding: 8px;
+  font-size: 14px;
+}
+thead th { background: #142038; }
+.chart-wrap { padding: 10px; }
+.trade-controls {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 12px;
+}
+button {
+  border: 1px solid #2f7de1;
+  background: #1d4f91;
+  color: #fff;
+  border-radius: 6px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+button:hover { filter: brightness(1.1); }
+#suggestion, #action-status {
+  text-align: center;
+  margin: 4px 0 12px;
+}
+#action-status { color: var(--good); }
+
+@media (max-width: 980px) {
+  .cards { grid-template-columns: repeat(2, 1fr); }
+}
