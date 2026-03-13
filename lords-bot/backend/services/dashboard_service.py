@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from backend.core.cache import SnapshotStore
-from backend.runtime_state import runtime_state
+from core.cache import SnapshotStore
+from runtime_state import runtime_state
 
 
 class DashboardService:

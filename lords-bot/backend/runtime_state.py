@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from backend.config import settings
+from config import settings
 
 
 @dataclass
@@ -15,6 +15,7 @@ class RuntimeState:
     latest_analysis: dict[str, Any] = field(default_factory=dict)
     latest_signal: dict[str, Any] = field(default_factory=dict)
     latest_underlying_price: float = 0.0
+    last_execution: dict[str, Any] = field(default_factory=dict)
 
 
 runtime_state = RuntimeState()

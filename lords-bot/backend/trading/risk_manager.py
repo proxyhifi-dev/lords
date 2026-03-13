@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.config import settings
+from config import settings
 
 
 class RiskManager:

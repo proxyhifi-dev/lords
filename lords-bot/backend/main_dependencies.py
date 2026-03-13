@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from backend.config import settings
-from backend.core.cache import SnapshotStore, TTLCache
-from backend.services.dashboard_service import DashboardService
-from backend.services.funds_service import FundsService
-from backend.services.profile_service import ProfileService
+from config import settings
+from core.cache import SnapshotStore, TTLCache
+from services.dashboard_service import DashboardService
+from services.funds_service import FundsService
+from services.profile_service import ProfileService
 
 shared_cache = TTLCache()
 snapshot_store = SnapshotStore(settings.cache_snapshot_file)

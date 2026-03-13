@@ -3,8 +3,8 @@ from __future__ import annotations
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
 
-from backend.config import settings
-from backend.runtime_state import runtime_state
+from config import settings
+from runtime_state import runtime_state
 
 router = APIRouter(tags=['trading-mode'])
 

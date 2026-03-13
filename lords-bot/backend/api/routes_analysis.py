@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from backend.runtime_state import runtime_state
+from runtime_state import runtime_state
 
 router = APIRouter(tags=['analysis'])
 
