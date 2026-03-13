@@ -8,8 +8,8 @@ class StrategyEngine:
     def __init__(self, cache: TTLCache) -> None:
         self.signal_service = SignalService(cache)
 
-    def run(self, analysis: dict) -> dict:
-        return self.signal_service.generate_signal(analysis)
+    def run(self, analysis: dict, option_chain: list[dict]) -> dict:
+        return self.signal_service.generate_signal(analysis, option_chain)
 
 
 strategy_engine = StrategyEngine(TTLCache())

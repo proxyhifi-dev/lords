@@ -16,6 +16,7 @@ from api.routes_profile import router as profile_router
 from api.routes_funds import router as funds_router
 from api.routes_trading_mode import router as trading_mode_router
 from api.routes_dashboard import router as dashboard_router
+from api.routes_trade import router as trade_router
 
 # Core modules
 from config import settings
@@ -60,6 +61,7 @@ for router in [
     funds_router,
     trading_mode_router,
     dashboard_router,
+    trade_router,
 ]:
     app.include_router(router)
 
