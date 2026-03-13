@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from backend.main_dependencies import dashboard_service, funds_service, profile_service
+from main_dependencies import dashboard_service, funds_service, profile_service
 
 router = APIRouter(tags=['dashboard'])
 

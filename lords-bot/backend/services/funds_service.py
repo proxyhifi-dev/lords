@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from backend.brokers.samco_client import samco_client
-from backend.config import settings
-from backend.core.cache import TTLCache
+import logging
+
+from brokers.samco_client import samco_client
+from config import settings
+from core.cache import TTLCache
+
+logger = logging.getLogger(__name__)
 
 
 class FundsService:
@@ -13,6 +17,11 @@ class FundsService:
         cached = self.cache.get('funds')
         if cached is not None:
             return cached
-        payload = await samco_client.get_funds()
-        self.cache.set('funds', payload, settings.funds_ttl)
-        return payload
+
+        try:
+            payload = await samco_client.get_funds()
+            self.cache.set('funds', payload, settings.funds_ttl)
+            return payload
+        except Exception as exc:  # noqa: BLE001
+            logger.error('funds fetch failed err=%s', exc)
+            return cached or {}

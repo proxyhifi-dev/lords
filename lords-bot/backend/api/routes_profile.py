@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from backend.main_dependencies import profile_service
+from main_dependencies import profile_service
 
 router = APIRouter(tags=['profile'])
 
