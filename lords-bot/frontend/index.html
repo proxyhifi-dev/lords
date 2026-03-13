@@ -1,23 +1,81 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lords Bot Dashboard</title>
+  <title>LORDS BOT DASHBOARD</title>
   <link rel="stylesheet" href="/static/styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <h1>Lords Bot Dashboard</h1>
-  <div id="mode"></div>
-  <button id="toggle">Toggle Trading Mode</button>
-  <pre id="summary"></pre>
-  <canvas id="oiChart" height="100"></canvas>
-  <table>
-    <thead><tr><th>Strike</th><th>Call OI</th><th>Put OI</th></tr></thead>
-    <tbody id="rows"></tbody>
-  </table>
-  <script src="/static/chart.js"></script>
+  <div class="container">
+    <header class="hero">LORDS BOT DASHBOARD</header>
+
+    <section class="cards" id="top-cards">
+      <div class="card"><div class="label">Trading Mode</div><div id="mode" class="value">PAPER</div></div>
+      <div class="card"><div class="label">Market Trend</div><div id="trend" class="value">-</div></div>
+      <div class="card"><div class="label">PCR</div><div id="pcr" class="value">-</div></div>
+      <div class="card"><div class="label">Signal</div><div id="signal" class="value">-</div></div>
+    </section>
+
+    <section class="panel-box">
+      <h2>ACCOUNT INFORMATION</h2>
+      <table>
+        <thead><tr><th>Profile Name</th><th>Broker</th><th>Available Funds</th><th>Used Margin</th><th>Today's PnL</th></tr></thead>
+        <tbody id="account-row"></tbody>
+      </table>
+    </section>
+
+    <section class="panel-box">
+      <h2>OPEN POSITIONS</h2>
+      <table>
+        <thead><tr><th>Symbol</th><th>Strike</th><th>Type</th><th>Qty</th><th>Entry Price</th><th>LTP</th><th>P&L</th><th>Status</th></tr></thead>
+        <tbody id="positions"></tbody>
+      </table>
+    </section>
+
+    <section class="panel-box">
+      <h2>ORDER HISTORY</h2>
+      <table>
+        <thead><tr><th>Time</th><th>Symbol</th><th>Type</th><th>Side</th><th>Qty</th><th>Price</th><th>Status</th></tr></thead>
+        <tbody id="orders"></tbody>
+      </table>
+    </section>
+
+    <section class="panel-box">
+      <h2>OPTION CHAIN (LIVE)</h2>
+      <table>
+        <thead><tr><th>Call OI</th><th>Call LTP</th><th>Strike</th><th>Put LTP</th><th>Put OI</th></tr></thead>
+        <tbody id="chain"></tbody>
+      </table>
+    </section>
+
+    <section class="panel-box">
+      <h2>MARKET ANALYSIS</h2>
+      <table>
+        <thead><tr><th>Support Level</th><th>Resistance Level</th><th>Max Call OI</th><th>Max Put OI</th><th>ATM Strike</th></tr></thead>
+        <tbody id="analysis"></tbody>
+      </table>
+    </section>
+
+    <section class="panel-box">
+      <h2>CHARTS</h2>
+      <div class="chart-wrap"><canvas id="oiChart" height="96"></canvas></div>
+    </section>
+
+    <section class="panel-box">
+      <h2>TRADING PANEL</h2>
+      <div class="trade-controls">
+        <button id="toggle-mode">Toggle PAPER / REAL</button>
+        <button id="approve">Approve Trade</button>
+        <button id="close">Close Position</button>
+        <button id="reset">Reset</button>
+      </div>
+      <p id="suggestion">Trade Suggestion: None</p>
+      <p id="action-status">Status: Ready</p>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
