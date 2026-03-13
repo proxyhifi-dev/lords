@@ -65,6 +65,29 @@
     <section class="panel-box">
       <h2>TRADING PANEL</h2>
       <div class="trade-controls">
+    <h1>LORDS BOT DASHBOARD</h1>
+
+    <section class="cards" id="top-cards">
+      <div class="card"><h3>Trading Mode</h3><p id="mode">PAPER</p></div>
+      <div class="card"><h3>Market Trend</h3><p id="trend">-</p></div>
+      <div class="card"><h3>PCR</h3><p id="pcr">-</p></div>
+      <div class="card"><h3>Signal</h3><p id="signal">-</p></div>
+    </section>
+
+    <section><h2>ACCOUNT INFORMATION</h2><table><thead><tr><th>Profile Name</th><th>Broker</th><th>Available Funds</th><th>Used Margin</th><th>Today's PnL</th></tr></thead><tbody id="account-row"></tbody></table></section>
+
+    <section><h2>OPEN POSITIONS</h2><table><thead><tr><th>Symbol</th><th>Strike</th><th>Type</th><th>Qty</th><th>Entry Price</th><th>LTP</th><th>P&L</th><th>Status</th></tr></thead><tbody id="positions"></tbody></table></section>
+
+    <section><h2>ORDER HISTORY</h2><table><thead><tr><th>Time</th><th>Symbol</th><th>Type</th><th>Side</th><th>Qty</th><th>Price</th><th>Status</th></tr></thead><tbody id="orders"></tbody></table></section>
+
+    <section><h2>OPTION CHAIN (LIVE)</h2><table><thead><tr><th>Call OI</th><th>Call LTP</th><th>Strike</th><th>Put LTP</th><th>Put OI</th></tr></thead><tbody id="chain"></tbody></table></section>
+
+    <section><h2>MARKET ANALYSIS</h2><table><thead><tr><th>Support Level</th><th>Resistance Level</th><th>Max Call OI</th><th>Max Put OI</th><th>ATM Strike</th></tr></thead><tbody id="analysis"></tbody></table></section>
+
+    <section><h2>CHARTS</h2><canvas id="oiChart" height="90"></canvas></section>
+
+    <section><h2>TRADING PANEL</h2>
+      <div class="panel">
         <button id="toggle-mode">Toggle PAPER / REAL</button>
         <button id="approve">Approve Trade</button>
         <button id="close">Close Position</button>
@@ -75,6 +98,9 @@
     </section>
   </div>
 
+      <p id="suggestion"></p>
+    </section>
+  </div>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="/static/app.js"></script>
 </body>

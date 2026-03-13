@@ -94,3 +94,14 @@ button:hover { filter: brightness(1.1); }
 @media (max-width: 980px) {
   .cards { grid-template-columns: repeat(2, 1fr); }
 }
+body { font-family: Arial, sans-serif; margin: 0; background: #0f1117; color: #e6edf3; }
+.container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+h1, h2 { text-align: center; border: 1px solid #30363d; padding: 10px; }
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
+.card { border: 1px solid #30363d; text-align: center; padding: 10px; }
+section { margin-bottom: 14px; }
+table { width: 100%; border-collapse: collapse; border: 1px solid #30363d; }
+th, td { border: 1px solid #30363d; padding: 6px; text-align: center; }
+.panel { display: flex; justify-content: center; gap: 10px; padding: 8px; border: 1px solid #30363d; }
+button { background: #238636; color: white; border: none; padding: 8px 10px; cursor: pointer; }
+#suggestion { text-align: center; }
