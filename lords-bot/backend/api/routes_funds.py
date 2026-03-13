@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from backend.main_dependencies import funds_service
+from main_dependencies import funds_service
 
 router = APIRouter(tags=['funds'])
 

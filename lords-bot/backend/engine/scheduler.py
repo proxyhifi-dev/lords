@@ -3,13 +3,13 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from backend.config import settings
-from backend.core.cache import TTLCache
-from backend.engine.strategy_engine import strategy_engine
-from backend.runtime_state import runtime_state
-from backend.services.analysis_service import AnalysisService
-from backend.services.option_chain_service import OptionChainService
-from backend.trading.trade_executor import trade_executor
+from config import settings
+from core.cache import TTLCache
+from engine.strategy_engine import StrategyEngine
+from runtime_state import runtime_state
+from services.analysis_service import AnalysisService
+from services.option_chain_service import OptionChainService
+from trading.trade_executor import trade_executor
 
 logger = logging.getLogger(__name__)
 
@@ -20,36 +20,49 @@ class Scheduler:
         self._task: asyncio.Task | None = None
         self.cache = TTLCache()
         self.option_chain_service = OptionChainService(self.cache)
-        self.analysis_service = AnalysisService()
+        self.analysis_service = AnalysisService(self.cache)
+        self.strategy_engine = StrategyEngine(self.cache)
 
     async def tick(self) -> None:
-        chain = await self.option_chain_service.get_option_chain(runtime_state.symbol, runtime_state.expiry)
-        underlying = await self.option_chain_service.get_underlying_price(runtime_state.symbol)
-        analysis = self.analysis_service.analyze(chain, runtime_state.symbol, runtime_state.expiry, underlying)
-        signal = strategy_engine.run(analysis)
-        trade_executor.execute(signal, runtime_state.symbol)
+        try:
+            chain = await self.option_chain_service.get_option_chain(runtime_state.symbol, runtime_state.expiry)
+            underlying = await self.option_chain_service.get_underlying_price(runtime_state.symbol)
+            analysis = self.analysis_service.analyze(chain, runtime_state.symbol, runtime_state.expiry, underlying)
+            signal = self.strategy_engine.run(analysis)
+            execution = trade_executor.execute(signal, runtime_state.symbol)
 
-        runtime_state.latest_option_chain = chain
-        runtime_state.latest_underlying_price = underlying
-        runtime_state.latest_analysis = analysis
-        runtime_state.latest_signal = signal
-        logger.info('scheduler tick: pcr=%s signal=%s', analysis.get('pcr'), signal.get('signal'))
+            runtime_state.latest_option_chain = chain
+            runtime_state.latest_underlying_price = underlying
+            runtime_state.latest_analysis = analysis
+            runtime_state.latest_signal = signal
+            runtime_state.last_execution = execution
+            logger.info('scheduler tick: pcr=%s signal=%s execution=%s', analysis.get('pcr'), signal.get('signal'), execution.get('status'))
+        except Exception as exc:  # noqa: BLE001
+            logger.error('scheduler tick failed err=%s', exc)
 
     async def _run(self) -> None:
-        self.running = True
         while self.running:
             await self.tick()
             await asyncio.sleep(settings.scheduler_interval)
 
     async def start(self) -> None:
-        if self._task and not self._task.done():
+        if self.running:
             return
+        self.running = True
         self._task = asyncio.create_task(self._run())
+        logger.info('scheduler started interval=%ss', settings.scheduler_interval)
 
     async def stop(self) -> None:
+        if not self.running:
+            return
         self.running = False
         if self._task:
-            await asyncio.wait([self._task], timeout=2)
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        logger.info('scheduler stopped')
 
 
 scheduler = Scheduler()

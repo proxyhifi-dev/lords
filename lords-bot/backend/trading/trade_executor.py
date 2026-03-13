@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from backend.config import settings
-from backend.runtime_state import runtime_state
-from backend.trading.paper_trading_engine import paper_trading_engine
-from backend.trading.risk_manager import risk_manager
+from config import settings
+from runtime_state import runtime_state
+from trading.paper_trading_engine import paper_trading_engine
+from trading.risk_manager import risk_manager
 
 
 class TradeExecutor:

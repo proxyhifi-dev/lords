@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -22,6 +23,8 @@ class Settings(BaseSettings):
 
     scheduler_interval: int = 15
     option_chain_ttl: int = 5
+    analysis_ttl: int = 5
+    signals_ttl: int = 5
     profile_ttl: int = 60
     funds_ttl: int = 60
     request_timeout: int = 10
