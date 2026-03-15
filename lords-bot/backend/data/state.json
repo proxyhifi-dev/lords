@@ -1,12 +1,25 @@
 {
-  "trade_day": "2026-01-01",
+  "trade_day": "2026-03-15",
   "trading_mode": "PAPER",
   "system_status": "RUNNING",
-  "strategy_state": {},
+  "strategy_state": {
+    "spot": 23151.1,
+    "oi_bias": "NEUTRAL"
+  },
   "active_trade": {},
-  "trades_today": 0,
+  "trades_today": 3,
   "realized_pnl": 0.0,
-  "last_error": "",
-  "latest_signal": {},
-  "orb_range": {}
+  "last_error": "time data '26MAR2026' does not match format '%Y-%m-%d'",
+  "latest_signal": {
+    "signal": "BUY",
+    "option_side": "CALL",
+    "reason": "ORB_BREAKOUT_UP;rsi=100.00",
+    "entry_price": 23151.1,
+    "stop_loss": 0.0,
+    "target_price": 57877.74999999999
+  },
+  "orb_range": {
+    "high": 0.0,
+    "low": 0.0
+  }
 }
