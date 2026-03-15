@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from brokers.samco_client import samco_client
@@ -9,9 +11,23 @@ from config import settings
 from core.cache import TTLCache
 
 logger = logging.getLogger(__name__)
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class MarketDataService:
+
+    @staticmethod
+    def _normalize_response(response: Any) -> dict[str, Any]:
+        if isinstance(response, dict):
+            return response
+        if isinstance(response, str):
+            try:
+                payload = json.loads(response)
+                return payload if isinstance(payload, dict) else {}
+            except Exception:
+                logger.warning('failed to parse market data string response')
+                return {}
+        return {}
 
     def __init__(self, cache: TTLCache) -> None:
         self.cache = cache
@@ -26,7 +42,7 @@ class MarketDataService:
         if cached is not None:
             return float(cached)
 
-        response = await samco_client.index_quote("NIFTY 50")
+        response = self._normalize_response(await samco_client.index_quote("NIFTY 50"))
 
         details = response.get("indexDetails") or response.get("data") or [{}]
 
@@ -41,7 +57,7 @@ class MarketDataService:
     def add_tick(self, price: float, timestamp: datetime | None = None, volume: float = 0.0) -> None:
         if price <= 0:
             return
-        tick_time = (timestamp or datetime.now()).replace(microsecond=0)
+        tick_time = (timestamp or datetime.now(IST)).replace(microsecond=0)
         self._tick_buffer.append({'timestamp': tick_time.isoformat(), 'price': float(price), 'volume': float(volume)})
         max_ticks = 7200
         if len(self._tick_buffer) > max_ticks:

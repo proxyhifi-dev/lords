@@ -141,3 +141,48 @@ def test_scheduler_market_hours_guard() -> None:
     scheduler = Scheduler()
     dt = datetime.fromisoformat('2026-03-26T08:00:00+05:30')
     assert scheduler._in_market_hours(dt) is False
+
+
+def test_candle_builder_opening_range_allows_partial_window_after_945() -> None:
+    builder = CandleBuilder()
+    ticks = [
+        {'timestamp': '2026-03-26T09:20:01+05:30', 'price': 100},
+        {'timestamp': '2026-03-26T09:30:01+05:30', 'price': 104},
+        {'timestamp': '2026-03-26T09:44:59+05:30', 'price': 98},
+        {'timestamp': '2026-03-26T09:50:01+05:30', 'price': 101},
+    ]
+    candles = builder.build_5min_candles(ticks)
+    orb = builder.opening_range(candles)
+    assert orb['high'] == 104.0
+    assert orb['low'] == 98.0
+
+
+def test_option_chain_service_accepts_string_payload(monkeypatch) -> None:
+    monkeypatch.setattr(samco_module, 'StocknoteAPIPythonBridge', FakeBridge)
+    service = OptionChainService(TTLCache())
+
+    async def _fake_get_option_chain(symbol: str, expiry: str, strike_price: str | None = None) -> str:
+        return '{"optionDetails":[{"strikePrice":"22100","optionType":"CE","openInterest":"150","lastTradedPrice":"110"}]}'
+
+    async def _run() -> list[dict]:
+        monkeypatch.setattr('services.option_chain_service.samco_client.get_option_chain', _fake_get_option_chain)
+        return await service.get_option_chain('NIFTY', '2026-03-26')
+
+    chain = asyncio.run(_run())
+    assert chain[0]['call_oi'] == 150.0
+
+
+def test_market_data_service_accepts_string_payload(monkeypatch) -> None:
+    from services.market_data_service import MarketDataService
+
+    async def _fake_index_quote(index_name: str) -> str:
+        return '{"indexDetails":[{"spotPrice":"22456.5"}]}'
+
+    service = MarketDataService(TTLCache())
+
+    async def _run() -> float:
+        monkeypatch.setattr('services.market_data_service.samco_client.index_quote', _fake_index_quote)
+        return await service.get_nifty_spot()
+
+    spot = asyncio.run(_run())
+    assert spot == 22456.5

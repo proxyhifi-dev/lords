@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from brokers.samco_client import SamcoClient, samco_client
@@ -8,6 +9,20 @@ from core.cache import TTLCache
 
 
 class OptionChainService:
+
+
+    @staticmethod
+    def _normalize_response(response: Any) -> dict[str, Any]:
+        if isinstance(response, dict):
+            return response
+        if isinstance(response, str):
+            try:
+                payload = json.loads(response)
+                return payload if isinstance(payload, dict) else {}
+            except Exception:
+                return {}
+        return {}
+
     def __init__(self, cache: TTLCache) -> None:
         self.cache = cache
 
@@ -17,7 +32,7 @@ class OptionChainService:
         if cached is not None:
             return cached
 
-        response = await samco_client.get_option_chain(symbol, expiry, strike_price=strike_price)
+        response = self._normalize_response(await samco_client.get_option_chain(symbol, expiry, strike_price=strike_price))
         details = response.get('optionChainDetails') or response.get('optionDetails') or response.get('data') or []
 
         chain_by_strike: dict[float, dict[str, Any]] = {}
