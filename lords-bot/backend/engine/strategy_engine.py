@@ -1,19 +1,23 @@
 from __future__ import annotations
 
-from core.cache import TTLCache
-from services.signal_service import SignalService
-from strategies import PCRStrategy
+from typing import Any
+
+from strategies.orb_strategy import OrbStrategy
 
 
 class StrategyEngine:
-    def __init__(self, cache: TTLCache) -> None:
-        self.signal_service = SignalService(cache)
-        self.pcr_strategy = PCRStrategy()
+    def __init__(self) -> None:
+        self.orb = OrbStrategy()
 
-    def run(self, analysis: dict, option_chain: list[dict]) -> dict:
-        signal = self.signal_service.generate_signal(analysis, option_chain)
-        signal['strategy_signal'] = self.pcr_strategy.generate(float(analysis.get('pcr', 0) or 0))
-        return signal
+    def run(
+        self,
+        spot: float,
+        orb_high: float,
+        orb_low: float,
+        option_chain_bias: str,
+        candles: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return self.orb.generate(spot, orb_high, orb_low, option_chain_bias, candles).__dict__
 
 
-strategy_engine = StrategyEngine(TTLCache())
+strategy_engine = StrategyEngine()

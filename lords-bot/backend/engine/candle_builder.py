@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 
 class CandleBuilder:
     def __init__(self) -> None:
         self._ticks: list[dict[str, Any]] = []
+        self._active_session: date | None = None
+
+    def reset_for_session(self, session_date: date) -> None:
+        if self._active_session != session_date:
+            self._ticks = []
+            self._active_session = session_date
 
     def add_tick(self, tick: dict[str, Any]) -> None:
         ts_value = tick.get('timestamp')
@@ -17,6 +23,7 @@ class CandleBuilder:
         if price <= 0:
             return
         timestamp = ts_value if isinstance(ts_value, datetime) else datetime.fromisoformat(str(ts_value))
+        self.reset_for_session(timestamp.date())
         self._ticks.append({'timestamp': timestamp, 'price': price, 'volume': volume})
 
     def build_5min_candles(self, raw_ticks: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -47,7 +54,6 @@ class CandleBuilder:
         for tick in parsed:
             ts = tick['timestamp']
             bucket = ts.replace(minute=(ts.minute // 5) * 5, second=0, microsecond=0)
-
             if current_bucket != bucket:
                 if current:
                     candles.append(current)
@@ -73,27 +79,25 @@ class CandleBuilder:
         return candles
 
     def prune_ticks(self, keep_minutes: int = 120) -> None:
-        cutoff = datetime.now() - timedelta(minutes=keep_minutes)
+        if not self._ticks:
+            return
+        latest = max(t['timestamp'] for t in self._ticks)
+        cutoff = latest - timedelta(minutes=keep_minutes)
         self._ticks = [tick for tick in self._ticks if tick['timestamp'] >= cutoff]
 
     def opening_range(self, candles: list[dict[str, Any]]) -> dict[str, float]:
         if not candles:
             return {'high': 0.0, 'low': 0.0}
-        parsed = []
-        for c in candles:
-            ts = datetime.fromisoformat(str(c['timestamp']))
-            parsed.append((ts, c))
-        session_date = max(ts.date() for ts, _ in parsed)
 
-        start = time(9, 15)
-        end = time(9, 45)
+        parsed = [(datetime.fromisoformat(str(c['timestamp'])), c) for c in candles]
+        session_date = max(ts.date() for ts, _ in parsed)
         window = [
-            c for ts, c in parsed
-            if ts.date() == session_date and start <= ts.time() < end
+            c
+            for ts, c in parsed
+            if ts.date() == session_date and time(9, 15) <= ts.time() < time(9, 45)
         ]
         if len(window) < 6:
             return {'high': 0.0, 'low': 0.0}
-        window = sorted(window, key=lambda c: c['timestamp'])[:6]
         return {
             'high': max(float(c['high']) for c in window),
             'low': min(float(c['low']) for c in window),

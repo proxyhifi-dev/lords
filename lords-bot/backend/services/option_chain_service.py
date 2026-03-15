@@ -11,33 +11,29 @@ class OptionChainService:
     def __init__(self, cache: TTLCache) -> None:
         self.cache = cache
 
-    async def get_option_chain(self, symbol: str, expiry: str) -> list[dict[str, Any]]:
-        key = f'option_chain:{symbol}:{expiry}'
+    async def get_option_chain(self, symbol: str, expiry: str, strike_price: str | None = None) -> list[dict[str, Any]]:
+        key = f'option_chain:{symbol}:{expiry}:{strike_price or "ALL"}'
         cached = self.cache.get(key)
         if cached is not None:
             return cached
 
-        response = await samco_client.get_option_chain(symbol, expiry)
+        response = await samco_client.get_option_chain(symbol, expiry, strike_price=strike_price)
         details = response.get('optionChainDetails') or response.get('optionDetails') or response.get('data') or []
 
         chain_by_strike: dict[float, dict[str, Any]] = {}
         for row in details:
             strike = float(row.get('strikePrice') or row.get('strike_price') or 0)
+            if strike <= 0:
+                continue
             opt = str(row.get('optionType') or row.get('option_type') or '').upper()
             item = chain_by_strike.setdefault(
                 strike,
-                {
-                    'strike_price': strike,
-                    'call_oi': 0.0,
-                    'put_oi': 0.0,
-                    'call_ltp': 0.0,
-                    'put_ltp': 0.0,
-                },
+                {'strike_price': strike, 'call_oi': 0.0, 'put_oi': 0.0, 'call_ltp': 0.0, 'put_ltp': 0.0},
             )
             if opt == 'CE':
                 item['call_oi'] = float(row.get('openInterest') or row.get('open_interest') or 0)
                 item['call_ltp'] = float(row.get('lastTradedPrice') or row.get('last_traded_price') or 0)
-            if opt == 'PE':
+            elif opt == 'PE':
                 item['put_oi'] = float(row.get('openInterest') or row.get('open_interest') or 0)
                 item['put_ltp'] = float(row.get('lastTradedPrice') or row.get('last_traded_price') or 0)
 
@@ -48,12 +44,10 @@ class OptionChainService:
     def get_option_chain_bias(self, chain: list[dict[str, Any]]) -> str:
         if not chain:
             return 'NEUTRAL'
-
         call_oi = sum(float(r.get('call_oi', 0) or 0) for r in chain)
         put_oi = sum(float(r.get('put_oi', 0) or 0) for r in chain)
         if call_oi <= 0 and put_oi <= 0:
             return 'NEUTRAL'
-
         pcr = put_oi / max(1.0, call_oi)
         if pcr >= 1.1:
             return 'BULLISH'
@@ -64,11 +58,9 @@ class OptionChainService:
     def select_atm_strike(self, spot_price: float, chain: list[dict[str, Any]]) -> float:
         if not chain:
             return round(spot_price / 50.0) * 50.0
-
         strikes = sorted(float(row.get('strike_price') or 0.0) for row in chain if row.get('strike_price') is not None)
         if not strikes:
             return round(spot_price / 50.0) * 50.0
-
         return min(strikes, key=lambda strike: abs(strike - spot_price))
 
     def build_option_symbol(self, underlying: str, expiry: str, strike: float, option_side: str) -> str:
@@ -92,4 +84,6 @@ class OptionChainService:
             'option_symbol': self.build_option_symbol(symbol, expiry, strike, option_side),
             'strike': strike,
             'premium': premium,
+            'expiry': SamcoClient.to_expiry_api_date(expiry),
+            'option_type': 'CE' if option_side.upper() == 'CALL' else 'PE',
         }
