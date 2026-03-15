@@ -23,9 +23,15 @@ class RiskManager:
             return RiskDecision(False, 'max_trades_reached')
         if abs(state.realized_pnl) >= settings.max_daily_loss and state.realized_pnl < 0:
             return RiskDecision(False, 'daily_loss_limit_hit')
+        if capital <= 0:
+            return RiskDecision(False, 'invalid_capital')
+        if entry <= 0 or stop <= 0:
+            return RiskDecision(False, 'invalid_entry_or_stop')
+        if abs(entry - stop) < 0.01:
+            return RiskDecision(False, 'invalid_risk_distance')
 
         risk_amount = capital * (settings.risk_per_trade_pct / 100)
-        per_unit_risk = max(0.1, abs(entry - stop))
+        per_unit_risk = abs(entry - stop)
         qty = int(risk_amount / per_unit_risk)
         qty = max(settings.default_lot_size, qty)
         qty = min(settings.max_position_size, qty)

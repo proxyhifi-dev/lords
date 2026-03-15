@@ -51,6 +51,9 @@ class OrbStrategy:
         candles: list[dict[str, Any]],
     ) -> OrbSignal:
 
+        if orb_high <= 0 or orb_low <= 0 or orb_high <= orb_low:
+            return OrbSignal('HOLD', '', 'INVALID_ORB_RANGE', spot_price, 0.0, 0.0)
+
         closes = [float(c["close"]) for c in candles]
 
         rsi = compute_rsi(closes)
@@ -58,6 +61,7 @@ class OrbStrategy:
         if spot_price > orb_high and option_chain_bias in {"BULLISH", "NEUTRAL"} and rsi >= 55:
 
             risk = max(1.0, spot_price - orb_low)
+            risk = min(risk, max(1.0, spot_price * 0.03))
 
             target = spot_price + risk * 1.5
 
@@ -73,6 +77,7 @@ class OrbStrategy:
         if spot_price < orb_low and option_chain_bias in {"BEARISH", "NEUTRAL"} and rsi <= 45:
 
             risk = max(1.0, orb_high - spot_price)
+            risk = min(risk, max(1.0, spot_price * 0.03))
 
             target = spot_price - risk * 1.5
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, time
 
 from config import settings
 from core.cache import TTLCache
@@ -44,6 +44,8 @@ class Scheduler:
         self.order_manager = OrderManager()
 
         self.trade_logger = TradeLogger()
+        self._last_option_chain_fetch: datetime | None = None
+        self._latest_chain: list[dict[str, float]] = []
 
     @property
     def interval_seconds(self) -> int:
@@ -55,19 +57,38 @@ class Scheduler:
 
             try:
 
-                candles = await self.market_data_service.get_historical_candles(settings.symbol)
+                now = datetime.now()
+                market_open = time(9, 15)
+                market_close = time(15, 30)
+                if now.weekday() >= 5 or not (market_open <= now.time() <= market_close):
+                    self.state.system_status = 'MARKET_CLOSED'
+                    self.state_manager.save(self.state)
+                    return
+
+                spot = await self.market_data_service.get_nifty_spot()
+                self.market_data_service.add_tick(spot, timestamp=now)
+                self.candle_builder.add_tick({'timestamp': now.isoformat(), 'price': spot, 'volume': 0})
+                self.candle_builder.prune_ticks()
+
+                candles = self.candle_builder.build_5min_candles()
 
                 if not candles:
                     return
 
                 orb = self.candle_builder.opening_range(candles)
 
-                spot = await self.market_data_service.get_nifty_spot()
-
-                chain = await self.option_chain_service.get_option_chain(
-                    settings.symbol,
-                    settings.expiry,
+                should_refresh_chain = (
+                    self._last_option_chain_fetch is None
+                    or (now - self._last_option_chain_fetch).total_seconds() >= max(10, settings.option_chain_ttl)
                 )
+                if should_refresh_chain:
+                    self._latest_chain = await self.option_chain_service.get_option_chain(
+                        settings.symbol,
+                        settings.expiry,
+                    )
+                    self._last_option_chain_fetch = now
+
+                chain = self._latest_chain
 
                 bias = self.option_chain_service.get_option_chain_bias(chain)
 
@@ -81,6 +102,8 @@ class Scheduler:
 
                 self.state.latest_signal = signal.__dict__
                 self.state.orb_range = orb
+                logger.info('ORB high=%s low=%s spot=%s', orb.get('high'), orb.get('low'), spot)
+                logger.info('Signal generated=%s reason=%s', signal.signal, signal.reason)
 
                 # ---------------------------------------------
                 # RISK CIRCUIT BREAKER
@@ -109,13 +132,23 @@ class Scheduler:
 
                     if decision.allowed:
 
+                        contract = self.option_chain_service.pick_option_contract(
+                            chain,
+                            spot,
+                            signal.option_side,
+                            settings.symbol,
+                            settings.expiry,
+                        )
+                        option_symbol = contract['option_symbol']
+                        option_premium = float(contract['premium'] or signal.entry_price)
+
                         order_payload = {
-                            "symbol": settings.symbol,
+                            "symbol": option_symbol,
                             "transactionType": "BUY",
                             "quantity": decision.quantity,
                             "orderType": "MKT",
                             "productType": "MIS",
-                            "price": signal.entry_price,
+                            "price": option_premium,
                         }
 
                         placed = await self.order_manager.place_market_order(
@@ -131,20 +164,24 @@ class Scheduler:
                         if verification.get("order_status") in {"COMPLETE", "FILLED"}:
 
                             position = TradePosition(
-                                symbol=settings.symbol,
+                                symbol=option_symbol,
                                 side=signal.option_side,
                                 quantity=decision.quantity,
-                                entry_price=signal.entry_price,
+                                entry_price=option_premium,
                                 stop_loss=signal.stop_loss,
                                 target_price=signal.target_price,
                                 order_id=placed.get("order_id", ""),
                             )
 
                             self.state.active_trade = position.to_dict()
+                            self.state.active_trade['strike'] = contract['strike']
+                            self.state.active_trade['entry_spot'] = spot
 
                             self.state.trades_today += 1
 
                             logger.info("Trade opened %s", self.state.active_trade)
+                        else:
+                            logger.warning('Order not filled order=%s verification=%s', placed, verification)
 
                 # ---------------------------------------------
                 # TRADE MANAGEMENT
@@ -157,6 +194,14 @@ class Scheduler:
                     rsi = compute_rsi(closes)
 
                     at = self.state.active_trade
+                    strike = float(at.get('strike') or 0.0)
+
+                    option_ltp = float(at['entry_price'])
+                    for row in chain:
+                        if float(row.get('strike_price') or 0.0) == strike:
+                            premium_key = 'call_ltp' if at['side'] == 'CALL' else 'put_ltp'
+                            option_ltp = float(row.get(premium_key) or option_ltp)
+                            break
 
                     should_exit = False
 
@@ -169,6 +214,9 @@ class Scheduler:
                         ):
                             should_exit = True
 
+                    if now.time() >= time(15, 15):
+                        should_exit = True
+
                     if at["side"] == "PUT":
 
                         if (
@@ -180,10 +228,7 @@ class Scheduler:
 
                     if should_exit:
 
-                        pnl = (spot - at["entry_price"]) * at["quantity"]
-
-                        if at["side"] == "PUT":
-                            pnl = -pnl
+                        pnl = (option_ltp - float(at["entry_price"])) * int(at["quantity"])
 
                         self.state.realized_pnl += pnl
 
@@ -191,7 +236,7 @@ class Scheduler:
                             {
                                 "symbol": at["symbol"],
                                 "entry_price": at["entry_price"],
-                                "exit_price": spot,
+                                "exit_price": option_ltp,
                                 "timestamp": datetime.utcnow().isoformat(),
                                 "pnl": round(pnl, 2),
                                 "strategy": "ORB",
@@ -206,6 +251,10 @@ class Scheduler:
                 self.state.strategy_state = {
                     "spot": spot,
                     "oi_bias": bias,
+                    "rsi": compute_rsi([float(c["close"]) for c in candles]),
+                    "orb_high": orb.get('high', 0.0),
+                    "orb_low": orb.get('low', 0.0),
+                    "trade_active": bool(self.state.active_trade),
                 }
 
                 self.state_manager.save(self.state)

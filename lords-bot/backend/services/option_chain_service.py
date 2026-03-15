@@ -47,10 +47,50 @@ class OptionChainService:
         return normalized
 
     def get_option_chain_bias(self, chain: list[dict[str, Any]]) -> str:
-        call_oi = sum(float(r.get('call_oi', 0)) for r in chain)
-        put_oi = sum(float(r.get('put_oi', 0)) for r in chain)
-        if put_oi > call_oi * 1.05:
+        if not chain:
+            return 'NEUTRAL'
+
+        call_oi = sum(float(r.get('call_oi', 0) or 0) for r in chain)
+        put_oi = sum(float(r.get('put_oi', 0) or 0) for r in chain)
+        if call_oi <= 0 and put_oi <= 0:
+            return 'NEUTRAL'
+
+        pcr = put_oi / max(1.0, call_oi)
+        if pcr >= 1.1:
             return 'BULLISH'
-        if call_oi > put_oi * 1.05:
+        if pcr <= 0.9:
             return 'BEARISH'
         return 'NEUTRAL'
+
+    def select_atm_strike(self, spot_price: float, chain: list[dict[str, Any]]) -> float:
+        if not chain:
+            return round(spot_price / 50.0) * 50.0
+
+        strikes = sorted(float(row.get('strike_price') or 0.0) for row in chain if row.get('strike_price') is not None)
+        if not strikes:
+            return round(spot_price / 50.0) * 50.0
+
+        return min(strikes, key=lambda strike: abs(strike - spot_price))
+
+    def build_option_symbol(self, underlying: str, expiry: str, strike: float, option_side: str) -> str:
+        expiry_code = SamcoClient.to_expiry_code(expiry)
+        suffix = 'CE' if option_side.upper() == 'CALL' else 'PE'
+        return f"{underlying.upper()}{expiry_code}{int(round(strike))}{suffix}"
+
+    def pick_option_contract(
+        self,
+        chain: list[dict[str, Any]],
+        spot_price: float,
+        option_side: str,
+        symbol: str,
+        expiry: str,
+    ) -> dict[str, Any]:
+        strike = self.select_atm_strike(spot_price, chain)
+        row = next((item for item in chain if float(item.get('strike_price') or 0.0) == strike), {})
+        ltp_key = 'call_ltp' if option_side.upper() == 'CALL' else 'put_ltp'
+        premium = float(row.get(ltp_key) or 0.0)
+        return {
+            'option_symbol': self.build_option_symbol(symbol, expiry, strike, option_side),
+            'strike': strike,
+            'premium': premium,
+        }
