@@ -20,20 +20,29 @@ logger = logging.getLogger(__name__)
 
 
 class Scheduler:
+
     def __init__(self) -> None:
+
         self.running = False
         self._task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
 
         cache = TTLCache()
+
         self.state_manager = StateManager()
         self.state: EngineState = self.state_manager.load()
+
         self.market_data_service = MarketDataService(cache)
         self.option_chain_service = OptionChainService(cache)
+
         self.candle_builder = CandleBuilder()
+
         self.strategy = OrbStrategy()
+
         self.risk_manager = RiskManager()
+
         self.order_manager = OrderManager()
+
         self.trade_logger = TradeLogger()
 
     @property
@@ -41,35 +50,86 @@ class Scheduler:
         return max(5, settings.scheduler_interval)
 
     async def tick(self) -> None:
+
         async with self._lock:
+
             try:
+
                 candles = await self.market_data_service.get_historical_candles(settings.symbol)
+
+                if not candles:
+                    return
+
                 orb = self.candle_builder.opening_range(candles)
+
                 spot = await self.market_data_service.get_nifty_spot()
-                chain = await self.option_chain_service.get_option_chain(settings.symbol, settings.expiry)
+
+                chain = await self.option_chain_service.get_option_chain(
+                    settings.symbol,
+                    settings.expiry,
+                )
+
                 bias = self.option_chain_service.get_option_chain_bias(chain)
 
-                signal = self.strategy.generate(spot, orb['high'], orb['low'], bias, candles)
+                signal = self.strategy.generate(
+                    spot,
+                    orb["high"],
+                    orb["low"],
+                    bias,
+                    candles,
+                )
+
                 self.state.latest_signal = signal.__dict__
                 self.state.orb_range = orb
 
-                system_status = self.risk_manager.circuit_breaker(self.state, broker_ok=True, api_ok=True)
+                # ---------------------------------------------
+                # RISK CIRCUIT BREAKER
+                # ---------------------------------------------
+
+                system_status = self.risk_manager.circuit_breaker(
+                    self.state,
+                    broker_ok=True,
+                    api_ok=True,
+                )
+
                 self.state.system_status = system_status
 
-                if signal.signal == 'BUY':
-                    decision = self.risk_manager.pre_trade_check(self.state, capital=100000.0, entry=signal.entry_price, stop=signal.stop_loss)
+                # ---------------------------------------------
+                # TRADE ENTRY
+                # ---------------------------------------------
+
+                if signal.signal == "BUY" and not self.state.active_trade:
+
+                    decision = self.risk_manager.pre_trade_check(
+                        self.state,
+                        capital=100000.0,
+                        entry=signal.entry_price,
+                        stop=signal.stop_loss,
+                    )
+
                     if decision.allowed:
+
                         order_payload = {
-                            'symbol': settings.symbol,
-                            'transactionType': 'BUY',
-                            'quantity': decision.quantity,
-                            'orderType': 'MKT',
-                            'productType': 'MIS',
-                            'price': signal.entry_price,
+                            "symbol": settings.symbol,
+                            "transactionType": "BUY",
+                            "quantity": decision.quantity,
+                            "orderType": "MKT",
+                            "productType": "MIS",
+                            "price": signal.entry_price,
                         }
-                        placed = await self.order_manager.place_market_order(order_payload, self.state.trading_mode)
-                        verification = await self.order_manager.verify_order_status(placed.get('order_id', ''), self.state.trading_mode)
-                        if verification.get('order_status', 'COMPLETE') in {'COMPLETE', 'FILLED'}:
+
+                        placed = await self.order_manager.place_market_order(
+                            order_payload,
+                            self.state.trading_mode,
+                        )
+
+                        verification = await self.order_manager.verify_order_status(
+                            placed.get("order_id", ""),
+                            self.state.trading_mode,
+                        )
+
+                        if verification.get("order_status") in {"COMPLETE", "FILLED"}:
+
                             position = TradePosition(
                                 symbol=settings.symbol,
                                 side=signal.option_side,
@@ -77,61 +137,117 @@ class Scheduler:
                                 entry_price=signal.entry_price,
                                 stop_loss=signal.stop_loss,
                                 target_price=signal.target_price,
-                                order_id=placed.get('order_id', ''),
+                                order_id=placed.get("order_id", ""),
                             )
+
                             self.state.active_trade = position.to_dict()
+
                             self.state.trades_today += 1
 
+                            logger.info("Trade opened %s", self.state.active_trade)
+
+                # ---------------------------------------------
+                # TRADE MANAGEMENT
+                # ---------------------------------------------
+
                 if self.state.active_trade:
-                    closes = [float(c['close']) for c in candles]
+
+                    closes = [float(c["close"]) for c in candles]
+
                     rsi = compute_rsi(closes)
+
                     at = self.state.active_trade
-                    should_exit = (
-                        (at['side'] == 'CALL' and (spot <= at['stop_loss'] or spot >= at['target_price'] or rsi >= 70))
-                        or (at['side'] == 'PUT' and (spot >= at['stop_loss'] or spot <= at['target_price'] or rsi <= 30))
-                    )
+
+                    should_exit = False
+
+                    if at["side"] == "CALL":
+
+                        if (
+                            spot <= at["stop_loss"]
+                            or spot >= at["target_price"]
+                            or rsi >= 70
+                        ):
+                            should_exit = True
+
+                    if at["side"] == "PUT":
+
+                        if (
+                            spot >= at["stop_loss"]
+                            or spot <= at["target_price"]
+                            or rsi <= 30
+                        ):
+                            should_exit = True
+
                     if should_exit:
-                        pnl = (spot - at['entry_price']) * at['quantity']
-                        if at['side'] == 'PUT':
+
+                        pnl = (spot - at["entry_price"]) * at["quantity"]
+
+                        if at["side"] == "PUT":
                             pnl = -pnl
+
                         self.state.realized_pnl += pnl
+
                         self.trade_logger.log_trade(
                             {
-                                'symbol': at['symbol'],
-                                'entry_price': at['entry_price'],
-                                'exit_price': spot,
-                                'timestamp': datetime.utcnow().isoformat(),
-                                'pnl': round(pnl, 2),
-                                'strategy': 'ORB',
-                                'quantity': at['quantity'],
-                            },
+                                "symbol": at["symbol"],
+                                "entry_price": at["entry_price"],
+                                "exit_price": spot,
+                                "timestamp": datetime.utcnow().isoformat(),
+                                "pnl": round(pnl, 2),
+                                "strategy": "ORB",
+                                "quantity": at["quantity"],
+                            }
                         )
+
+                        logger.info("Trade closed PnL=%s", pnl)
+
                         self.state.active_trade = {}
 
-                self.state.strategy_state = {'spot': spot, 'oi_bias': bias}
+                self.state.strategy_state = {
+                    "spot": spot,
+                    "oi_bias": bias,
+                }
+
                 self.state_manager.save(self.state)
-            except Exception as exc:  # noqa: BLE001
+
+            except Exception as exc:
+
                 self.state.last_error = str(exc)
-                logger.exception('scheduler tick failed')
+
+                logger.exception("scheduler tick failed")
+
                 self.state_manager.save(self.state)
 
     async def _run(self) -> None:
+
         while self.running:
+
             await self.tick()
+
             await asyncio.sleep(self.interval_seconds)
 
     async def start(self) -> None:
+
         if self.running:
             return
+
         self.running = True
+
         self._task = asyncio.create_task(self._run())
 
+        logger.info("scheduler started interval=%ss", self.interval_seconds)
+
     async def stop(self) -> None:
+
         if not self.running:
             return
+
         self.running = False
+
         if self._task:
+
             self._task.cancel()
+
             try:
                 await self._task
             except asyncio.CancelledError:
