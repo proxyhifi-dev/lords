@@ -1,54 +1,31 @@
-# Lords Bot
+# Lords Bot - Production ORB Platform
 
-Plug-and-play FastAPI options dashboard with Samco market data, option scanner, manual trade approval, paper/real mode, and auto stop-loss/target management.
+This codebase has been refactored into a modular ORB (Opening Range Breakout) trading platform for NIFTY options.
 
-## Quick start
+## Architecture
+
+- `backend/brokers`: Samco Stocknote integration wrapper with login/session/retry handling.
+- `backend/services`: market data, option chain, trade logging, performance metrics.
+- `backend/engine`: scheduler, candle builder, order manager, state manager, backtester.
+- `backend/strategies`: ORB signal engine with RSI and OI bias confirmation.
+- `backend/risk`: global risk manager + circuit breaker + trade lock checks.
+- `backend/api`: dashboard and trading control endpoints.
+- `frontend`: web dashboard with paper/real mode switch and bot controls.
+
+## Core Safety Features
+
+- Pre-trade risk checks (risk per trade, max trades/day, daily loss limit).
+- Circuit breaker statuses (`DAILY_LOSS_LIMIT`, `BROKER_DISCONNECTED`, `API_UNSTABLE`).
+- Single active trade lock.
+- Persistent state recovery via `backend/data/state.json`.
+- Order placement + order status verification flow.
+
+## Run
 
 ```bash
+cd lords-bot
 pip install -r requirements.txt
-cd backend
-uvicorn main:app --reload
+uvicorn backend.main:app --reload --port 8000
 ```
 
-Open: `http://127.0.0.1:8000`
-
-## Environment
-
-Create `.env` in project root:
-
-```env
-SYMBOL=NIFTY
-EXPIRY=2026-03-26
-
-SAMCO_BASE_URL=https://api.stocknote.com
-
-# Preferred: auto-login flow (StockNoteBridge style)
-SAMCO_USER_ID=
-SAMCO_PASSWORD=
-SAMCO_YOB=
-
-# Optional fallback: provide active session token directly
-SAMCO_SESSION_TOKEN=
-# Backward-compatible alias
-SAMCO_ACCESS_TOKEN=
-
-# Optional legacy header (only if your account setup needs it)
-SAMCO_API_KEY=
-
-TRADING_MODE=PAPER
-ENABLE_REAL_TRADING=false
-
-SCHEDULER_INTERVAL=15
-
-MAX_TRADES_PER_DAY=5
-MAX_DAILY_LOSS=5000
-```
-
-## Key endpoints
-
-- `GET /dashboard`
-- `POST /trade/approve`
-- `POST /trade/close`
-- `POST /trade/reset`
-- `GET /trading-mode`
-- `POST /trading-mode`
+Open `http://localhost:8000`.

@@ -1,0 +1,12 @@
+{
+  "trade_day": "2026-01-01",
+  "trading_mode": "PAPER",
+  "system_status": "RUNNING",
+  "strategy_state": {},
+  "active_trade": {},
+  "trades_today": 0,
+  "realized_pnl": 0.0,
+  "last_error": "",
+  "latest_signal": {},
+  "orb_range": {}
+}
