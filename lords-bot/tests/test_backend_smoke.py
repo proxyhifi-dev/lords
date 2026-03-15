@@ -11,8 +11,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'backend'))
 from brokers import samco_client as samco_module  # noqa: E402
 from brokers.samco_client import SamcoClient  # noqa: E402
 from core.cache import TTLCache  # noqa: E402
+from engine.candle_builder import CandleBuilder  # noqa: E402
 from engine.scheduler import Scheduler  # noqa: E402
 from main import app  # noqa: E402
+from models import EngineState  # noqa: E402
+from risk.risk_manager import RiskManager  # noqa: E402
 from services.option_chain_service import OptionChainService  # noqa: E402
 
 
@@ -96,3 +99,39 @@ def test_option_chain_normalization(monkeypatch) -> None:
 def test_scheduler_enforces_minimum_interval() -> None:
     scheduler = Scheduler()
     assert scheduler.interval_seconds >= 5
+
+
+def test_candle_builder_opening_range_uses_first_six_candles() -> None:
+    builder = CandleBuilder()
+    ticks = [
+        {'timestamp': '2026-03-26T09:15:10', 'price': 100},
+        {'timestamp': '2026-03-26T09:16:00', 'price': 102},
+        {'timestamp': '2026-03-26T09:20:01', 'price': 99},
+        {'timestamp': '2026-03-26T09:25:01', 'price': 105},
+        {'timestamp': '2026-03-26T09:30:01', 'price': 101},
+        {'timestamp': '2026-03-26T09:35:01', 'price': 98},
+        {'timestamp': '2026-03-26T09:40:01', 'price': 103},
+    ]
+    candles = builder.build_5min_candles(ticks)
+    orb = builder.opening_range(candles)
+    assert orb['high'] == 105.0
+    assert orb['low'] == 98.0
+
+
+def test_option_chain_atm_contract_selection(monkeypatch) -> None:
+    monkeypatch.setattr(samco_module, 'StocknoteAPIPythonBridge', FakeBridge)
+    service = OptionChainService(TTLCache())
+    chain = [
+        {'strike_price': 22050.0, 'call_ltp': 120.0, 'put_ltp': 100.0},
+        {'strike_price': 22100.0, 'call_ltp': 100.0, 'put_ltp': 120.0},
+        {'strike_price': 22150.0, 'call_ltp': 80.0, 'put_ltp': 140.0},
+    ]
+    contract = service.pick_option_contract(chain, 22112.0, 'CALL', 'NIFTY', '2026-03-26')
+    assert contract['strike'] == 22100.0
+    assert contract['premium'] == 100.0
+    assert contract['option_symbol'] == 'NIFTY26MAR202622100CE'
+
+
+def test_risk_manager_blocks_invalid_stop() -> None:
+    decision = RiskManager().pre_trade_check(EngineState(), capital=100000, entry=100.0, stop=0.0)
+    assert decision.allowed is False

@@ -15,6 +15,7 @@ class MarketDataService:
 
     def __init__(self, cache: TTLCache) -> None:
         self.cache = cache
+        self._tick_buffer: list[dict[str, Any]] = []
 
     async def get_nifty_spot(self) -> float:
 
@@ -37,6 +38,20 @@ class MarketDataService:
 
         return spot
 
+    def add_tick(self, price: float, timestamp: datetime | None = None, volume: float = 0.0) -> None:
+        if price <= 0:
+            return
+        tick_time = (timestamp or datetime.now()).replace(microsecond=0)
+        self._tick_buffer.append({'timestamp': tick_time.isoformat(), 'price': float(price), 'volume': float(volume)})
+        max_ticks = 7200
+        if len(self._tick_buffer) > max_ticks:
+            self._tick_buffer = self._tick_buffer[-max_ticks:]
+
+    def get_recent_ticks(self, limit: int = 2000) -> list[dict[str, Any]]:
+        if limit <= 0:
+            return []
+        return self._tick_buffer[-limit:]
+
     async def get_historical_candles(
         self,
         symbol: str,
@@ -45,35 +60,44 @@ class MarketDataService:
     ) -> list[dict[str, Any]]:
 
         key = f"market:candles:{symbol}:{interval_minutes}:{limit}"
-
         cached = self.cache.get(key)
-
         if cached is not None:
             return cached
 
-        spot = await self.get_nifty_spot()
+        ticks = self.get_recent_ticks(limit=max(200, limit * 40))
+        if not ticks:
+            return []
 
-        candles: list[dict[str, Any]] = []
+        bucketed: dict[datetime, dict[str, Any]] = {}
+        for tick in ticks:
+            ts = datetime.fromisoformat(str(tick['timestamp']))
+            bucket = ts.replace(minute=(ts.minute // interval_minutes) * interval_minutes, second=0, microsecond=0)
+            price = float(tick.get('price') or 0.0)
+            volume = float(tick.get('volume') or 0.0)
+            if price <= 0:
+                continue
 
-        now = datetime.now().replace(second=0, microsecond=0)
-
-        for i in range(limit):
-
-            base = spot + (i - limit / 2) * 0.5
-
-            candles.append(
-                {
-                    "timestamp": now.isoformat(),
-                    "open": base,
-                    "high": base + 8,
-                    "low": base - 8,
-                    "close": base + 1,
-                    "volume": 1000 + i,
+            candle = bucketed.get(bucket)
+            if candle is None:
+                bucketed[bucket] = {
+                    'timestamp': bucket.isoformat(),
+                    'open': price,
+                    'high': price,
+                    'low': price,
+                    'close': price,
+                    'volume': volume,
                 }
-            )
+                continue
 
-        self.cache.set(key, candles, settings.historical_ttl)
+            candle['high'] = max(float(candle['high']), price)
+            candle['low'] = min(float(candle['low']), price)
+            candle['close'] = price
+            candle['volume'] = float(candle['volume']) + volume
 
+        candles = [bucketed[k] for k in sorted(bucketed.keys())]
+        if limit > 0:
+            candles = candles[-limit:]
+        self.cache.set(key, candles, 2)
         return candles
 
     def compute_orb_range(self, candles: list[dict[str, Any]]) -> tuple[float, float]:
