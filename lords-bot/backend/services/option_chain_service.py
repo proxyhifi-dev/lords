@@ -17,8 +17,7 @@ class OptionChainService:
         if cached is not None:
             return cached
 
-        formatted_expiry = SamcoClient.to_expiry_code(expiry)
-        response = await samco_client.get_option_chain(symbol, formatted_expiry)
+        response = await samco_client.get_option_chain(symbol, expiry)
         details = response.get('optionChainDetails') or response.get('optionDetails') or response.get('data') or []
 
         chain_by_strike: dict[float, dict[str, Any]] = {}

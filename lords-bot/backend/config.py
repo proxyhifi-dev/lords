@@ -26,6 +26,8 @@ class Settings(BaseSettings):
 
     trading_mode: str = 'PAPER'
     enable_real_trading: bool = False
+    api_key: str = ''
+
 
     scheduler_interval: int = 20
     option_chain_ttl: int = 30
@@ -39,6 +41,7 @@ class Settings(BaseSettings):
     max_daily_loss: float = 2000.0
     max_position_size: int = 500
     default_lot_size: int = 50
+    paper_capital: float = 100000.0
 
     frontend_dir: str = str(ROOT_DIR / 'frontend')
     logs_dir: str = str(ROOT_DIR / 'logs')

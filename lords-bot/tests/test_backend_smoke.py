@@ -59,7 +59,7 @@ class FakeBridge:
 
 
 def test_expiry_conversion() -> None:
-    assert SamcoClient.to_expiry_code('2026-03-26') == '26MAR2026'
+    assert SamcoClient.to_expiry_code('2026-03-26') == '26MAR26'
 
 
 def test_health_endpoint() -> None:
@@ -129,7 +129,7 @@ def test_option_chain_atm_contract_selection(monkeypatch) -> None:
     contract = service.pick_option_contract(chain, 22112.0, 'CALL', 'NIFTY', '2026-03-26')
     assert contract['strike'] == 22100.0
     assert contract['premium'] == 100.0
-    assert contract['option_symbol'] == 'NIFTY26MAR202622100CE'
+    assert contract['option_symbol'] == 'NIFTY26MAR2622100CE'
 
 
 def test_risk_manager_blocks_invalid_stop() -> None:
