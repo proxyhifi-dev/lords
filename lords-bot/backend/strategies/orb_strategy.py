@@ -5,33 +5,32 @@ from typing import Any
 
 
 def compute_rsi(closes: list[float], period: int = 14) -> float:
-
     if len(closes) <= period:
         return 50.0
 
     gains = 0.0
     losses = 0.0
-
     for i in range(-period, 0):
-
         diff = closes[i] - closes[i - 1]
-
-        if diff >= 0:
+        if diff > 0:
             gains += diff
-        else:
+        elif diff < 0:
             losses += abs(diff)
 
-    if losses == 0:
+    avg_gain = gains / period
+    avg_loss = losses / period
+
+    if avg_gain == 0 and avg_loss == 0:
+        return 50.0
+    if avg_loss == 0:
         return 100.0
 
-    rs = (gains / period) / (losses / period)
-
+    rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
 
 @dataclass
 class OrbSignal:
-
     signal: str
     option_side: str
     reason: str
@@ -41,7 +40,6 @@ class OrbSignal:
 
 
 class OrbStrategy:
-
     def generate(
         self,
         spot_price: float,
@@ -50,69 +48,31 @@ class OrbStrategy:
         option_chain_bias: str,
         candles: list[dict[str, Any]],
     ) -> OrbSignal:
-
         if orb_high <= 0 or orb_low <= 0 or orb_high <= orb_low:
             return OrbSignal('HOLD', '', 'INVALID_ORB_RANGE', spot_price, 0.0, 0.0)
 
-        closes = [float(c["close"]) for c in candles]
-
+        closes = [float(c['close']) for c in candles if float(c.get('close', 0) or 0) > 0]
         rsi = compute_rsi(closes)
 
-        if spot_price > orb_high and option_chain_bias in {"BULLISH", "NEUTRAL"} and rsi >= 55:
+        if spot_price > orb_high and option_chain_bias == 'BULLISH' and rsi >= 55:
+            stop_loss = orb_low
+            risk = abs(spot_price - stop_loss)
+            target = spot_price + (risk * 1.5)
+            return OrbSignal('BUY', 'CALL', f'ORB_BREAKOUT_UP;rsi={rsi:.2f}', spot_price, stop_loss, target)
 
-            risk = max(1.0, spot_price - orb_low)
-            risk = min(risk, max(1.0, spot_price * 0.03))
+        if spot_price < orb_low and option_chain_bias == 'BEARISH' and rsi <= 45:
+            stop_loss = orb_high
+            risk = abs(spot_price - stop_loss)
+            target = spot_price - (risk * 1.5)
+            return OrbSignal('BUY', 'PUT', f'ORB_BREAKOUT_DOWN;rsi={rsi:.2f}', spot_price, stop_loss, target)
 
-            target = spot_price + risk * 1.5
-
-            return OrbSignal(
-                "BUY",
-                "CALL",
-                f"ORB_BREAKOUT_UP;rsi={rsi:.2f}",
-                spot_price,
-                orb_low,
-                target,
-            )
-
-        if spot_price < orb_low and option_chain_bias in {"BEARISH", "NEUTRAL"} and rsi <= 45:
-
-            risk = max(1.0, orb_high - spot_price)
-            risk = min(risk, max(1.0, spot_price * 0.03))
-
-            target = spot_price - risk * 1.5
-
-            return OrbSignal(
-                "BUY",
-                "PUT",
-                f"ORB_BREAKOUT_DOWN;rsi={rsi:.2f}",
-                spot_price,
-                orb_high,
-                target,
-            )
-
-        return OrbSignal("HOLD", "", f"NO_BREAKOUT;rsi={rsi:.2f}", spot_price, 0.0, 0.0)
+        return OrbSignal('HOLD', '', f'NO_BREAKOUT;rsi={rsi:.2f}', spot_price, 0.0, 0.0)
 
     def should_exit(self, spot_price: float, signal: OrbSignal, rsi: float) -> bool:
-
-        if signal.signal != "BUY":
+        if signal.signal != 'BUY':
             return False
-
-        if signal.option_side == "CALL":
-
-            if (
-                spot_price <= signal.stop_loss
-                or spot_price >= signal.target_price
-                or rsi >= 70
-            ):
-                return True
-
-        if signal.option_side == "PUT":
-
-            if (
-                spot_price >= signal.stop_loss
-                or spot_price <= signal.target_price
-                or rsi <= 30
-            ):
-                return True
-
+        if signal.option_side == 'CALL':
+            return spot_price <= signal.stop_loss or spot_price >= signal.target_price or rsi >= 70
+        if signal.option_side == 'PUT':
+            return spot_price >= signal.stop_loss or spot_price <= signal.target_price or rsi <= 30
         return False

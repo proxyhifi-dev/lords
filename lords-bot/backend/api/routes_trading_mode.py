@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from config import settings
+from api.auth import require_api_key
 from main_dependencies import scheduler
 
-router = APIRouter(tags=['mode'])
+router = APIRouter(tags=['mode'], dependencies=[Depends(require_api_key)])
 
 
 class ModePayload(BaseModel):
