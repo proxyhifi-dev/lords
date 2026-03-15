@@ -77,14 +77,23 @@ class CandleBuilder:
         self._ticks = [tick for tick in self._ticks if tick['timestamp'] >= cutoff]
 
     def opening_range(self, candles: list[dict[str, Any]]) -> dict[str, float]:
+        if not candles:
+            return {'high': 0.0, 'low': 0.0}
+        parsed = []
+        for c in candles:
+            ts = datetime.fromisoformat(str(c['timestamp']))
+            parsed.append((ts, c))
+        session_date = max(ts.date() for ts, _ in parsed)
+
         start = time(9, 15)
         end = time(9, 45)
         window = [
-            c for c in candles if start <= datetime.fromisoformat(c['timestamp']).time() < end
+            c for ts, c in parsed
+            if ts.date() == session_date and start <= ts.time() < end
         ]
         if len(window) < 6:
             return {'high': 0.0, 'low': 0.0}
-        window = window[:6]
+        window = sorted(window, key=lambda c: c['timestamp'])[:6]
         return {
             'high': max(float(c['high']) for c in window),
             'low': min(float(c['low']) for c in window),
