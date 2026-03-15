@@ -23,5 +23,12 @@ class RiskManager:
             return False, 'MAX_DAILY_LOSS reached'
         return True, 'ok'
 
+    def position_size(self, entry_price: float, stop_loss_price: float, lot_size: int = 50) -> int:
+        risk_budget = max(0.0, abs(settings.max_daily_loss) * 0.02)
+        per_unit_risk = max(1.0, abs(entry_price - stop_loss_price))
+        qty = int(risk_budget / per_unit_risk)
+        lots = max(1, qty // max(1, lot_size))
+        return lots * max(1, lot_size)
+
 
 risk_manager = RiskManager()

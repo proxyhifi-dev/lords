@@ -25,19 +25,22 @@ class Settings(BaseSettings):
     trading_mode: str = 'PAPER'
     enable_real_trading: bool = False
 
-    scheduler_interval: int = 15
-    option_chain_ttl: int = 5
+    scheduler_interval: int = 60
+    option_chain_ttl: int = 30
     analysis_ttl: int = 5
     signals_ttl: int = 5
     profile_ttl: int = 60
     funds_ttl: int = 60
     request_timeout: int = 10
+    max_api_retries: int = 3
+    base_retry_delay_seconds: float = 1.0
 
     max_trades_per_day: int = 5
     max_daily_loss: float = 5000
 
     frontend_dir: str = str(ROOT_DIR / 'frontend')
     cache_snapshot_file: str = str(ROOT_DIR / 'backend' / 'data' / 'cache_snapshot.json')
+    trade_log_file: str = str(ROOT_DIR / 'backend' / 'data' / 'trade_log.jsonl')
 
 
 settings = Settings()
