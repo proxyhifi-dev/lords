@@ -91,12 +91,21 @@ class CandleBuilder:
 
         parsed = [(datetime.fromisoformat(str(c['timestamp'])), c) for c in candles]
         session_date = max(ts.date() for ts, _ in parsed)
+        latest_ts = max(ts for ts, _ in parsed if ts.date() == session_date)
         window = [
             c
             for ts, c in parsed
             if ts.date() == session_date and time(9, 15) <= ts.time() < time(9, 45)
         ]
-        if len(window) < 6:
+
+        # Before 09:45 IST, opening range must not be considered complete.
+        if latest_ts.time() < time(9, 45):
+            return {'high': 0.0, 'low': 0.0}
+
+        # After 09:45 IST we prefer six 5-minute candles, but when the service
+        # starts late or some ticks are missing we still derive ORB from whatever
+        # valid candles are available in the opening window.
+        if not window:
             return {'high': 0.0, 'low': 0.0}
         return {
             'high': max(float(c['high']) for c in window),
