@@ -88,5 +88,5 @@ async def health() -> dict:
     return {
         "status": "ok",
         "scheduler_running": scheduler.running,
-        "interval_seconds": settings.scheduler_interval,
+        "interval_seconds": scheduler.interval_seconds,
     }
