@@ -19,6 +19,6 @@ async def dashboard() -> dict:
         'signal_panel': scheduler.state.latest_signal,
         'trade_execution_panel': scheduler.state.active_trade,
         'trade_history': trades[-20:],
-        'performance': perf,
+        'performance': {**perf, 'realized_pnl': scheduler.state.realized_pnl},
         'bot_controls': {'running': scheduler.running},
     }

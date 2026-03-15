@@ -16,7 +16,10 @@ class OrderManager:
             order = {'status': 'Success', 'order_id': order_id, 'fill_price': payload.get('price', 0.0), 'payload': payload}
             self.paper_orders[order_id] = {**order, 'order_status': 'COMPLETE'}
             return order
-        return await samco_client.place_order(payload)
+        response = await samco_client.place_order(payload)
+        if response.get('status') == 'Success' and 'order_id' not in response:
+            response['order_id'] = response.get('nOrdNo') or response.get('orderNumber') or ''
+        return response
 
     async def place_limit_order(self, payload: dict[str, Any], mode: str) -> dict[str, Any]:
         return await self.place_market_order(payload, mode)
