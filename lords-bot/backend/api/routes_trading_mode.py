@@ -1,29 +1,34 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from config import settings
-from runtime_state import runtime_state
+from main_dependencies import scheduler
 
-router = APIRouter(tags=['trading-mode'])
+router = APIRouter(tags=['mode'])
 
 
-class TradingModeRequest(BaseModel):
+class ModePayload(BaseModel):
     mode: str
+    confirm_real: bool = False
 
 
 @router.get('/trading-mode')
-async def get_trading_mode() -> dict:
-    return {'mode': runtime_state.trading_mode, 'enable_real_trading': settings.enable_real_trading}
+async def get_mode() -> dict:
+    return {'mode': scheduler.state.trading_mode, 'enable_real_trading': settings.enable_real_trading}
 
 
 @router.post('/trading-mode')
-async def set_trading_mode(payload: TradingModeRequest) -> dict:
+async def set_mode(payload: ModePayload) -> dict:
     mode = payload.mode.upper()
     if mode not in {'PAPER', 'REAL'}:
         raise HTTPException(status_code=400, detail='mode must be PAPER or REAL')
-    if mode == 'REAL' and not settings.enable_real_trading:
-        raise HTTPException(status_code=403, detail='ENABLE_REAL_TRADING=false')
-    runtime_state.trading_mode = mode
-    return {'mode': runtime_state.trading_mode}
+    if mode == 'REAL':
+        if not settings.enable_real_trading:
+            raise HTTPException(status_code=403, detail='real mode disabled')
+        if not payload.confirm_real:
+            raise HTTPException(status_code=400, detail='confirm_real=true required')
+    scheduler.state.trading_mode = mode
+    scheduler.state_manager.save(scheduler.state)
+    return {'mode': mode}

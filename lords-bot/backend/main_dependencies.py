@@ -1,13 +1,24 @@
 from __future__ import annotations
 
-from config import settings
-from core.cache import SnapshotStore, TTLCache
-from services.dashboard_service import DashboardService
-from services.funds_service import FundsService
-from services.profile_service import ProfileService
+from core.cache import TTLCache
+from engine.backtester import Backtester
+from engine.scheduler import scheduler
+from services.market_data_service import MarketDataService
+from services.option_chain_service import OptionChainService
+from services.performance_service import PerformanceService
+from services.trade_logger import TradeLogger
 
-shared_cache = TTLCache()
-snapshot_store = SnapshotStore(settings.cache_snapshot_file)
-profile_service = ProfileService(shared_cache)
-funds_service = FundsService(shared_cache)
-dashboard_service = DashboardService(snapshot_store)
+cache = TTLCache()
+market_data_service = MarketDataService(cache)
+option_chain_service = OptionChainService(cache)
+trade_logger = TradeLogger()
+performance_service = PerformanceService()
+backtester = Backtester()
+__all__ = [
+    'scheduler',
+    'market_data_service',
+    'option_chain_service',
+    'trade_logger',
+    'performance_service',
+    'backtester',
+]
