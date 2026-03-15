@@ -21,14 +21,14 @@ class SamcoClient:
             raise ValueError('Expiry cannot be empty')
         expiry = expiry.strip().upper()
         if '-' in expiry:
-            dt = datetime.strptime(expiry, '%Y-%m-%d')
-            return dt.strftime('%d%b%y').upper()
-        if len(expiry) == 9:
-            return expiry
-        if len(expiry) == 11:  # e.g. 26MAR2026
-            dt = datetime.strptime(expiry, '%d%b%Y')
-            return dt.strftime('%d%b%y').upper()
-        return expiry
+            return datetime.strptime(expiry, '%Y-%m-%d').strftime('%d%b%y').upper()
+        for fmt in ('%d%b%Y', '%d%b%y'):
+            try:
+                dt = datetime.strptime(expiry, fmt)
+                return dt.strftime('%d%b%y').upper()
+            except ValueError:
+                continue
+        raise ValueError(f'Unsupported expiry format: {expiry}')
 
     @staticmethod
     def to_expiry_api_date(expiry: str) -> str:
@@ -38,11 +38,12 @@ class SamcoClient:
         if '-' in expiry:
             datetime.strptime(expiry, '%Y-%m-%d')
             return expiry
-        if len(expiry) == 9:
-            dt = datetime.strptime(expiry, '%d%b%y')
-            return dt.strftime('%Y-%m-%d')
-        dt = datetime.strptime(expiry, '%d%b%Y')
-        return dt.strftime('%Y-%m-%d')
+        for fmt in ('%d%b%Y', '%d%b%y'):
+            try:
+                return datetime.strptime(expiry, fmt).strftime('%Y-%m-%d')
+            except ValueError:
+                continue
+        raise ValueError(f'Unsupported expiry format: {expiry}')
 
     def __init__(self) -> None:
         self.samco = StocknoteAPIPythonBridge()
@@ -77,8 +78,7 @@ class SamcoClient:
                 except Exception:
                     logger.error('Invalid login response: %s', response)
                     return False
-            status = str(response.get('status', '')).strip()
-            if status != 'Success':
+            if str(response.get('status', '')).strip() != 'Success':
                 logger.error('Samco login failed response=%s', response)
                 self._authenticated = False
                 return False
@@ -119,10 +119,9 @@ class SamcoClient:
                 except Exception:
                     response = {'status': 'Error', 'statusMessage': response}
             if isinstance(response, dict) and response.get('status') == 'Success':
-                time.sleep(0.2)
+                time.sleep(0.15)
                 return response
             if self._needs_relogin(response):
-                logger.warning('Samco session expired — relogin')
                 self._authenticated = False
                 self.login(force=True)
                 continue
@@ -134,15 +133,15 @@ class SamcoClient:
     async def index_quote(self, index_name: str) -> dict[str, Any]:
         return await asyncio.to_thread(self._call, self.samco.index_quote, exchange='NSE', indexName=index_name)
 
-    async def get_option_chain(self, symbol: str, expiry: str) -> dict[str, Any]:
-        expiry_date = self.to_expiry_api_date(expiry)
-        return await asyncio.to_thread(
-            self._call,
-            self.samco.get_option_chain,
-            search_symbol_name=symbol,
-            exchange=self.samco.EXCHANGE_NFO,
-            expiry_date=expiry_date,
-        )
+    async def get_option_chain(self, symbol: str, expiry: str, strike_price: str | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            'search_symbol_name': symbol,
+            'exchange': self.samco.EXCHANGE_NFO,
+            'expiry_date': self.to_expiry_api_date(expiry),
+        }
+        if strike_price:
+            payload['strike_price'] = str(strike_price)
+        return await asyncio.to_thread(self._call, self.samco.get_option_chain, **payload)
 
     async def place_order(self, order_payload: dict[str, Any]) -> dict[str, Any]:
         return await asyncio.to_thread(self._call, self.samco.place_order, body=order_payload)
