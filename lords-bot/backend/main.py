@@ -3,11 +3,12 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from api.auth import require_api_key
 from api.routes_analysis import router as analysis_router
 from api.routes_dashboard import router as dashboard_router
 from api.routes_funds import router as funds_router
@@ -40,6 +41,7 @@ app.add_middleware(
     allow_headers=['Content-Type', 'X-API-Key'],
 )
 
+secure_router_kwargs = {'prefix': '/api', 'dependencies': [Depends(require_api_key)]}
 for route in [
     analysis_router,
     dashboard_router,
@@ -50,7 +52,7 @@ for route in [
     trade_router,
     trading_mode_router,
 ]:
-    app.include_router(route)
+    app.include_router(route, **secure_router_kwargs)
 
 frontend_path = Path(settings.frontend_dir)
 if frontend_path.exists():

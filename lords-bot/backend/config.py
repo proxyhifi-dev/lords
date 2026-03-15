@@ -28,18 +28,20 @@ class Settings(BaseSettings):
     enable_real_trading: bool = False
     api_key: str = ''
 
-
     scheduler_interval: int = 20
     option_chain_ttl: int = 30
     historical_ttl: int = 300
+    spot_ttl: int = 3
+    funds_ttl: int = 20
     request_timeout: int = 10
     max_api_retries: int = 3
     base_retry_delay_seconds: float = 1.0
 
-    risk_per_trade_pct: float = 5.0
+    risk_per_trade_pct: float = 2.0
     max_trades_per_day: int = 3
     max_daily_loss: float = 2000.0
     max_position_size: int = 500
+    max_consecutive_losses: int = 3
     default_lot_size: int = 50
     paper_capital: float = 100000.0
 

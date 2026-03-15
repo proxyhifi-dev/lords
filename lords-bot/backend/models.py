@@ -30,6 +30,7 @@ class EngineState:
     active_trade: dict[str, Any] = field(default_factory=dict)
     trades_today: int = 0
     realized_pnl: float = 0.0
+    consecutive_losses: int = 0
     last_error: str = ''
     latest_signal: dict[str, Any] = field(default_factory=dict)
     orb_range: dict[str, float] = field(default_factory=dict)
