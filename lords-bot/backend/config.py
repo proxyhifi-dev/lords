@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -14,7 +15,10 @@ class Settings(BaseSettings):
     environment: str = 'dev'
 
     samco_base_url: str = 'https://api.stocknote.com'
-    samco_api_key: str = ''
+    samco_api_key: str = Field(default='', validation_alias='API_KEY')
+
+    samco_api_secret: str = Field(default='', validation_alias='API_SECRET')
+    samco_institution_id: str = Field(default='', validation_alias='INSTITUTION_ID')
     samco_access_token: str = ''
     samco_session_token: str = ''
     samco_user_id: str = ''
