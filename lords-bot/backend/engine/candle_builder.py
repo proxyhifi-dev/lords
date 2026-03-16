@@ -5,6 +5,7 @@ from typing import Any
 
 
 class CandleBuilder:
+
     def __init__(self) -> None:
         self._ticks: list[dict[str, Any]] = []
         self._active_session: date | None = None
@@ -15,9 +16,7 @@ class CandleBuilder:
             self._active_session = session_date
 
     def add_tick(self, tick: dict[str, Any]) -> None:
-        """
-        Add tick data from websocket or market feed
-        """
+
         ts_value = tick.get("timestamp")
         if not ts_value:
             return
@@ -44,9 +43,7 @@ class CandleBuilder:
         )
 
     def build_5min_candles(self, raw_ticks: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
-        """
-        Convert ticks → 5 minute candles
-        """
+
         source = raw_ticks if raw_ticks is not None else self._ticks
 
         if not source:
@@ -55,7 +52,9 @@ class CandleBuilder:
         parsed: list[dict[str, Any]] = []
 
         for tick in source:
+
             ts_value = tick.get("timestamp")
+
             if not ts_value:
                 continue
 
@@ -89,6 +88,7 @@ class CandleBuilder:
         current: dict[str, Any] = {}
 
         for tick in parsed:
+
             ts = tick["timestamp"]
 
             bucket = ts.replace(
@@ -98,6 +98,7 @@ class CandleBuilder:
             )
 
             if current_bucket != bucket:
+
                 if current:
                     candles.append(current)
 
@@ -125,21 +126,17 @@ class CandleBuilder:
         return candles
 
     def prune_ticks(self, keep_minutes: int = 120) -> None:
-        """
-        Remove old ticks to prevent memory growth
-        """
+
         if not self._ticks:
             return
 
         latest = max(t["timestamp"] for t in self._ticks)
+
         cutoff = latest - timedelta(minutes=keep_minutes)
 
-        self._ticks = [t for t in self._ticks if t["timestamp"] >= cutoff]
+        self._ticks = [tick for tick in self._ticks if tick["timestamp"] >= cutoff]
 
     def opening_range(self, candles: list[dict[str, Any]]) -> dict[str, float]:
-        """
-        Calculate ORB range from 09:15 → 09:45
-        """
 
         if not candles:
             return {"high": 0.0, "low": 0.0}
@@ -147,6 +144,7 @@ class CandleBuilder:
         parsed = []
 
         for c in candles:
+
             try:
                 ts = datetime.fromisoformat(str(c["timestamp"]))
                 parsed.append((ts, c))
@@ -164,8 +162,9 @@ class CandleBuilder:
             if ts.date() == session_date and time(9, 15) <= ts.time() < time(9, 45)
         ]
 
-        # fallback if ORB window candles missing
+        # fallback if ORB window missing
         if not window:
+
             first = candles[:6]
 
             if not first:
