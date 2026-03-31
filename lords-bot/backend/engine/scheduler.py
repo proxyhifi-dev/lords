@@ -99,9 +99,6 @@ class Scheduler:
 
                 self.state.orb_range = orb
 
-                if orb["high"] <= 0 or orb["low"] <= 0:
-                    return
-
                 chain = await self.option_chain_service.get_option_chain(
                     settings.symbol,
                     settings.expiry,
@@ -109,7 +106,7 @@ class Scheduler:
 
                 bias = self.option_chain_service.get_option_chain_bias(chain)
 
-                signal_data = self.strategy_manager.choose(
+                signal = self.strategy_manager.choose(
                     {
                         "spot_price": spot,
                         "orb_high": orb["high"],
@@ -119,7 +116,84 @@ class Scheduler:
                     }
                 )
 
-                self.state.latest_signal = signal_data
+                self.state.latest_signal = signal
+
+                # ------------------------------------------------
+                # TRADE EXECUTION LOGIC
+                # ------------------------------------------------
+
+                if signal.get("signal") == "BUY" and not self.state.active_trade:
+
+                    option = self.option_chain_service.pick_option_contract(
+                        chain,
+                        spot,
+                        signal.get("option_side"),
+                        settings.symbol,
+                        settings.expiry,
+                    )
+
+                    payload = {
+                        "exchange": "NFO",
+                        "symbolName": option["option_symbol"],
+                        "expiryDate": option["expiry"],
+                        "strikePrice": option["strike"],
+                        "optionType": option["option_type"],
+                        "transactionType": "BUY",
+                        "orderType": "MARKET",
+                        "productType": "MIS",
+                        "quantity": settings.quantity,
+                        "price": option["premium"],
+                    }
+
+                    order = await self.order_manager.place_order(
+                        payload,
+                        self.state.trading_mode,
+                    )
+
+                    if order.get("status") == "Success":
+
+                        order_id = order.get("order_id")
+
+                        self.state.active_trade = {
+                            "order_id": order_id,
+                            "symbol": option["option_symbol"],
+                            "entry_price": option["premium"],
+                            "quantity": settings.quantity,
+                            "side": signal.get("option_side"),
+                            "stop_loss": signal.get("stop_loss"),
+                            "target": signal.get("target_price"),
+                        }
+
+                        logger.info("Trade opened %s", option["option_symbol"])
+
+                # ------------------------------------------------
+                # EXIT LOGIC
+                # ------------------------------------------------
+
+                if self.state.active_trade:
+
+                    pos = self.state.active_trade
+
+                    pnl = self.order_manager.update_pnl(
+                        pos["order_id"],
+                        spot,
+                    )
+
+                    if (
+                        spot <= pos["stop_loss"]
+                        or spot >= pos["target"]
+                    ):
+
+                        trade = self.order_manager.close_position(
+                            pos["order_id"],
+                            spot,
+                        )
+
+                        self.trade_logger.log_trade(trade)
+
+                        logger.info("Trade closed")
+
+                        self.state.active_trade = {}
 
                 self.state_manager.save(self.state)
 
@@ -161,48 +235,6 @@ class Scheduler:
                 await self._task
             except asyncio.CancelledError:
                 pass
-
-    # ---------------------------------------------------
-    # FIXED FUNCTION FOR FLATTEN BUTTON
-    # ---------------------------------------------------
-
-    async def flatten_active_trade(self):
-
-        if not self.state.active_trade:
-            return {"status": "no_active_trade"}
-
-        try:
-
-            trade = self.state.active_trade
-
-            symbol = trade.get("symbol")
-            quantity = trade.get("quantity", 0)
-            side = trade.get("side")
-
-            if not symbol or quantity <= 0:
-                return {"status": "invalid_trade"}
-
-            exit_side = "SELL" if side == "CALL" else "BUY"
-
-            if self.state.trading_mode == "REAL":
-
-                await self.order_manager.place_order(
-                    symbol_name=symbol,
-                    quantity=quantity,
-                    transaction_type=exit_side,
-                )
-
-            self.state.active_trade = {}
-
-            self.state_manager.save(self.state)
-
-            return {"status": "flattened"}
-
-        except Exception as e:
-
-            logger.error("flatten failed: %s", e)
-
-            return {"status": "error", "message": str(e)}
 
 
 scheduler = Scheduler()
