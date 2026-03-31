@@ -222,14 +222,23 @@ class SamcoClient:
 
         return {'status': 'Error', 'statusMessage': 'Samco SDK call failed after retries'}
 
+
+    async def _run_io(self, fn: Callable[..., Any], **kwargs: Any) -> dict[str, Any]:
+        timeout = max(1, int(settings.request_timeout))
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(self._call, fn, **kwargs), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.error('Samco call timeout after %ss', timeout)
+            return {'status': 'Error', 'statusMessage': f'timeout:{timeout}s'}
+
     async def index_quote(self, index_name: str) -> dict[str, Any]:
-        return await asyncio.to_thread(self._call, self.samco.index_quote, exchange='NSE', indexName=index_name)
+        return await self._run_io(self.samco.index_quote, exchange='NSE', indexName=index_name)
 
     async def get_quote(self, symbol_name: str, exchange: str = 'NSE') -> dict[str, Any]:
-        return await asyncio.to_thread(self._call, self.samco.get_quote, symbol_name=symbol_name, exchange=exchange)
+        return await self._run_io(self.samco.get_quote, symbol_name=symbol_name, exchange=exchange)
 
     async def get_positions(self) -> dict[str, Any]:
-        return await asyncio.to_thread(self._call, self.samco.get_positions)
+        return await self._run_io(self.samco.get_positions)
 
     async def get_option_chain(self, symbol: str, expiry: str, strike_price: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -240,7 +249,7 @@ class SamcoClient:
         }
         if strike_price:
             payload['strike_price'] = str(strike_price)
-        return await asyncio.to_thread(self._call, self.samco.get_option_chain, **payload)
+        return await self._run_io(self.samco.get_option_chain, **payload)
 
     async def place_order(
         self,
@@ -268,16 +277,16 @@ class SamcoClient:
                 'productType': product_type,
                 'price': price,
             }
-        return await asyncio.to_thread(self._call, self.samco.place_order, body=body)
+        return await self._run_io(self.samco.place_order, body=body)
 
     async def get_limits(self) -> dict[str, Any]:
-        return await asyncio.to_thread(self._call, self.samco.get_limits)
+        return await self._run_io(self.samco.get_limits)
 
     async def user_details(self) -> dict[str, Any]:
-        return await asyncio.to_thread(self._call, self.samco.user_details)
+        return await self._run_io(self.samco.user_details)
 
     async def get_order_status(self, order_id: str) -> dict[str, Any]:
-        return await asyncio.to_thread(self._call, self.samco.get_order_status, order_id=order_id)
+        return await self._run_io(self.samco.get_order_status, order_id=order_id)
 
 
 samco_client = SamcoClient()

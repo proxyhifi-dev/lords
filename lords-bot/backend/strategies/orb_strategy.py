@@ -40,6 +40,23 @@ class OrbSignal:
 
 
 class OrbStrategy:
+    def generate_signal(self, market_data: dict[str, Any]) -> dict[str, Any]:
+        signal = self.generate(
+            spot_price=float(market_data.get('spot_price') or 0.0),
+            orb_high=float(market_data.get('orb_high') or 0.0),
+            orb_low=float(market_data.get('orb_low') or 0.0),
+            option_chain_bias=str(market_data.get('option_chain_bias') or 'NEUTRAL'),
+            candles=list(market_data.get('candles') or []),
+        )
+        return {
+            'signal': signal.signal,
+            'reason': signal.reason,
+            'entry_price': signal.entry_price,
+            'stop_loss': signal.stop_loss,
+            'target_price': signal.target_price,
+            'option_side': signal.option_side,
+        }
+
     def generate(
         self,
         spot_price: float,
