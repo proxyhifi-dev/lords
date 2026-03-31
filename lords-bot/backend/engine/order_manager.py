@@ -22,6 +22,7 @@ REQUIRED_FIELDS = {
 class OrderManager:
     def __init__(self) -> None:
         self.paper_orders: dict[str, dict[str, Any]] = {}
+        self.open_positions: dict[str, dict[str, Any]] = {}
 
     def validate_payload(self, payload: dict[str, Any]) -> tuple[bool, str]:
         missing = [key for key in REQUIRED_FIELDS if key not in payload or payload.get(key) in (None, '', 0)]
@@ -30,6 +31,9 @@ class OrderManager:
         if str(payload.get('transactionType')).upper() not in {'BUY', 'SELL'}:
             return False, 'invalid_transaction_type'
         return True, 'ok'
+
+    async def place_order(self, payload: dict[str, Any], mode: str) -> dict[str, Any]:
+        return await self.place_market_order(payload, mode)
 
     async def place_market_order(self, payload: dict[str, Any], mode: str) -> dict[str, Any]:
         valid, reason = self.validate_payload(payload)
@@ -46,11 +50,14 @@ class OrderManager:
                 'order_status': 'COMPLETE',
             }
             self.paper_orders[order_id] = order
+            self.track_position(order_id, payload)
             return order
 
         response = await samco_client.place_order(payload)
         if response.get('status') == 'Success' and 'order_id' not in response:
             response['order_id'] = response.get('nOrdNo') or response.get('orderNumber') or ''
+        if response.get('order_id'):
+            self.track_position(str(response['order_id']), payload)
         return response
 
     async def place_limit_order(self, payload: dict[str, Any], mode: str) -> dict[str, Any]:
@@ -67,8 +74,33 @@ class OrderManager:
             if not order:
                 return {'status': 'Error', 'message': 'NOT_FOUND'}
             order['order_status'] = 'CANCELLED'
+            self.open_positions.pop(order_id, None)
             return {'status': 'Success', 'order_id': order_id}
         return {'status': 'Error', 'message': 'cancel endpoint unavailable in bridge wrapper'}
+
+    def track_position(self, order_id: str, payload: dict[str, Any]) -> None:
+        self.open_positions[order_id] = {
+            'symbol': payload.get('symbolName', ''),
+            'quantity': int(payload.get('quantity') or 0),
+            'side': payload.get('transactionType', ''),
+            'entry_price': float(payload.get('price') or 0.0),
+            'last_price': float(payload.get('price') or 0.0),
+            'pnl': 0.0,
+        }
+
+    def update_pnl(self, order_id: str, latest_price: float) -> float:
+        pos = self.open_positions.get(order_id)
+        if not pos:
+            return 0.0
+        entry = float(pos.get('entry_price') or 0.0)
+        qty = int(pos.get('quantity') or 0)
+        side = str(pos.get('side') or 'BUY').upper()
+        pnl = (latest_price - entry) * qty
+        if side == 'SELL':
+            pnl *= -1
+        pos['last_price'] = float(latest_price)
+        pos['pnl'] = pnl
+        return pnl
 
     def is_verified_success(self, verification: dict[str, Any]) -> bool:
         status = str(verification.get('order_status') or verification.get('status') or '').upper()

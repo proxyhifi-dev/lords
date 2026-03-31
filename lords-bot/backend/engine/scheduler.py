@@ -16,6 +16,8 @@ from services.market_data_service import MarketDataService
 from services.option_chain_service import OptionChainService
 from services.trade_logger import TradeLogger
 from strategies.orb_strategy import OrbStrategy, compute_rsi
+from strategies.pcr_strategy import PCRStrategy
+from strategies.strategy_manager import StrategyManager
 
 logger = logging.getLogger(__name__)
 IST = ZoneInfo('Asia/Kolkata')
@@ -34,7 +36,7 @@ class Scheduler:
         self.market_data_service = MarketDataService(cache)
         self.option_chain_service = OptionChainService(cache)
         self.candle_builder = CandleBuilder()
-        self.strategy = OrbStrategy()
+        self.strategy_manager = StrategyManager([OrbStrategy(), PCRStrategy()])
         self.risk_manager = RiskManager()
         self.order_manager = OrderManager()
         self.trade_logger = TradeLogger()
@@ -129,14 +131,23 @@ class Scheduler:
                     api_ok = False
 
                 bias = self.option_chain_service.get_option_chain_bias(chain)
-                signal = self.strategy.generate(spot, orb['high'], orb['low'], bias, candles)
-                self.state.latest_signal = signal.__dict__
+                signal_data = self.strategy_manager.choose(
+                    {
+                        'spot_price': spot,
+                        'orb_high': orb['high'],
+                        'orb_low': orb['low'],
+                        'option_chain_bias': bias,
+                        'option_chain': chain,
+                        'candles': candles,
+                    }
+                )
+                self.state.latest_signal = signal_data
 
                 self.state.system_status = self.risk_manager.circuit_breaker(self.state, broker_ok=broker_ok, api_ok=api_ok)
                 current_candle = candles[-1]['timestamp']
 
                 if (
-                    signal.signal == 'BUY'
+                    signal_data.get('signal') == 'BUY'
                     and self.state.system_status == 'RUNNING'
                     and not self.state.active_trade
                     and self._last_entry_candle != current_candle
@@ -144,12 +155,12 @@ class Scheduler:
                     decision = self.risk_manager.pre_trade_check(
                         self.state,
                         capital=settings.paper_capital,
-                        entry=signal.entry_price,
-                        stop=signal.stop_loss,
+                        entry=float(signal_data.get('entry_price') or 0.0),
+                        stop=float(signal_data.get('stop_loss') or 0.0),
                     )
                     if decision.allowed:
                         contract = self.option_chain_service.pick_option_contract(
-                            chain, spot, signal.option_side, settings.symbol, settings.expiry
+                            chain, spot, str(signal_data.get('option_side') or ''), settings.symbol, settings.expiry
                         )
                         option_premium = float(contract['premium'] or 0.0)
                         if option_premium <= 0:
@@ -176,11 +187,11 @@ class Scheduler:
                             if order_id and self.order_manager.is_verified_success(verification):
                                 position = TradePosition(
                                     symbol=contract['option_symbol'],
-                                    side=signal.option_side,
+                                    side=str(signal_data.get('option_side') or ''),
                                     quantity=decision.quantity,
                                     entry_price=option_premium,
-                                    stop_loss=signal.stop_loss,
-                                    target_price=signal.target_price,
+                                    stop_loss=float(signal_data.get('stop_loss') or 0.0),
+                                    target_price=float(signal_data.get('target_price') or 0.0),
                                     order_id=order_id,
                                 )
                                 self.state.active_trade = position.to_dict()
@@ -202,12 +213,11 @@ class Scheduler:
                             option_ltp = float(row.get(premium_key) or option_ltp)
                             break
 
-                    rsi = compute_rsi([float(c['close']) for c in candles])
                     should_exit = False
                     if at['side'] == 'CALL':
-                        should_exit = spot <= at['stop_loss'] or spot >= at['target_price'] or rsi >= 70
+                        should_exit = spot <= at['stop_loss'] or spot >= at['target_price']
                     elif at['side'] == 'PUT':
-                        should_exit = spot >= at['stop_loss'] or spot <= at['target_price'] or rsi <= 30
+                        should_exit = spot >= at['stop_loss'] or spot <= at['target_price']
                     if now.time() >= time(15, 15):
                         should_exit = True
 
