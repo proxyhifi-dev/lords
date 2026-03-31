@@ -49,7 +49,7 @@ class MarketDataService:
 
         try:
 
-            raw = await samco_client.index_quote("NIFTY")
+            raw = await samco_client.get_quote("NIFTY")
 
             response = self._normalize_response(raw)
 
