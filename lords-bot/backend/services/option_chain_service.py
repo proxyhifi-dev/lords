@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from typing import Any
 
 from brokers.samco_client import SamcoClient, samco_client
@@ -26,6 +27,50 @@ class OptionChainService:
 
     def __init__(self, cache: TTLCache) -> None:
         self.cache = cache
+        self._live_expiry_by_symbol: dict[str, str] = {}
+
+    @staticmethod
+    def _extract_details(response: dict[str, Any]) -> list[dict[str, Any]]:
+        details = (
+            response.get("optionChainDetails")
+            or response.get("optionDetails")
+            or response.get("data")
+            or []
+        )
+        return [row for row in details if isinstance(row, dict)]
+
+    @staticmethod
+    def _extract_error_text(response: dict[str, Any]) -> str:
+        return str(
+            response.get("statusMessage")
+            or response.get("errorMessage")
+            or response.get("message")
+            or ""
+        ).strip()
+
+    @staticmethod
+    def _extract_expiries(details: list[dict[str, Any]]) -> list[str]:
+        values: set[str] = set()
+        for row in details:
+            raw = str(row.get("expiryDate") or row.get("expiry_date") or "").strip()
+            if not raw:
+                continue
+            try:
+                values.add(SamcoClient.to_expiry_api_date(raw))
+            except ValueError:
+                continue
+        return sorted(values)
+
+    @staticmethod
+    def _pick_live_expiry(expiries: list[str]) -> str | None:
+        if not expiries:
+            return None
+        today = date.today().isoformat()
+        future_or_today = [item for item in expiries if item >= today]
+        return (future_or_today[0] if future_or_today else expiries[-1])
+
+    def get_live_expiry(self, symbol: str, fallback_expiry: str) -> str:
+        return self._live_expiry_by_symbol.get(symbol.upper(), fallback_expiry)
 
     async def get_option_chain(
         self,
@@ -34,22 +79,47 @@ class OptionChainService:
         strike_price: str | None = None
     ) -> list[dict[str, Any]]:
 
-        key = f"option_chain:{symbol}:{expiry}:{strike_price or 'ALL'}"
+        symbol_key = symbol.upper()
+        requested_expiry = self.get_live_expiry(symbol_key, expiry)
+
+        key = f"option_chain:{symbol_key}:{requested_expiry}:{strike_price or 'ALL'}"
 
         cached = self.cache.get(key)
         if cached is not None:
             return cached
 
         response = self._normalize_response(
-            await samco_client.get_option_chain(symbol, expiry, strike_price=strike_price)
+            await samco_client.get_option_chain(symbol_key, requested_expiry, strike_price=strike_price)
         )
+        details = self._extract_details(response)
 
-        details = (
-            response.get("optionChainDetails")
-            or response.get("optionDetails")
-            or response.get("data")
-            or []
-        )
+        if not details:
+            # Recover from stale expiry by pulling contracts without expiry filter
+            recovery = self._normalize_response(
+                await samco_client.get_option_chain(symbol_key, None, strike_price=strike_price)
+            )
+            recovery_details = self._extract_details(recovery)
+            live_expiry = self._pick_live_expiry(self._extract_expiries(recovery_details))
+
+            if live_expiry and live_expiry != requested_expiry:
+                self._live_expiry_by_symbol[symbol_key] = live_expiry
+                key = f"option_chain:{symbol_key}:{live_expiry}:{strike_price or 'ALL'}"
+                response = self._normalize_response(
+                    await samco_client.get_option_chain(symbol_key, live_expiry, strike_price=strike_price)
+                )
+                details = self._extract_details(response)
+            else:
+                details = recovery_details
+
+            if not details:
+                error_text = self._extract_error_text(recovery) or self._extract_error_text(response)
+                raise RuntimeError(error_text or "Option chain unavailable from Samco")
+
+        available_expiries = self._extract_expiries(details)
+        if available_expiries:
+            live_expiry = self._pick_live_expiry(available_expiries)
+            if live_expiry:
+                self._live_expiry_by_symbol[symbol_key] = live_expiry
 
         chain_by_strike: dict[float, dict[str, Any]] = {}
 

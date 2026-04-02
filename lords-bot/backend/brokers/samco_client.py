@@ -295,15 +295,17 @@ class SamcoClient:
     async def get_option_chain(
         self,
         symbol: str,
-        expiry: str,
+        expiry: str | None = None,
         strike_price: str | None = None,
     ):
 
-        payload = {
+        payload: dict[str, Any] = {
             "search_symbol_name": symbol,
             "exchange": self.samco.EXCHANGE_NFO,
-            "expiry_date": self.to_expiry_api_date(expiry),
         }
+
+        if expiry:
+            payload["expiry_date"] = self.to_expiry_api_date(expiry)
 
         if strike_price:
             payload["strike_price"] = strike_price
