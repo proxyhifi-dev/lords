@@ -1,143 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Lords Bot Dashboard</title>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<style>
-
-body{
-    margin:0;
-    font-family:Arial;
-    background:#0f172a;
-    color:white;
-}
-
-header{
-    padding:15px;
-    background:#111827;
-    border-bottom:1px solid #334155;
-}
-
-.container{
-    display:grid;
-    grid-template-columns: repeat(auto-fit,minmax(260px,1fr));
-    gap:12px;
-    padding:15px;
-}
-
-.card{
-    background:#1e293b;
-    border-radius:8px;
-    padding:12px;
-}
-
-.card h3{
-    margin-top:0;
-    font-size:16px;
-}
-
-button{
-    padding:6px 10px;
-    margin-right:5px;
-    border:none;
-    border-radius:4px;
-    cursor:pointer;
-}
-
-.paper{
-    background:#22c55e;
-}
-
-.real{
-    background:#ef4444;
-}
-
-.refresh{
-    background:#3b82f6;
-}
-
-pre{
-    font-size:12px;
-    white-space:pre-wrap;
-}
-
-.chart{
-    grid-column: span 2;
-}
-
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lords Bot Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css">
 </head>
-
 <body>
-
 <header>
-<h2>Lords Bot — ORB NIFTY Options</h2>
+  <h2>Lords Bot — ORB NIFTY Options</h2>
 </header>
 
-<div class="container">
-
-<div class="card">
-<h3>Bot Status</h3>
-<pre id="botStatus"></pre>
-</div>
-
-<div class="card">
-<h3>Trading Mode</h3>
-<button class="paper" id="paperBtn">PAPER</button>
-<button class="real" id="realBtn">REAL</button>
-<pre id="modeState"></pre>
-</div>
-
-<div class="card">
-<h3>Market</h3>
-<pre id="marketStatus"></pre>
-</div>
-
-<div class="card">
-<h3>ORB Range</h3>
-<pre id="orbRange"></pre>
-</div>
-
-<div class="card">
-<h3>Signal</h3>
-<pre id="signalPanel"></pre>
-</div>
-
-<div class="card">
-<h3>Active Trade</h3>
-<pre id="executionPanel"></pre>
-</div>
-
-<div class="card chart">
-<h3>Option Chain OI</h3>
-<canvas id="oiChart"></canvas>
-</div>
-
-<div class="card">
-<h3>Performance</h3>
-<pre id="performance"></pre>
-</div>
-
-<div class="card">
-<h3>Trade History</h3>
-<pre id="tradeHistory"></pre>
-</div>
-
-<div class="card">
-<h3>Controls</h3>
-<button class="refresh" id="refreshBtn">Refresh</button>
-<button class="real" id="flattenBtn">Flatten</button>
-</div>
-
+<div class="grid">
+  <section><h3>Bot Status</h3><pre id="botStatus"></pre></section>
+  <section>
+    <h3>Trading Mode</h3>
+    <button id="paperBtn">PAPER</button>
+    <button id="realBtn">REAL</button>
+    <pre id="modeState"></pre>
+  </section>
+  <section><h3>NIFTY Spot</h3><pre id="marketStatus"></pre></section>
+  <section><h3>ORB Range (9:15–9:30)</h3><pre id="orbRange"></pre></section>
+  <section><h3>Signal Panel</h3><pre id="signalPanel"></pre></section>
+  <section><h3>Active Trade</h3><pre id="executionPanel"></pre></section>
+  <section><h3>PnL Metrics</h3><pre id="performance"></pre></section>
+  <section><h3>Trade History</h3><pre id="tradeHistory"></pre></section>
+  <section>
+    <h3>Controls</h3>
+    <button id="refreshBtn">Refresh</button>
+    <button id="flattenBtn">Flatten</button>
+  </section>
 </div>
 
 <script src="/static/app.js"></script>
-
 </body>
 </html>

@@ -139,7 +139,7 @@ class CandleBuilder:
             if not ts:
                 continue
             dt = datetime.fromisoformat(ts) if isinstance(ts, str) else ts
-            if time(9, 15) <= dt.time() < time(9, 45):
+            if time(9, 15) <= dt.time() < time(9, 30):
                 window.append(candle)
 
         if not window:
