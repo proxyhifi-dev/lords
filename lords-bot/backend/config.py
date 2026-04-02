@@ -16,7 +16,6 @@ class Settings(BaseSettings):
 
     samco_base_url: str = 'https://api.stocknote.com'
     samco_api_key: str = Field(default='', validation_alias=AliasChoices('SAMCO_API_KEY', 'API_KEY'))
-
     samco_api_secret: str = Field(default='', validation_alias=AliasChoices('SAMCO_API_SECRET', 'API_SECRET'))
     samco_institution_id: str = Field(default='', validation_alias=AliasChoices('SAMCO_INSTITUTION_ID', 'INSTITUTION_ID'))
     samco_access_token: str = Field(default='', validation_alias=AliasChoices('SAMCO_ACCESS_TOKEN', 'ACCESS_TOKEN'))
@@ -26,24 +25,27 @@ class Settings(BaseSettings):
     samco_yob: str = Field(default='', validation_alias=AliasChoices('SAMCO_YOB', 'YOB'))
 
     symbol: str = 'NIFTY'
+    index_symbol: str = 'NIFTY 50'
     expiry: str = '2026-03-26'
 
     trading_mode: str = 'PAPER'
     enable_real_trading: bool = False
     api_key: str = ''
 
-    scheduler_interval: int = 20
+    scheduler_interval: int = 30
+    min_market_poll_seconds: int = 3
     option_chain_ttl: int = 30
-    historical_ttl: int = 300
     spot_ttl: int = 3
+    candle_ttl: int = 120
     funds_ttl: int = 20
     request_timeout: int = 10
-    max_api_retries: int = 3
+    max_api_retries: int = 4
     base_retry_delay_seconds: float = 1.0
 
     risk_per_trade_pct: float = 2.0
     max_trades_per_day: int = 3
     max_daily_loss: float = 2000.0
+    max_drawdown: float = 5000.0
     max_position_size: int = 500
     max_consecutive_losses: int = 3
     default_lot_size: int = 50
