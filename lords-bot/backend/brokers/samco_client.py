@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import time
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
@@ -12,8 +11,9 @@ from typing import Any, Callable
 from snapi_py_client.snapi_bridge import StocknoteAPIPythonBridge
 
 from config import settings
+from core.rate_limiter import GlobalRateLimiter
 
-logger = logging.getLogger('core.logger')
+logger = logging.getLogger(__name__)
 
 
 class SamcoClient:
@@ -25,12 +25,24 @@ class SamcoClient:
         self._authenticated = False
         self._token = ''
         self._session_restored = False
-        self._last_market_request_ts = 0.0
+        self._limiter = GlobalRateLimiter(settings.max_api_calls_per_second)
         self._bootstrap_session()
 
     @staticmethod
+    def _parse_response(response: Any) -> dict[str, Any]:
+        if isinstance(response, dict):
+            return response
+        if isinstance(response, str):
+            try:
+                payload = json.loads(response)
+                return payload if isinstance(payload, dict) else {'status': 'Error', 'message': response}
+            except Exception:
+                return {'status': 'Error', 'message': response}
+        return {'status': 'Error', 'message': 'Invalid response'}
+
+    @staticmethod
     def _is_success(payload: dict[str, Any]) -> bool:
-        return str(payload.get('status', '')).lower() == 'success'
+        return str(payload.get('status', '')).lower() in {'success', 'ok'}
 
     @staticmethod
     def _message(payload: dict[str, Any]) -> str:
@@ -44,7 +56,7 @@ class SamcoClient:
     @classmethod
     def _is_retryable_error(cls, payload: dict[str, Any]) -> bool:
         msg = cls._message(payload).lower()
-        return any(token in msg for token in ['429', 'too many requests', 'internal server error', 'timeout', 'tempor'])
+        return any(token in msg for token in ['429', 'too many requests', 'internal', 'tempor', 'timeout', 'gateway'])
 
     @staticmethod
     def to_expiry_code(expiry: str) -> str:
@@ -76,12 +88,10 @@ class SamcoClient:
             self.set_session_token(settings.samco_session_token, persist=False)
             self._authenticated = True
             self._session_restored = True
-            logger.info('samco_session_restored source=env')
             return
         if self._load_session():
             self._authenticated = True
             self._session_restored = True
-            logger.info('samco_session_restored source=file')
             return
         self.login()
 
@@ -104,14 +114,11 @@ class SamcoClient:
         try:
             self.SESSION_FILE.write_text(json.dumps({'access_token': self._token}))
         except Exception:
-            logger.warning('samco_session_save_failed')
+            logger.exception('samco_session_save_failed')
 
     def set_session_token(self, token: str, persist: bool = True) -> None:
         self._token = token
-        try:
-            self.samco.set_session_token(sessionToken=token)
-        except Exception:
-            logger.exception('samco_set_session_failed')
+        self.samco.set_session_token(sessionToken=token)
         if persist:
             self._save_session()
 
@@ -119,59 +126,32 @@ class SamcoClient:
         with self._lock:
             if self._authenticated and self._token and not self._session_restored:
                 return True
-            try:
-                response = self.samco.login(
-                    body={
-                        'userId': settings.samco_user_id,
-                        'password': settings.samco_password,
-                        'yob': settings.samco_yob,
-                    }
-                )
-                payload = self._parse_response(response)
-                if not self._is_success(payload):
-                    logger.error('samco_login_failed message=%s', self._message(payload))
-                    return False
-                token = payload.get('sessionToken') or payload.get('accessToken')
-                if not token:
-                    logger.error('samco_login_missing_token')
-                    return False
-                self.set_session_token(token)
-                self._authenticated = True
-                self._session_restored = False
-                logger.info('samco_login_success')
-                return True
-            except Exception:
-                logger.exception('samco_login_error')
+            response = self.samco.login(
+                body={
+                    'userId': settings.samco_user_id,
+                    'password': settings.samco_password,
+                    'yob': settings.samco_yob,
+                }
+            )
+            payload = self._parse_response(response)
+            if not self._is_success(payload):
+                logger.error('samco_login_failed %s', self._message(payload))
                 return False
+            token = payload.get('sessionToken') or payload.get('accessToken')
+            if not token:
+                return False
+            self.set_session_token(token)
+            self._authenticated = True
+            self._session_restored = False
+            return True
 
-    def _parse_response(self, response: Any) -> dict[str, Any]:
-        if isinstance(response, dict):
-            return response
-        if isinstance(response, str):
-            try:
-                payload = json.loads(response)
-                return payload if isinstance(payload, dict) else {'status': 'Error', 'message': response}
-            except Exception:
-                return {'status': 'Error', 'message': response}
-        return {'status': 'Error', 'message': 'Invalid response'}
-
-    def _rate_limit_market_calls(self) -> None:
-        min_gap = max(3, settings.min_market_poll_seconds)
-        now = time.time()
-        elapsed = now - self._last_market_request_ts
-        if elapsed < min_gap:
-            time.sleep(min_gap - elapsed)
-        self._last_market_request_ts = time.time()
-
-    def _call(self, fn: Callable[..., Any], *, rate_limited: bool = False, **kwargs: Any) -> dict[str, Any]:
+    def _call_sync(self, fn: Callable[..., Any], **kwargs: Any) -> dict[str, Any]:
         retries = max(1, settings.max_api_retries)
         base_delay = max(0.2, settings.base_retry_delay_seconds)
         for attempt in range(retries + 1):
             try:
                 if fn != self.samco.login and not self._authenticated and not self.login():
                     return {'status': 'Error', 'message': 'Samco login failed'}
-                if rate_limited:
-                    self._rate_limit_market_calls()
                 payload = self._parse_response(fn(**kwargs))
                 if self._is_success(payload):
                     return payload
@@ -181,21 +161,19 @@ class SamcoClient:
                         continue
                 if not self._is_retryable_error(payload):
                     return payload
-                logger.warning('samco_retryable_error attempt=%s message=%s', attempt + 1, self._message(payload))
             except Exception:
-                logger.exception('samco_sdk_call_failed')
+                logger.exception('samco_call_failed fn=%s', getattr(fn, '__name__', 'unknown'))
             if attempt < retries:
-                time.sleep(base_delay * (2**attempt))
+                delay = base_delay * (2**attempt)
+                asyncio.run(asyncio.sleep(delay))
         return {'status': 'Error', 'message': 'API call failed after retries'}
 
     async def _run_io(self, fn: Callable[..., Any], *, rate_limited: bool = False, **kwargs: Any) -> dict[str, Any]:
+        if rate_limited:
+            await self._limiter.wait()
         try:
-            return await asyncio.wait_for(
-                asyncio.to_thread(self._call, fn, rate_limited=rate_limited, **kwargs),
-                timeout=settings.request_timeout,
-            )
+            return await asyncio.wait_for(asyncio.to_thread(self._call_sync, fn, **kwargs), timeout=settings.request_timeout)
         except asyncio.TimeoutError:
-            logger.error('samco_timeout')
             return {'status': 'Error', 'message': 'timeout'}
 
     async def multi_quote(self, payload: dict[str, list[str]]) -> dict[str, Any]:
@@ -212,9 +190,6 @@ class SamcoClient:
     async def get_quote(self, symbol_name: str, exchange: str = 'NFO') -> dict[str, Any]:
         return await self._run_io(self.samco.get_quote, symbol_name=symbol_name, exchange=exchange, rate_limited=True)
 
-    async def get_positions(self) -> dict[str, Any]:
-        return await self._run_io(self.samco.get_positions)
-
     async def get_option_chain(self, symbol: str, expiry: str | None = None, strike_price: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {'search_symbol_name': symbol.upper(), 'exchange': 'NFO'}
         if expiry:
@@ -224,19 +199,22 @@ class SamcoClient:
         return await self._run_io(self.samco.get_option_chain, rate_limited=True, **payload)
 
     async def place_order(self, body: dict[str, Any]) -> dict[str, Any]:
-        return await self._run_io(self.samco.place_order, body=body)
-
-    async def get_limits(self) -> dict[str, Any]:
-        return await self._run_io(self.samco.get_limits)
+        return await self._run_io(self.samco.place_order, body=body, rate_limited=True)
 
     async def get_order_status(self, order_id: str) -> dict[str, Any]:
-        return await self._run_io(self.samco.get_order_status, order_id=order_id)
+        return await self._run_io(self.samco.get_order_status, order_id=order_id, rate_limited=True)
+
+    async def get_positions(self) -> dict[str, Any]:
+        return await self._run_io(self.samco.get_positions, rate_limited=True)
+
+    async def get_limits(self) -> dict[str, Any]:
+        return await self._run_io(self.samco.get_limits, rate_limited=True)
 
     async def user_details(self) -> dict[str, Any]:
         if hasattr(self.samco, 'user_details'):
-            return await self._run_io(self.samco.user_details)
+            return await self._run_io(self.samco.user_details, rate_limited=True)
         if hasattr(self.samco, 'get_profile'):
-            return await self._run_io(self.samco.get_profile)
+            return await self._run_io(self.samco.get_profile, rate_limited=True)
         return {'status': 'Error', 'message': 'user_details_not_supported'}
 
 

@@ -18,7 +18,7 @@ class Backtester:
             window = candles[: idx + 1]
             spot = float(window[-1]['close'])
             signal = self.strategy.generate(spot, orb_high, orb_low, oi_bias, window)
-            if entry is None and signal.signal == 'BUY':
+            if entry is None and signal.signal in {'BUY','BUY CALL','BUY PUT'}:
                 entry = signal.entry_price
                 side = signal.option_side
                 continue
