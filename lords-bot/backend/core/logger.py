@@ -12,24 +12,28 @@ from config import settings
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            'ts': datetime.now(timezone.utc).isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'level': record.levelname,
-            'logger': record.name,
+            'service': getattr(record, 'service', record.name),
+            'event': getattr(record, 'event', 'log'),
             'message': record.getMessage(),
         }
+        for key in ('symbol', 'qty', 'order_id', 'status', 'reason'):
+            value = getattr(record, key, None)
+            if value is not None:
+                payload[key] = value
         if record.exc_info:
-            payload['exc_info'] = self.formatException(record.exc_info)
+            payload['exception'] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=False)
 
 
 def configure_logging() -> None:
     Path(settings.logs_dir).mkdir(parents=True, exist_ok=True)
+    handlers: list[logging.Handler] = [logging.StreamHandler(), logging.FileHandler(settings.log_file)]
     formatter = JsonFormatter()
-    handlers: list[logging.Handler] = [logging.StreamHandler(), logging.FileHandler(settings.trading_log_file)]
-    for handler in handlers:
-        handler.setFormatter(formatter)
     root = logging.getLogger()
     root.handlers.clear()
     root.setLevel(logging.INFO)
     for handler in handlers:
+        handler.setFormatter(formatter)
         root.addHandler(handler)

@@ -1,12 +1,4 @@
-fastapi==0.115.12
-uvicorn[standard]==0.34.0
-httpx==0.28.1
-pandas==2.2.3
-numpy==2.2.3
 pydantic==2.10.6
 pydantic-settings==2.8.1
-python-dotenv==1.0.1
 stocknotebridge
-requests
-websocket-client
-future
+pytest==8.3.5

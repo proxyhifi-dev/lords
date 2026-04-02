@@ -1,31 +1,30 @@
-# Lords Bot - Production ORB Platform
+# Lords Bot (Production-Grade Samco Trading Bot)
 
-This codebase has been refactored into a modular ORB (Opening Range Breakout) trading platform for NIFTY options.
+## Configure credentials
+Create `.env` in repo root:
 
-## Architecture
-
-- `backend/brokers`: Samco Stocknote integration wrapper with login/session/retry handling.
-- `backend/services`: market data, option chain, trade logging, performance metrics.
-- `backend/engine`: scheduler, candle builder, order manager, state manager, backtester.
-- `backend/strategies`: ORB signal engine with RSI and OI bias confirmation.
-- `backend/risk`: global risk manager + circuit breaker + trade lock checks.
-- `backend/api`: dashboard and trading control endpoints.
-- `frontend`: web dashboard with paper/real mode switch and bot controls.
-
-## Core Safety Features
-
-- Pre-trade risk checks (risk per trade, max trades/day, daily loss limit).
-- Circuit breaker statuses (`DAILY_LOSS_LIMIT`, `BROKER_DISCONNECTED`, `API_UNSTABLE`).
-- Single active trade lock.
-- Persistent state recovery via `backend/data/state.json`.
-- Order placement + order status verification flow.
-
-## Run
-
-```bash
-cd lords-bot
-pip install -r requirements.txt
-uvicorn backend.main:app --reload --port 8000
+```env
+SAMCO_USER_ID=your_user
+SAMCO_PASSWORD=your_password
+SAMCO_YOB=1990
+SAMCO_SESSION_TOKEN=
 ```
 
-Open `http://localhost:8000`.
+## Run bot
+```bash
+pip install -r requirements.txt
+python backend/main.py
+```
+
+## Run tests
+```bash
+PYTHONPATH=backend pytest tests/test_market_feed.py tests/test_strategy.py tests/test_execution.py tests/test_full_bot.py
+```
+
+## Architecture
+- `backend/broker/samco_broker.py`: Samco API adapter with retry, validation and global rate limiting.
+- `backend/engine/market_feed_engine.py`: robust tick producer.
+- `backend/engine/strategy_engine.py`: signal emitter.
+- `backend/engine/execution_engine.py`: order placement, duplicate guard, state persistence.
+- `backend/risk/risk_manager.py`: risk gates.
+- `backend/services/state_manager.py`: disk state recovery using `runtime_state.json`.
