@@ -1,35 +1,24 @@
-import time
-from typing import Any
+from __future__ import annotations
+
+import asyncio
 
 from backend.app.broker.samco_client import SamcoClient
+from backend.app.core.event_bus import EventBus
+from backend.app.utils.logger import get_logger
 from backend.config import settings
 
 
 class MarketEngine:
-    def __init__(self, samco_client: SamcoClient) -> None:
+    def __init__(self, event_bus: EventBus, samco_client: SamcoClient) -> None:
+        self.event_bus = event_bus
         self.samco_client = samco_client
-        self.last_spot_price: float | None = None
-        self.last_quote: dict[str, Any] = {}
+        self.logger = get_logger("market_engine")
 
-    @staticmethod
-    def _extract_price(quote: dict[str, Any]) -> float:
-        for key in ("lastTradedPrice", "ltp", "last_traded_price", "close"):
-            value = quote.get(key)
-            if value is not None:
-                return float(value)
-        raise ValueError(f"Quote missing price field: {quote}")
-
-    def poll_quote(self) -> dict[str, Any]:
-        quote = self.samco_client.get_quote(
-            symbol_name=settings.nifty_symbol,
-            exchange=settings.nifty_exchange,
-        )
-        self.last_quote = quote
-        self.last_spot_price = self._extract_price(quote)
-        return quote
-
-    def run_poll_loop(self, on_quote) -> None:
+    async def run(self) -> None:
         while True:
-            quote = self.poll_quote()
-            on_quote(quote)
-            time.sleep(settings.poll_seconds)
+            quote = await self.samco_client.get_quote(
+                symbol_name=settings.nifty_symbol,
+                exchange=settings.nifty_exchange,
+            )
+            await self.event_bus.publish("MARKET_QUOTE", {"quote": quote})
+            await asyncio.sleep(settings.poll_seconds)
