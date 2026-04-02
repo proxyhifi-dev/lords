@@ -56,6 +56,10 @@ class SamcoClient:
             )
 
             if isinstance(response, str):
+
+                if response.strip() == "":
+                    raise RuntimeError("Empty SAMCO login response")
+
                 response = json.loads(response)
 
             if response.get("status") != "Success":
@@ -92,16 +96,12 @@ class SamcoClient:
         await self.ensure_session()
 
         return await self._call_sdk(
-
-            lambda: self.samco.index_quote(
-                indexName=index_name
-            ),
-
+            lambda: self.samco.index_quote(indexName=index_name),
             "index_quote",
         )
 
     # --------------------------------------------------
-    # QUOTE
+    # STOCK QUOTE
     # --------------------------------------------------
 
     async def get_quote(self, symbol_name: str, exchange: str):
@@ -109,12 +109,10 @@ class SamcoClient:
         await self.ensure_session()
 
         return await self._call_sdk(
-
             lambda: self.samco.get_quote(
                 symbolName=symbol_name,
-                exchange=exchange
+                exchange=exchange,
             ),
-
             "get_quote",
         )
 
@@ -133,14 +131,12 @@ class SamcoClient:
         await self.ensure_session()
 
         return await self._call_sdk(
-
             lambda: self.samco.get_option_chain(
                 symbolName=symbol_name,
                 exchange=exchange,
                 strikePrice=str(strike_price),
-                expiryDate=expiry_date
+                expiryDate=expiry_date,
             ),
-
             "get_option_chain",
         )
 
@@ -159,7 +155,6 @@ class SamcoClient:
         )
 
         return await self._call_sdk(
-
             lambda: self.samco.place_order(
                 body={
                     "symbolName": symbol,
@@ -171,7 +166,6 @@ class SamcoClient:
                     "orderValidity": self.samco.VALIDITY_DAY,
                 }
             ),
-
             "place_order",
         )
 
@@ -184,20 +178,15 @@ class SamcoClient:
         await self.ensure_session()
 
         return await self._call_sdk(
-
             lambda: self.samco.get_order_book(),
-
             "get_order_book",
         )
 
     # --------------------------------------------------
-    # POSITIONS (DISABLED SAFE MODE)
+    # POSITIONS (SAFE MODE)
     # --------------------------------------------------
 
     async def get_positions(self):
-
-        # SDK version doesn't support positions
-        # return empty data to avoid crash
 
         return {"positions": []}
 
@@ -208,17 +197,13 @@ class SamcoClient:
     async def healthcheck(self) -> bool:
 
         try:
-
             await self.get_index_quote("NIFTY 50")
-
             return True
-
         except Exception:
-
             return False
 
     # --------------------------------------------------
-    # INTERNAL CALL
+    # INTERNAL SDK CALL
     # --------------------------------------------------
 
     async def _call_sdk(
@@ -234,7 +219,6 @@ class SamcoClient:
 
         attempts = settings.reconnect_max_attempts
         delay = settings.reconnect_base_delay
-
         last_error = None
 
         for attempt in range(1, attempts + 1):
@@ -243,8 +227,19 @@ class SamcoClient:
 
                 result = await asyncio.to_thread(fn)
 
+                # SAMCO sometimes returns empty string
+                if result is None:
+                    return {}
+
                 if isinstance(result, str):
-                    result = json.loads(result)
+
+                    if result.strip() == "":
+                        return {}
+
+                    try:
+                        result = json.loads(result)
+                    except Exception:
+                        return {}
 
                 self._breaker.record_success()
 
@@ -272,6 +267,7 @@ class SamcoClient:
                     if "session" in str(exc).lower():
 
                         self._session_live = False
+
                         await self.login()
 
         raise RuntimeError(

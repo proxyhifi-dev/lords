@@ -40,6 +40,7 @@ class MarketScheduler:
     # --------------------------------
     # START
     # --------------------------------
+
     async def start(self):
 
         if self.running:
@@ -65,6 +66,7 @@ class MarketScheduler:
     # --------------------------------
     # STOP
     # --------------------------------
+
     async def stop(self):
 
         if not self.running:
@@ -83,20 +85,25 @@ class MarketScheduler:
     # --------------------------------
     # MAIN LOOP
     # --------------------------------
+
     async def _loop(self):
 
         while self.running:
 
             now = datetime.now().time()
 
-            market_open = time(9, 15)
-            market_close = time(15, 15)
+         
+            market_open = time(0, 0)
+            market_close = time(23, 59)
 
             if market_open <= now <= market_close:
 
                 try:
 
-                    # fetch NIFTY spot
+                    # -------------------------
+                    # FETCH NIFTY SPOT
+                    # -------------------------
+
                     quote = await self.broker.get_index_quote(
                         "NIFTY 50"
                     )
@@ -111,18 +118,83 @@ class MarketScheduler:
 
                             spot = details[0].get("spotPrice")
 
-                    if spot is not None:
+                    if spot is None:
+                        await asyncio.sleep(1)
+                        continue
 
-                        try:
-                            spot = float(spot)
-                        except Exception:
-                            pass
+                    try:
+                        spot = float(spot)
+                    except Exception:
+                        await asyncio.sleep(1)
+                        continue
 
-                        # publish tick event
+                    # -------------------------
+                    # UPDATE STATE
+                    # -------------------------
+
+                    await self.state.update(spot_price=spot)
+
+                    # publish tick
+                    await self.event_bus.publish(
+                        "TICK",
+                        {
+                            "price": spot
+                        }
+                    )
+
+                    state = await self.state.snapshot()
+
+                    # -------------------------
+                    # ORB RANGE (9:15–9:30)
+                    # -------------------------
+
+                    if time(9, 15) <= now <= time(9, 30):
+
+                        high = state.orb_high
+                        low = state.orb_low
+
+                        if high is None or spot > high:
+                            high = spot
+
+                        if low is None or spot < low:
+                            low = spot
+
+                        await self.state.update(
+                            orb_high=high,
+                            orb_low=low
+                        )
+
                         await self.event_bus.publish(
-                            "TICK",
+                            "ORB_UPDATED",
                             {
-                                "price": spot
+                                "orb_high": high,
+                                "orb_low": low
+                            }
+                        )
+
+                    # -------------------------
+                    # BREAKOUT SIGNAL
+                    # -------------------------
+
+                    if state.orb_high and spot > state.orb_high:
+
+                        await self.state.update(signal="CALL")
+
+                        await self.event_bus.publish(
+                            "SIGNAL",
+                            {
+                                "signal": "CALL"
+                            }
+                        )
+
+                    elif state.orb_low and spot < state.orb_low:
+
+                        await self.state.update(signal="PUT")
+
+                        await self.event_bus.publish(
+                            "SIGNAL",
+                            {
+                                "signal": "PUT"
                             }
                         )
 
@@ -139,4 +211,5 @@ class MarketScheduler:
 # --------------------------------
 # GLOBAL INSTANCE
 # --------------------------------
+
 scheduler = MarketScheduler()
