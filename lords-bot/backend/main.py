@@ -1,75 +1,62 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-from pathlib import Path
+import asyncio
+import signal
 
-from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-
-from api.auth import require_api_key
-from api.routes_analysis import router as analysis_router
-from api.routes_dashboard import router as dashboard_router
-from api.routes_funds import router as funds_router
-from api.routes_option_chain import router as option_chain_router
-from api.routes_profile import router as profile_router
-from api.routes_signals import router as signals_router
-from api.routes_trade import router as trade_router
-from api.routes_trading_mode import router as trading_mode_router
-from config import settings
+from broker.samco_broker import SamcoBroker
 from core.logger import configure_logging
-from engine.scheduler import scheduler
-
-configure_logging()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await scheduler.start()
-    yield
-    await scheduler.stop()
+from engine.execution_engine import ExecutionEngine
+from engine.market_feed_engine import MarketFeedEngine
+from engine.strategy_engine import StrategyEngine
+from risk.risk_manager import RiskManager
+from services.market_data_service import MarketDataService
+from services.option_chain_service import OptionChainService
+from services.state_manager import StateManager
+from strategies.orb_strategy import OrbStrategy
 
 
-app = FastAPI(title=settings.app_name, lifespan=lifespan)
-allowed_origins = ['http://localhost:8000', 'http://127.0.0.1:8000'] if settings.environment == 'dev' else []
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=False,
-    allow_methods=['GET', 'POST'],
-    allow_headers=['Content-Type', 'X-API-Key'],
-)
+async def run_bot() -> None:
+    configure_logging()
 
-secure_router_kwargs = {'prefix': '/api', 'dependencies': [Depends(require_api_key)]}
-for route in [
-    analysis_router,
-    dashboard_router,
-    funds_router,
-    option_chain_router,
-    profile_router,
-    signals_router,
-    trade_router,
-    trading_mode_router,
-]:
-    app.include_router(route, **secure_router_kwargs)
+    tick_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+    signal_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
 
-frontend_path = Path(settings.frontend_dir)
-if frontend_path.exists():
-    app.mount('/static', StaticFiles(directory=str(frontend_path)), name='static')
+    broker = SamcoBroker()
+    state_manager = StateManager()
+    state = state_manager.load()
+
+    market_data_service = MarketDataService(broker)
+    option_chain_service = OptionChainService(broker)
+    strategy = OrbStrategy()
+    strategy.set_orb(orb_high=22100, orb_low=22000)
+
+    market_engine = MarketFeedEngine(market_data_service, tick_queue)
+    strategy_engine = StrategyEngine(strategy, tick_queue, signal_queue)
+    execution_engine = ExecutionEngine(broker, option_chain_service, RiskManager(), state_manager, signal_queue, state)
+
+    tasks = [
+        asyncio.create_task(market_engine.run(), name='market_feed'),
+        asyncio.create_task(strategy_engine.run(), name='strategy_engine'),
+        asyncio.create_task(execution_engine.run(), name='execution_engine'),
+    ]
+
+    stop_event = asyncio.Event()
+
+    def _shutdown() -> None:
+        market_engine.stop()
+        strategy_engine.stop()
+        execution_engine.stop()
+        stop_event.set()
+
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, _shutdown)
+
+    await stop_event.wait()
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
-@app.get('/')
-async def root() -> FileResponse:
-    return FileResponse(frontend_path / 'index.html')
-
-
-@app.get('/health')
-async def health() -> dict:
-    return {
-        'status': 'ok',
-        'scheduler_running': scheduler.running,
-        'interval_seconds': scheduler.interval_seconds,
-        'trading_mode': scheduler.state.trading_mode,
-        'system_status': scheduler.state.system_status,
-    }
+if __name__ == '__main__':
+    asyncio.run(run_bot())
