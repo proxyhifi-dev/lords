@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any
@@ -22,9 +24,3 @@ class TradeStore:
         trades = self.load_trades()
         trades.append(trade)
         self.path.write_text(json.dumps(trades, indent=2), encoding="utf-8")
-
-    def last_open_trade(self) -> dict[str, Any] | None:
-        for trade in reversed(self.load_trades()):
-            if trade.get("state") == "ENTERED":
-                return trade
-        return None

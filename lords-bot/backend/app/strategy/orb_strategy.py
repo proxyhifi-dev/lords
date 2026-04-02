@@ -1,67 +1,50 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
 
-
-Signal = Literal["BUY_CE", "BUY_PE"]
-
-
-@dataclass
-class OrbState:
-    orb_high: float | None = None
-    orb_low: float | None = None
-    is_frozen: bool = False
-    signal: Signal | None = None
+from backend.app.core.event_bus import EventBus
 
 
 class OrbStrategy:
-    def __init__(self) -> None:
-        self.state = OrbState()
-        self._last_ticks: deque[dict] = deque(maxlen=5)
-        self._volume_window: deque[float] = deque(maxlen=20)
+    def __init__(self, event_bus: EventBus) -> None:
+        self.event_bus = event_bus
+        self.orb_high: float | None = None
+        self.orb_low: float | None = None
+        self.frozen = False
+        self.signal_emitted = False
+        self._tick_window: deque[float] = deque(maxlen=5)
 
-    @staticmethod
-    def _in_orb_window(now: datetime) -> bool:
-        return now.hour == 9 and 15 <= now.minute < 30
-
-    def update_orb(self, tick: dict, now: datetime | None = None) -> None:
-        now = now or datetime.now()
-        self._last_ticks.append(tick)
-        self._volume_window.append(float(tick.get("volume") or 0))
-
-        if self._in_orb_window(now):
+    async def run(self) -> None:
+        queue = self.event_bus.subscribe("TICK")
+        async for event in self.event_bus.iter_events(queue):
+            tick = event.payload
+            now = datetime.now()
             price = float(tick["price"])
-            self.state.orb_high = price if self.state.orb_high is None else max(self.state.orb_high, price)
-            self.state.orb_low = price if self.state.orb_low is None else min(self.state.orb_low, price)
-        if now.hour > 9 or (now.hour == 9 and now.minute >= 30):
-            self.state.is_frozen = True
+            self._tick_window.append(price)
 
-    def check_breakout(self, tick: dict, now: datetime | None = None) -> Signal | None:
-        now = now or datetime.now()
-        if not self.state.is_frozen or self.state.orb_high is None or self.state.orb_low is None:
-            return None
-        if self.state.signal is not None:
-            return None
+            if now.hour == 9 and 15 <= now.minute < 30 and not self.frozen:
+                self.orb_high = price if self.orb_high is None else max(self.orb_high, price)
+                self.orb_low = price if self.orb_low is None else min(self.orb_low, price)
+                await self.event_bus.publish("ORB_UPDATED", {"orb_high": self.orb_high, "orb_low": self.orb_low})
+                continue
 
-        price = float(tick["price"])
-        if len(self._last_ticks) < 5:
-            return None
+            if (now.hour > 9 or (now.hour == 9 and now.minute >= 30)) and not self.frozen:
+                self.frozen = True
+                await self.event_bus.publish("ORB_FROZEN", {"orb_high": self.orb_high, "orb_low": self.orb_low})
 
-        vol = float(tick.get("volume") or 0)
-        avg_vol = (sum(self._volume_window) / len(self._volume_window)) if self._volume_window else 0
-        volume_expansion = avg_vol == 0 or vol >= (1.2 * avg_vol)
+            if self.frozen and not self.signal_emitted and self.orb_high is not None and self.orb_low is not None:
+                if len(self._tick_window) < 5:
+                    continue
 
-        ce_break = price > self.state.orb_high and ((price - self.state.orb_high) / self.state.orb_high) >= 0.001
-        pe_break = price < self.state.orb_low and ((self.state.orb_low - price) / self.state.orb_low) >= 0.001
+                above = all(v > self.orb_high for v in self._tick_window)
+                below = all(v < self.orb_low for v in self._tick_window)
+                ce_break = price > self.orb_high and ((price - self.orb_high) / self.orb_high) >= 0.001
+                pe_break = price < self.orb_low and ((self.orb_low - price) / self.orb_low) >= 0.001
 
-        last5 = [float(t["price"]) for t in self._last_ticks]
-        if ce_break and all(p > self.state.orb_high for p in last5) and volume_expansion:
-            self.state.signal = "BUY_CE"
-            return self.state.signal
-        if pe_break and all(p < self.state.orb_low for p in last5):
-            self.state.signal = "BUY_PE"
-            return self.state.signal
-        return None
+                if ce_break and above:
+                    self.signal_emitted = True
+                    await self.event_bus.publish("SIGNAL", {"signal": "BUY_CE", "spot_price": price})
+                elif pe_break and below:
+                    self.signal_emitted = True
+                    await self.event_bus.publish("SIGNAL", {"signal": "BUY_PE", "spot_price": price})

@@ -1,25 +1,31 @@
-from apscheduler.schedulers.background import BackgroundScheduler
+from __future__ import annotations
 
-from backend.app.engine.trading_engine import TradingEngine
-from backend.app.utils.logger import get_logger
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+from backend.app.core.event_bus import EventBus
 from backend.config import settings
 
 
 class MarketScheduler:
-    def __init__(self, trading_engine: TradingEngine) -> None:
-        self.logger = get_logger("market_scheduler")
-        self.trading_engine = trading_engine
-        self.scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
+    def __init__(self, event_bus: EventBus) -> None:
+        self.event_bus = event_bus
+        self.scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
 
-    def schedule(self) -> None:
+    def start(self) -> None:
+        start_hour, start_min = [int(x) for x in settings.orb_start.split(":")]
         end_hour, end_min = [int(x) for x in settings.orb_end.split(":")]
-        so_hour, so_min = [int(x) for x in settings.square_off.split(":")]
+        sq_hour, sq_min = [int(x) for x in settings.square_off.split(":")]
 
-        self.scheduler.add_job(self._freeze_orb, "cron", hour=end_hour, minute=end_min)
-        self.scheduler.add_job(self.trading_engine.square_off, "cron", hour=so_hour, minute=so_min)
+        self.scheduler.add_job(self._emit_start, "cron", hour=start_hour, minute=start_min)
+        self.scheduler.add_job(self._emit_orb_freeze, "cron", hour=end_hour, minute=end_min)
+        self.scheduler.add_job(self._emit_square_off, "cron", hour=sq_hour, minute=sq_min)
         self.scheduler.start()
-        self.logger.info("Market scheduler started")
 
-    def _freeze_orb(self) -> None:
-        self.trading_engine.strategy.state.is_frozen = True
-        self.logger.info("ORB frozen")
+    async def _emit_start(self) -> None:
+        await self.event_bus.publish("SCHEDULE_START", {})
+
+    async def _emit_orb_freeze(self) -> None:
+        await self.event_bus.publish("SCHEDULE_FREEZE_ORB", {})
+
+    async def _emit_square_off(self) -> None:
+        await self.event_bus.publish("SCHEDULE_SQUARE_OFF", {})
