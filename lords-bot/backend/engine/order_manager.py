@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import uuid
 from typing import Any
 
@@ -30,20 +31,45 @@ class OrderManager:
             return False, f'missing_fields:{",".join(sorted(missing))}'
         if str(payload.get('transactionType')).upper() not in {'BUY', 'SELL'}:
             return False, 'invalid_transaction_type'
+        if str(payload.get('exchange')).upper() != 'NFO':
+            return False, 'invalid_exchange_only_nfo_supported'
         return True, 'ok'
+
+    async def _paper_fill_price(self, payload: dict[str, Any]) -> float:
+        explicit_price = float(payload.get('price') or 0.0)
+        if explicit_price > 0:
+            return explicit_price
+        quote = await samco_client.get_quote(str(payload.get('symbolName') or ''), exchange='NFO')
+        ltp = float(quote.get('lastTradedPrice') or quote.get('lastTradePrice') or 0.0)
+        if ltp <= 0:
+            ltp = 0.01
+        side = str(payload.get('transactionType') or 'BUY').upper()
+        slippage = max(0.01, ltp * 0.001)
+        noise = random.uniform(0.0, slippage)
+        return ltp + noise if side == 'BUY' else max(0.01, ltp - noise)
+
+    async def place_market_order(self, payload: dict[str, Any], mode: str) -> dict[str, Any]:
+        payload = {**payload, 'orderType': 'MARKET'}
+        return await self.place_order(payload, mode)
+
+    async def place_limit_order(self, payload: dict[str, Any], mode: str) -> dict[str, Any]:
+        payload = {**payload, 'orderType': 'LIMIT'}
+        return await self.place_order(payload, mode)
 
     async def place_order(self, payload: dict[str, Any], mode: str) -> dict[str, Any]:
         valid, reason = self.validate_payload(payload)
         if not valid:
             return {'status': 'Error', 'statusMessage': reason}
 
+        mode = mode.upper()
         order_id = ''
         if mode == 'PAPER':
             order_id = f'paper-{uuid.uuid4().hex[:10]}'
+            fill_price = await self._paper_fill_price(payload)
             response = {
                 'status': 'Success',
                 'order_id': order_id,
-                'fill_price': float(payload.get('price') or 0.0),
+                'fill_price': fill_price,
                 'order_status': 'COMPLETE',
                 'payload': payload,
             }
@@ -55,28 +81,34 @@ class OrderManager:
                 response['order_id'] = order_id
 
         if str(response.get('status', '')).lower() == 'success' and order_id:
-            self.track_position(order_id, payload)
+            fill = float(response.get('fill_price') or payload.get('price') or 0.0)
+            self.track_position(order_id, payload, fill_price=fill)
         return response
 
-    async def verify_order(self, order_id: str, mode: str) -> dict[str, Any]:
-        if mode == 'PAPER':
+    async def verify_order_status(self, order_id: str, mode: str) -> dict[str, Any]:
+        if mode.upper() == 'PAPER':
             return self.paper_orders.get(order_id, {'status': 'Error', 'order_status': 'NOT_FOUND'})
         return await samco_client.get_order_status(order_id)
 
+    async def verify_order(self, order_id: str, mode: str) -> dict[str, Any]:
+        return await self.verify_order_status(order_id, mode)
+
     async def cancel_order(self, order_id: str, mode: str) -> dict[str, Any]:
-        if mode == 'PAPER':
+        if mode.upper() == 'PAPER':
             order = self.paper_orders.get(order_id)
             if not order:
                 return {'status': 'Error', 'message': 'NOT_FOUND'}
             order['order_status'] = 'CANCELLED'
             self.open_positions.pop(order_id, None)
             return {'status': 'Success', 'order_id': order_id}
+        if hasattr(samco_client.samco, 'cancel_order'):
+            return await samco_client._run_io(samco_client.samco.cancel_order, order_id=order_id)
         return {'status': 'Error', 'message': 'cancel_not_supported_by_current_sdk_bridge'}
 
     async def flatten_positions(self, mode: str, exit_price: float) -> list[dict[str, Any]]:
         closed: list[dict[str, Any]] = []
         for order_id in list(self.open_positions.keys()):
-            if mode == 'PAPER':
+            if mode.upper() == 'PAPER':
                 closed.append(self.close_position(order_id, exit_price))
                 continue
             position = self.open_positions.get(order_id) or {}
@@ -99,7 +131,7 @@ class OrderManager:
                 closed.append(self.close_position(order_id, exit_price))
         return closed
 
-    def track_position(self, order_id: str, payload: dict[str, Any]) -> None:
+    def track_position(self, order_id: str, payload: dict[str, Any], fill_price: float) -> None:
         self.open_positions[order_id] = {
             'symbol': payload.get('symbolName', ''),
             'expiryDate': payload.get('expiryDate', ''),
@@ -107,8 +139,8 @@ class OrderManager:
             'optionType': payload.get('optionType', ''),
             'quantity': int(payload.get('quantity') or 0),
             'side': payload.get('transactionType', ''),
-            'entry_price': float(payload.get('price') or 0.0),
-            'last_price': float(payload.get('price') or 0.0),
+            'entry_price': float(fill_price),
+            'last_price': float(fill_price),
             'pnl': 0.0,
         }
 

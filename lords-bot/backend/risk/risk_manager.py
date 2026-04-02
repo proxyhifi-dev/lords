@@ -70,3 +70,14 @@ class RiskManager:
         if not api_ok:
             return 'API_UNSTABLE'
         return 'RUNNING'
+
+
+    def should_exit_trade(self, active_trade: dict, spot_price: float, option_price: float) -> bool:
+        stop = float(active_trade.get('stop_loss') or 0.0)
+        target = float(active_trade.get('target') or 0.0)
+        side = str(active_trade.get('side') or '').upper()
+        if side == 'CALL':
+            return (stop > 0 and spot_price <= stop) or (target > 0 and spot_price >= target) or option_price <= 0
+        if side == 'PUT':
+            return (stop > 0 and spot_price >= stop) or (target > 0 and spot_price <= target) or option_price <= 0
+        return False
