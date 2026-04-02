@@ -1,37 +1,19 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lords Bot Dashboard</title>
-  <link rel="stylesheet" href="/static/styles.css">
-</head>
-<body>
-<header>
-  <h2>Lords Bot — ORB NIFTY Options</h2>
-</header>
+<div>Bot Status: <span id="bot-status"></span></div>
 
-<div class="grid">
-  <section><h3>Bot Status</h3><pre id="botStatus"></pre></section>
-  <section>
-    <h3>Trading Mode</h3>
-    <button id="paperBtn">PAPER</button>
-    <button id="realBtn">REAL</button>
-    <pre id="modeState"></pre>
-  </section>
-  <section><h3>NIFTY Spot</h3><pre id="marketStatus"></pre></section>
-  <section><h3>ORB Range (9:15–9:30)</h3><pre id="orbRange"></pre></section>
-  <section><h3>Signal Panel</h3><pre id="signalPanel"></pre></section>
-  <section><h3>Active Trade</h3><pre id="executionPanel"></pre></section>
-  <section><h3>PnL Metrics</h3><pre id="performance"></pre></section>
-  <section><h3>Trade History</h3><pre id="tradeHistory"></pre></section>
-  <section>
-    <h3>Controls</h3>
-    <button id="refreshBtn">Refresh</button>
-    <button id="flattenBtn">Flatten</button>
-  </section>
-</div>
+<div>Trading Mode: <span id="trading-mode"></span></div>
 
-<script src="/static/app.js"></script>
-</body>
-</html>
+<div>NIFTY Spot: <span id="nifty-spot"></span></div>
+
+<div>ORB Range: <span id="orb-range"></span></div>
+
+<div>Signal: <span id="signal"></span></div>
+
+<div>Active Trade:</div>
+<pre id="active-trade"></pre>
+
+<div>PnL: <span id="daily-pnl"></span></div>
+
+<div>Trade History:</div>
+<div id="trade-history"></div>
+
+<button id="refresh-btn">Refresh</button>

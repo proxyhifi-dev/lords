@@ -1,0 +1,10 @@
+{
+  "spot_price": null,
+  "orb_high": null,
+  "orb_low": null,
+  "signal": null,
+  "active_trade": null,
+  "daily_pnl": 0.0,
+  "trade_count": 0,
+  "trading_enabled": true
+}

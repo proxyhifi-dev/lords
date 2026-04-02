@@ -1,55 +1,87 @@
-from __future__ import annotations
-
 from functools import lru_cache
-from pathlib import Path
-
-from dotenv import load_dotenv
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
-load_dotenv()
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    samco_user_id: str = Field(alias="SAMCO_USER_ID")
-    samco_password: str = Field(alias="SAMCO_PASSWORD")
-    samco_yob: str = Field(alias="SAMCO_YOB")
+    # -------------------------
+    # APP
+    # -------------------------
+    app_name: str = "Lords Bot"
 
-    nifty_symbol: str = Field(default="NIFTY 50", alias="NIFTY_SYMBOL")
-    nifty_exchange: str = Field(default="NSE", alias="NIFTY_EXCHANGE")
+    # -------------------------
+    # SAMCO LOGIN
+    # -------------------------
+    samco_user_id: str
+    samco_password: str
+    samco_yob: str
+    samco_access_token: str
 
-    poll_seconds: float = Field(default=1.0, alias="POLL_SECONDS")
-    order_qty: int = Field(default=50, alias="ORDER_QTY")
-    risk_percent: float = Field(default=1.0, alias="RISK_PERCENT")
+    # -------------------------
+    # MARKET
+    # -------------------------
+    nifty_symbol: str = "NIFTY 50"
+    nifty_exchange: str = "NSE"
+    poll_seconds: int = 1
 
-    max_trades: int = Field(default=2, alias="MAX_TRADES")
-    max_daily_loss: float = Field(default=3000.0, alias="MAX_DAILY_LOSS")
-    stop_loss_pct: float = Field(default=0.2, alias="STOP_LOSS_PCT")
-    target_pct: float = Field(default=0.4, alias="TARGET_PCT")
+    # -------------------------
+    # TRADING
+    # -------------------------
+    order_qty: int = 50
+    max_daily_loss: int = 3000
+    max_trades: int = 2
+    stop_loss_pct: float = 0.2
+    target_pct: float = 0.4
 
-    orb_start: str = Field(default="09:15", alias="ORB_START")
-    orb_end: str = Field(default="09:30", alias="ORB_END")
-    square_off: str = Field(default="15:15", alias="SQUARE_OFF")
+    # -------------------------
+    # ORB TIMES
+    # -------------------------
+    orb_start: str = "09:15"
+    orb_end: str = "09:30"
+    square_off: str = "15:15"
 
-    reconnect_max_attempts: int = Field(default=5, alias="RECONNECT_MAX_ATTEMPTS")
-    reconnect_base_delay: int = Field(default=1, alias="RECONNECT_BASE_DELAY")
-    circuit_failure_threshold: int = Field(default=3, alias="CIRCUIT_FAILURE_THRESHOLD")
-    circuit_cooldown_seconds: int = Field(default=30, alias="CIRCUIT_COOLDOWN_SECONDS")
+    # -------------------------
+    # RECONNECT
+    # -------------------------
+    reconnect_max_attempts: int = 5
+    reconnect_base_delay: int = 1
 
-    log_file: str = Field(default="backend/logs/bot.log", alias="LOG_FILE")
-    trades_file: str = Field(default="backend/storage/trades.json", alias="TRADES_FILE")
-    state_file: str = Field(default="backend/storage/runtime_state.json", alias="STATE_FILE")
+    # -------------------------
+    # CIRCUIT BREAKER
+    # -------------------------
+    circuit_failure_threshold: int = 3
+    circuit_cooldown_seconds: int = 30
 
-    dashboard_host: str = Field(default="0.0.0.0", alias="DASHBOARD_HOST")
-    dashboard_port: int = Field(default=8000, alias="DASHBOARD_PORT")
+    # -------------------------
+    # STORAGE
+    # -------------------------
+    trades_file: str = "backend/storage/trades.json"
+    state_file: str = "backend/storage/runtime_state.json"
+
+    # -------------------------
+    # LOG
+    # -------------------------
+    log_file: str = "backend/logs/bot.log"
+
+    # -------------------------
+    # DASHBOARD
+    # -------------------------
+    dashboard_host: str = "0.0.0.0"
+    dashboard_port: int = 8000
+
+    # -------------------------
+    # FRONTEND
+    # -------------------------
+    frontend_dir: str = "frontend"
+
+    # -------------------------
+    # ENV CONFIG
+    # -------------------------
+    class Config:
+        env_file = ".env"
+        extra = "allow"
 
 
-@lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    settings = Settings()  # type: ignore[call-arg]
-    Path(settings.log_file).parent.mkdir(parents=True, exist_ok=True)
-    Path(settings.trades_file).parent.mkdir(parents=True, exist_ok=True)
-    Path(settings.state_file).parent.mkdir(parents=True, exist_ok=True)
-    return settings
+@lru_cache
+def get_settings():
+    return Settings()

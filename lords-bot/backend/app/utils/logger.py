@@ -1,23 +1,27 @@
 import logging
-from logging.handlers import RotatingFileHandler
+import os
+from pathlib import Path
 
-from backend.config import settings
+
+LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 
 
-def get_logger(name: str = "lords_bot") -> logging.Logger:
-    logger = logging.getLogger(name)
-    if logger.handlers:
-        return logger
+def configure_logging():
 
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    log_dir = Path("backend/logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
 
-    file_handler = RotatingFileHandler(settings.log_file, maxBytes=2_000_000, backupCount=5)
-    file_handler.setFormatter(formatter)
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
+    log_file = log_dir / "bot.log"
 
-    logger.addHandler(file_handler)
-    logger.addHandler(stream_handler)
-    logger.propagate = False
-    return logger
+    logging.basicConfig(
+        level=logging.INFO,
+        format=LOG_FORMAT,
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(log_file, encoding="utf-8"),
+        ],
+    )
+
+
+def get_logger(name: str) -> logging.Logger:
+    return logging.getLogger(name)

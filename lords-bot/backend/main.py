@@ -1,73 +1,206 @@
 from __future__ import annotations
 
-import asyncio
+from contextlib import asynccontextmanager
+from pathlib import Path
+from datetime import datetime, UTC
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
-from backend.app.api.dashboard_api import build_dashboard_router
-from backend.app.broker.samco_client import SamcoClient
-from backend.app.core.event_bus import EventBus
-from backend.app.engine.state_manager import StateManager
-from backend.app.engine.trading_engine import TradingEngine
-from backend.app.execution.order_executor import OrderExecutor
-from backend.app.market.market_engine import MarketEngine
-from backend.app.market.tick_engine import TickEngine
-from backend.app.options.option_selector import OptionSelector
-from backend.app.risk.risk_manager import RiskManager
-from backend.app.scheduler.market_scheduler import MarketScheduler
-from backend.app.storage.trade_store import TradeStore
-from backend.app.strategy.orb_strategy import OrbStrategy
-from backend.app.utils.logger import get_logger
+# CONFIG
+from backend.config import settings
 
-logger = get_logger("main")
-app = FastAPI(title="Lords Bot Dashboard API")
+# LOGGER
+from backend.app.utils.logger import configure_logging
+
+# SCHEDULER
+from backend.app.scheduler.market_scheduler import scheduler
 
 
-event_bus = EventBus()
-state_manager = StateManager()
-trade_store = TradeStore()
-broker = SamcoClient()
+# -----------------------------
+# INIT LOGGING
+# -----------------------------
+configure_logging()
 
-market_engine = MarketEngine(event_bus=event_bus, samco_client=broker)
-tick_engine = TickEngine(event_bus=event_bus)
-strategy = OrbStrategy(event_bus=event_bus)
-risk_manager = RiskManager(event_bus=event_bus, state_manager=state_manager)
-option_selector = OptionSelector()
-order_executor = OrderExecutor(event_bus=event_bus, broker=broker, option_selector=option_selector)
-trading_engine = TradingEngine(
-    event_bus=event_bus,
-    state_manager=state_manager,
-    trade_store=trade_store,
-    broker=broker,
+
+# -----------------------------
+# APP LIFESPAN
+# -----------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("🚀 Starting Lords Bot Scheduler...")
+    await scheduler.start()
+    yield
+    print("🛑 Stopping Lords Bot Scheduler...")
+    await scheduler.stop()
+
+
+# -----------------------------
+# FASTAPI APP
+# -----------------------------
+app = FastAPI(
+    title=settings.app_name,
+    lifespan=lifespan
 )
-market_scheduler = MarketScheduler(event_bus=event_bus)
-
-app.include_router(build_dashboard_router(state_manager))
 
 
-@app.on_event("startup")
-async def on_startup() -> None:
-    await state_manager.load()
-    await broker.login()
-    await event_bus.start()
-    market_scheduler.start()
-
-    app.state.tasks = [
-        asyncio.create_task(market_engine.run(), name="market-engine"),
-        asyncio.create_task(tick_engine.run(), name="tick-engine"),
-        asyncio.create_task(strategy.run(), name="strategy-engine"),
-        asyncio.create_task(risk_manager.run(), name="risk-engine"),
-        asyncio.create_task(order_executor.run(), name="execution-engine"),
-        asyncio.create_task(trading_engine.run(), name="trading-engine"),
-    ]
-    logger.info("Lords bot started")
+# -----------------------------
+# CORS
+# -----------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
-    for task in getattr(app.state, "tasks", []):
-        task.cancel()
-    await asyncio.gather(*getattr(app.state, "tasks", []), return_exceptions=True)
-    await state_manager.persist()
-    await event_bus.stop()
-    logger.info("Lords bot stopped")
+# -----------------------------
+# FRONTEND
+# -----------------------------
+frontend_path = Path(settings.frontend_dir)
+
+print("Frontend path:", frontend_path)
+
+if frontend_path.exists():
+    app.mount(
+        "/static",
+        StaticFiles(directory=str(frontend_path)),
+        name="static"
+    )
+
+
+# -----------------------------
+# ROOT
+# -----------------------------
+@app.get("/")
+async def root():
+    index_file = frontend_path / "index.html"
+
+    if index_file.exists():
+        return FileResponse(index_file)
+
+    return {"message": "Lords Bot API running"}
+
+
+# -----------------------------
+# HEALTH
+# -----------------------------
+@app.get("/health")
+async def health():
+
+    return {
+        "status": "ok",
+        "scheduler_running": scheduler.running,
+        "app": settings.app_name
+    }
+
+
+# -----------------------------
+# DASHBOARD
+# -----------------------------
+@app.get("/api/dashboard")
+async def dashboard():
+
+    try:
+
+        state = await scheduler.engine.state_manager.snapshot()
+
+        trades = scheduler.engine.trade_store.get_all_trades()
+
+        return {
+
+            "bot_status": "RUNNING" if scheduler.running else "STOPPED",
+
+            "trading_mode": getattr(
+                scheduler.engine.state_manager,
+                "trading_mode",
+                "PAPER"
+            ),
+
+            "nifty_spot": state.spot_price,
+
+            "orb_high": state.orb_high,
+            "orb_low": state.orb_low,
+
+            "signal": state.signal,
+
+            "active_trade": state.active_trade,
+
+            "daily_pnl": state.daily_pnl,
+
+            "trade_count": state.trade_count,
+
+            "trade_history": trades[-20:],   # last 20 trades
+
+            "timestamp": datetime.now(UTC).isoformat()
+
+        }
+
+    except Exception as e:
+
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+# -----------------------------
+# TRADING MODE
+# -----------------------------
+@app.post("/api/trading-mode")
+async def trading_mode(mode: dict):
+
+    value = mode.get("mode", "PAPER").upper()
+
+    scheduler.engine.state_manager.trading_mode = value
+
+    return {
+        "status": "ok",
+        "mode": value
+    }
+
+
+# -----------------------------
+# FLATTEN POSITION
+# -----------------------------
+@app.post("/api/trade/flatten")
+async def flatten():
+
+    state = await scheduler.engine.state_manager.snapshot()
+
+    if not state.active_trade:
+
+        return {
+            "status": "no_active_trade"
+        }
+
+    symbol = state.active_trade.get("symbol")
+
+    qty = state.active_trade.get("order", {}).get("quantity", 0)
+
+    try:
+
+        await scheduler.engine.broker.place_order(
+            symbol=symbol,
+            side="SELL",
+            quantity=qty
+        )
+
+        await scheduler.engine.state_manager.update(
+            active_trade=None
+        )
+
+        return {
+            "status": "flattened"
+        }
+
+    except Exception as e:
+
+        return {
+            "status": "error",
+            "message": str(e)
+        }
