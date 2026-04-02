@@ -100,7 +100,7 @@ def test_scheduler_enforces_minimum_interval() -> None:
     assert scheduler.interval_seconds >= 5
 
 
-def test_candle_builder_opening_range_uses_915_to_945_window() -> None:
+def test_candle_builder_opening_range_uses_915_to_930_window() -> None:
     builder = CandleBuilder()
     ticks = [
         {'timestamp': '2026-03-26T09:15:10+05:30', 'price': 100},
@@ -114,14 +114,14 @@ def test_candle_builder_opening_range_uses_915_to_945_window() -> None:
     candles = builder.build_5min_candles(ticks)
     orb = builder.opening_range(candles)
     assert orb['high'] == 105.0
-    assert orb['low'] == 98.0
+    assert orb['low'] == 99.0
 
 
 def test_orb_strategy_rule_gatekeeping() -> None:
     strategy = OrbStrategy()
-    candles = [{'close': 100 + i} for i in range(20)]
+    candles = [{'close': 100} for _ in range(18)] + [{'close': 104}, {'close': 108}]
     signal = strategy.generate(110, 105, 95, 'BULLISH', candles)
-    assert signal.signal == 'BUY'
+    assert signal.signal == 'BUY CALL'
     assert signal.option_side == 'CALL'
 
 
@@ -143,7 +143,7 @@ def test_scheduler_market_hours_guard() -> None:
     assert scheduler._in_market_hours(dt) is False
 
 
-def test_candle_builder_opening_range_allows_partial_window_after_945() -> None:
+def test_candle_builder_opening_range_allows_partial_window_after_930() -> None:
     builder = CandleBuilder()
     ticks = [
         {'timestamp': '2026-03-26T09:20:01+05:30', 'price': 100},
@@ -153,8 +153,8 @@ def test_candle_builder_opening_range_allows_partial_window_after_945() -> None:
     ]
     candles = builder.build_5min_candles(ticks)
     orb = builder.opening_range(candles)
-    assert orb['high'] == 104.0
-    assert orb['low'] == 98.0
+    assert orb['high'] == 100.0
+    assert orb['low'] == 100.0
 
 
 def test_option_chain_service_accepts_string_payload(monkeypatch) -> None:

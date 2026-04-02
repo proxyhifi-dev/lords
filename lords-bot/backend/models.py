@@ -30,6 +30,8 @@ class EngineState:
     active_trade: dict[str, Any] = field(default_factory=dict)
     trades_today: int = 0
     realized_pnl: float = 0.0
+    peak_equity: float = 0.0
+    max_drawdown_hit: bool = False
     consecutive_losses: int = 0
     last_error: str = ''
     latest_signal: dict[str, Any] = field(default_factory=dict)

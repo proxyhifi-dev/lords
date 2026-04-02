@@ -66,4 +66,10 @@ async def root() -> FileResponse:
 
 @app.get('/health')
 async def health() -> dict:
-    return {'status': 'ok', 'scheduler_running': scheduler.running, 'interval_seconds': scheduler.interval_seconds}
+    return {
+        'status': 'ok',
+        'scheduler_running': scheduler.running,
+        'interval_seconds': scheduler.interval_seconds,
+        'trading_mode': scheduler.state.trading_mode,
+        'system_status': scheduler.state.system_status,
+    }
