@@ -1,44 +1,53 @@
-from dataclasses import dataclass
-from threading import Lock
+from __future__ import annotations
+
+import asyncio
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any
+
+from backend.config import settings
 
 
 @dataclass
 class RuntimeState:
-    spot: float | None = None
+    spot_price: float | None = None
+    orb_high: float | None = None
+    orb_low: float | None = None
     signal: str | None = None
     active_trade: dict[str, Any] | None = None
-    pnl: float = 0.0
+    daily_pnl: float = 0.0
+    trade_count: int = 0
+    trading_enabled: bool = True
 
 
 class StateManager:
-    """Thread-safe in-memory runtime state for dashboard and orchestration."""
+    def __init__(self, state_file: str | None = None) -> None:
+        self._lock = asyncio.Lock()
+        self._state_file = Path(state_file or settings.state_file)
+        self._state_file.parent.mkdir(parents=True, exist_ok=True)
+        self._state = RuntimeState()
 
-    def __init__(self, active_trade: dict[str, Any] | None = None) -> None:
-        self._lock = Lock()
-        self._state = RuntimeState(active_trade=active_trade)
+    async def load(self) -> None:
+        if not self._state_file.exists():
+            await self.persist()
+            return
+        try:
+            data = json.loads(self._state_file.read_text(encoding="utf-8"))
+            self._state = RuntimeState(**data)
+        except Exception:
+            await self.persist()
 
-    def snapshot(self) -> RuntimeState:
-        with self._lock:
-            return RuntimeState(
-                spot=self._state.spot,
-                signal=self._state.signal,
-                active_trade=self._state.active_trade.copy() if self._state.active_trade else None,
-                pnl=self._state.pnl,
-            )
+    async def snapshot(self) -> RuntimeState:
+        async with self._lock:
+            return RuntimeState(**asdict(self._state))
 
-    def set_spot(self, spot: float) -> None:
-        with self._lock:
-            self._state.spot = spot
+    async def update(self, **kwargs: Any) -> None:
+        async with self._lock:
+            for key, value in kwargs.items():
+                setattr(self._state, key, value)
+            self._state_file.write_text(json.dumps(asdict(self._state), indent=2), encoding="utf-8")
 
-    def set_signal(self, signal: str) -> None:
-        with self._lock:
-            self._state.signal = signal
-
-    def set_active_trade(self, trade: dict[str, Any] | None) -> None:
-        with self._lock:
-            self._state.active_trade = trade
-
-    def update_pnl(self, pnl: float) -> None:
-        with self._lock:
-            self._state.pnl = pnl
+    async def persist(self) -> None:
+        async with self._lock:
+            self._state_file.write_text(json.dumps(asdict(self._state), indent=2), encoding="utf-8")
