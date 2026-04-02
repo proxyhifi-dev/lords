@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Any
@@ -37,6 +36,11 @@ class MarketDataService:
         self.cache = cache
         self._tick_buffer: list[dict[str, Any]] = []
         self._last_price: float = 22300
+        self._index_candidates = [
+            settings.symbol,
+            "NIFTY 50",
+            "NIFTY",
+        ]
 
     async def get_nifty_spot(self) -> float:
 
@@ -48,43 +52,32 @@ class MarketDataService:
             return float(cached)
 
         try:
-            raw = await samco_client.index_quote("NIFTY")
-            response = self._normalize_response(raw)
-            details = response.get("indexDetails") or response.get("data") or []
-
-            if not details:
-                raw = await samco_client.get_quote("NIFTY")
+            for index_name in self._index_candidates:
+                raw = await samco_client.index_quote(index_name)
                 response = self._normalize_response(raw)
                 details = response.get("indexDetails") or response.get("data") or []
 
-            if details:
+                if not details:
+                    continue
 
                 row = details[0]
-
                 spot = float(row.get("spotPrice") or row.get("ltp") or 0.0)
 
                 if spot > 0:
-
                     self._last_price = spot
-
                     self.cache.set(cache_key, spot, 1)
-
                     return spot
 
         except Exception as e:
 
             logger.error("Samco API error: %s", e)
 
-        # fallback when API fails
-        fallback = self._last_price + random.uniform(-30, 30)
+        if self._last_price > 0:
+            logger.warning("Using last known live price: %s", self._last_price)
+            self.cache.set(cache_key, self._last_price, 1)
+            return self._last_price
 
-        logger.warning("Using fallback simulated price: %s", fallback)
-
-        self._last_price = fallback
-
-        self.cache.set(cache_key, fallback, 1)
-
-        return fallback
+        raise RuntimeError("Unable to fetch live NIFTY spot from Samco")
 
     def add_tick(
         self,
