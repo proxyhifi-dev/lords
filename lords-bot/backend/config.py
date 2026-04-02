@@ -1,57 +1,43 @@
-from __future__ import annotations
-
+import os
+from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
+load_dotenv()
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=str(ROOT_DIR / '.env'), env_file_encoding='utf-8', extra='ignore')
+@dataclass(frozen=True)
+class Settings:
+    samco_user_id: str = os.getenv("SAMCO_USER_ID", "")
+    samco_password: str = os.getenv("SAMCO_PASSWORD", "")
+    samco_yob: str = os.getenv("SAMCO_YOB", "")
 
-    app_name: str = 'lords-bot'
-    environment: str = 'dev'
-    api_key: str = Field(default='', alias='API_KEY')
+    nifty_symbol: str = os.getenv("NIFTY_SYMBOL", "NIFTY 50")
+    nifty_exchange: str = os.getenv("NIFTY_EXCHANGE", "NSE")
 
-    # Samco auth
-    samco_user_id: str = Field(default='', alias='SAMCO_USER_ID')
-    samco_password: str = Field(default='', alias='SAMCO_PASSWORD')
-    samco_yob: str = Field(default='', alias='SAMCO_YOB')
-    samco_session_token: str = Field(default='', alias='SAMCO_SESSION_TOKEN')
+    poll_seconds: float = float(os.getenv("POLL_SECONDS", "1"))
+    quantity: int = int(os.getenv("ORDER_QTY", "50"))
 
-    # Trading behavior
-    symbol: str = 'NIFTY'
-    index_symbol: str = 'Nifty 50'
-    option_root_symbol: str = 'NIFTY'
-    exchange: str = 'NFO'
-    expiry: str = '2026-04-30'
-    lot_size: int = 50
-    trading_mode: str = 'PAPER'
-    enable_real_trading: bool = False
-    paper_capital: float = 500000.0
+    max_trades_per_day: int = int(os.getenv("MAX_TRADES_PER_DAY", "2"))
+    stop_loss_pct: float = float(os.getenv("STOP_LOSS_PCT", "0.20"))
+    target_pct: float = float(os.getenv("TARGET_PCT", "0.40"))
+    max_daily_loss: float = float(os.getenv("MAX_DAILY_LOSS", "3000"))
 
-    # Scheduling + reliability
-    scheduler_interval: int = 5
-    market_tick_interval_seconds: float = 3.0
-    min_api_interval_seconds: float = 2.0
-    max_api_calls_per_second: float = 0.5
-    request_timeout: float = 15.0
-    request_timeout_seconds: float = 15.0
-    max_api_retries: int = 4
-    base_retry_delay_seconds: float = 0.5
+    option_expiry: str = os.getenv("OPTION_EXPIRY", "24APR")
 
-    # Risk
-    max_daily_loss: float = 3000.0
-    max_trades_per_day: int = 6
-    max_position_size: int = 500
+    orb_start: str = os.getenv("ORB_START", "09:15")
+    orb_end: str = os.getenv("ORB_END", "09:30")
+    square_off: str = os.getenv("SQUARE_OFF", "15:15")
 
-    # Storage/logging
-    logs_dir: str = str(ROOT_DIR / 'logs')
-    log_file: str = str(ROOT_DIR / 'logs' / 'bot.jsonl')
-    state_file: str = str(ROOT_DIR / 'backend' / 'runtime_state.json')
-    trade_log_file: str = str(ROOT_DIR / 'backend' / 'data' / 'trade_log.jsonl')
+    dashboard_host: str = os.getenv("DASHBOARD_HOST", "0.0.0.0")
+    dashboard_port: int = int(os.getenv("DASHBOARD_PORT", "8000"))
+
+    log_file: str = os.getenv("LOG_FILE", "backend/logs/bot.log")
+    trades_file: str = os.getenv("TRADES_FILE", "backend/storage/trades.json")
 
 
 settings = Settings()
+
+Path(settings.log_file).parent.mkdir(parents=True, exist_ok=True)
+Path(settings.trades_file).parent.mkdir(parents=True, exist_ok=True)
