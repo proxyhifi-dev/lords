@@ -6,7 +6,7 @@ from typing import Any
 
 from brokers.samco_client import samco_client
 
-SUCCESS_STATUSES = {'SUCCESS', 'COMPLETE', 'FILLED'}
+SUCCESS_STATUSES = {'SUCCESS', 'COMPLETE', 'FILLED', 'PARTIALLY_FILLED'}
 REQUIRED_FIELDS = {
     'exchange',
     'symbolName',
@@ -81,7 +81,7 @@ class OrderManager:
                 response['order_id'] = order_id
 
         if str(response.get('status', '')).lower() == 'success' and order_id:
-            fill = float(response.get('fill_price') or payload.get('price') or 0.0)
+            fill = float(response.get('fill_price') or response.get('tradedPrice') or payload.get('price') or 0.0)
             self.track_position(order_id, payload, fill_price=fill)
         return response
 

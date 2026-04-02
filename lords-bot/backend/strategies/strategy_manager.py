@@ -4,7 +4,7 @@ from typing import Any, Protocol
 
 
 class SignalStrategy(Protocol):
-    def generate_signal(self, market_data: dict[str, Any]) -> dict[str, Any]:
+    def evaluate_signal(self, market_data: dict[str, Any]) -> dict[str, Any]:
         ...
 
 
@@ -20,7 +20,7 @@ class StrategyManager:
     def run(self, market_data: dict[str, Any]) -> list[dict[str, Any]]:
         outputs: list[dict[str, Any]] = []
         for strategy in self._strategies:
-            result = strategy.generate_signal(market_data)
+            result = strategy.evaluate_signal(market_data)
             outputs.append(
                 {
                     'strategy': strategy.__class__.__name__,
