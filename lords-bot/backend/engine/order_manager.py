@@ -33,44 +33,32 @@ class OrderManager:
         return True, 'ok'
 
     async def place_order(self, payload: dict[str, Any], mode: str) -> dict[str, Any]:
-        return await self.place_market_order(payload, mode)
-
-    async def place_market_order(self, payload: dict[str, Any], mode: str) -> dict[str, Any]:
         valid, reason = self.validate_payload(payload)
         if not valid:
             return {'status': 'Error', 'statusMessage': reason}
-        symbol = str(payload.get('symbolName') or '')
-        duplicate = any(
-            str(pos.get('symbol') or '') == symbol
-            for pos in self.open_positions.values()
-        )
-        if duplicate:
-            return {'status': 'Error', 'statusMessage': 'duplicate_open_position'}
 
+        order_id = ''
         if mode == 'PAPER':
-            order_id = f'paper-{uuid.uuid4().hex[:8]}'
-            order = {
+            order_id = f'paper-{uuid.uuid4().hex[:10]}'
+            response = {
                 'status': 'Success',
                 'order_id': order_id,
-                'fill_price': payload.get('price', 0.0),
-                'payload': payload,
+                'fill_price': float(payload.get('price') or 0.0),
                 'order_status': 'COMPLETE',
+                'payload': payload,
             }
-            self.paper_orders[order_id] = order
-            self.track_position(order_id, payload)
-            return order
+            self.paper_orders[order_id] = response
+        else:
+            response = await samco_client.place_order(payload)
+            order_id = str(response.get('order_id') or response.get('nOrdNo') or response.get('orderNumber') or '')
+            if order_id:
+                response['order_id'] = order_id
 
-        response = await samco_client.place_order(payload)
-        if response.get('status') == 'Success' and 'order_id' not in response:
-            response['order_id'] = response.get('nOrdNo') or response.get('orderNumber') or ''
-        if response.get('order_id'):
-            self.track_position(str(response['order_id']), payload)
+        if str(response.get('status', '')).lower() == 'success' and order_id:
+            self.track_position(order_id, payload)
         return response
 
-    async def place_limit_order(self, payload: dict[str, Any], mode: str) -> dict[str, Any]:
-        return await self.place_market_order(payload, mode)
-
-    async def verify_order_status(self, order_id: str, mode: str) -> dict[str, Any]:
+    async def verify_order(self, order_id: str, mode: str) -> dict[str, Any]:
         if mode == 'PAPER':
             return self.paper_orders.get(order_id, {'status': 'Error', 'order_status': 'NOT_FOUND'})
         return await samco_client.get_order_status(order_id)
@@ -83,11 +71,40 @@ class OrderManager:
             order['order_status'] = 'CANCELLED'
             self.open_positions.pop(order_id, None)
             return {'status': 'Success', 'order_id': order_id}
-        return {'status': 'Error', 'message': 'cancel endpoint unavailable in bridge wrapper'}
+        return {'status': 'Error', 'message': 'cancel_not_supported_by_current_sdk_bridge'}
+
+    async def flatten_positions(self, mode: str, exit_price: float) -> list[dict[str, Any]]:
+        closed: list[dict[str, Any]] = []
+        for order_id in list(self.open_positions.keys()):
+            if mode == 'PAPER':
+                closed.append(self.close_position(order_id, exit_price))
+                continue
+            position = self.open_positions.get(order_id) or {}
+            side = str(position.get('side') or 'BUY').upper()
+            close_side = 'SELL' if side == 'BUY' else 'BUY'
+            payload = {
+                'exchange': 'NFO',
+                'symbolName': position.get('symbol'),
+                'expiryDate': position.get('expiryDate'),
+                'strikePrice': position.get('strikePrice'),
+                'optionType': position.get('optionType'),
+                'transactionType': close_side,
+                'orderType': 'MARKET',
+                'productType': 'MIS',
+                'quantity': position.get('quantity'),
+                'price': exit_price,
+            }
+            response = await self.place_order(payload, mode='REAL')
+            if str(response.get('status', '')).lower() == 'success':
+                closed.append(self.close_position(order_id, exit_price))
+        return closed
 
     def track_position(self, order_id: str, payload: dict[str, Any]) -> None:
         self.open_positions[order_id] = {
             'symbol': payload.get('symbolName', ''),
+            'expiryDate': payload.get('expiryDate', ''),
+            'strikePrice': payload.get('strikePrice', ''),
+            'optionType': payload.get('optionType', ''),
             'quantity': int(payload.get('quantity') or 0),
             'side': payload.get('transactionType', ''),
             'entry_price': float(payload.get('price') or 0.0),
@@ -113,30 +130,23 @@ class OrderManager:
         status = str(verification.get('order_status') or verification.get('status') or '').upper()
         return status in SUCCESS_STATUSES
 
-    def handle_rejections(self, response: dict[str, Any]) -> dict[str, Any]:
-        if str(response.get('status', '')).upper() == 'SUCCESS':
-            return {'ok': True, 'reason': ''}
-        return {'ok': False, 'reason': response.get('statusMessage', 'order_rejected')}
-
     def close_position(self, order_id: str, exit_price: float) -> dict[str, Any]:
         pos = self.open_positions.pop(order_id, None)
         if not pos:
             return {'order_id': order_id, 'status': 'Error', 'message': 'POSITION_NOT_FOUND', 'pnl': 0.0}
-        pnl = self.update_pnl(order_id, exit_price)
-        if pnl == 0.0:
-            entry = float(pos.get('entry_price') or 0.0)
-            qty = int(pos.get('quantity') or 0)
-            side = str(pos.get('side') or 'BUY').upper()
-            pnl = (float(exit_price) - entry) * qty
-            if side == 'SELL':
-                pnl *= -1
+        entry = float(pos.get('entry_price') or 0.0)
+        qty = int(pos.get('quantity') or 0)
+        side = str(pos.get('side') or 'BUY').upper()
+        pnl = (float(exit_price) - entry) * qty
+        if side == 'SELL':
+            pnl *= -1
         return {
             'order_id': order_id,
             'symbol': pos.get('symbol', ''),
-            'entry_price': float(pos.get('entry_price') or 0.0),
+            'entry_price': entry,
             'exit_price': float(exit_price),
-            'quantity': int(pos.get('quantity') or 0),
-            'side': pos.get('side', ''),
+            'quantity': qty,
+            'side': side,
             'pnl': float(pnl),
             'status': 'Success',
         }
