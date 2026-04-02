@@ -11,6 +11,15 @@ class PCRStrategy:
 
     def generate_signal(self, market_data: dict) -> dict:
         chain = market_data.get('option_chain') or []
+        if not chain:
+            return {
+                'signal': 'HOLD',
+                'reason': 'PCR_UNAVAILABLE',
+                'entry_price': float(market_data.get('spot_price') or 0.0),
+                'stop_loss': 0.0,
+                'target_price': 0.0,
+                'option_side': '',
+            }
         call_oi = sum(float(r.get('call_oi') or 0.0) for r in chain)
         put_oi = sum(float(r.get('put_oi') or 0.0) for r in chain)
         pcr = put_oi / max(1.0, call_oi)
