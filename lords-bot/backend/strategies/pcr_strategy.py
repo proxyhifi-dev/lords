@@ -2,6 +2,7 @@ from __future__ import annotations
 
 
 class PCRStrategy:
+    name = 'PCR'
     def generate(self, pcr: float) -> str:
         if pcr > 1.2:
             return 'BUY CALL'
@@ -9,7 +10,7 @@ class PCRStrategy:
             return 'BUY PUT'
         return 'NO TRADE'
 
-    def generate_signal(self, market_data: dict) -> dict:
+    def evaluate_signal(self, market_data: dict) -> dict:
         chain = market_data.get('option_chain') or []
         if not chain:
             return {

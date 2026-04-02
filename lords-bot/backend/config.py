@@ -13,7 +13,9 @@ class Settings(BaseSettings):
 
     app_name: str = 'lords-bot'
     environment: str = 'dev'
+    api_key: str = ''
 
+    # Samco credentials
     samco_base_url: str = 'https://api.stocknote.com'
     samco_api_key: str = Field(default='', validation_alias=AliasChoices('SAMCO_API_KEY', 'API_KEY'))
     samco_api_secret: str = Field(default='', validation_alias=AliasChoices('SAMCO_API_SECRET', 'API_SECRET'))
@@ -24,33 +26,37 @@ class Settings(BaseSettings):
     samco_password: str = Field(default='', validation_alias=AliasChoices('SAMCO_PASSWORD', 'PASSWORD'))
     samco_yob: str = Field(default='', validation_alias=AliasChoices('SAMCO_YOB', 'YOB'))
 
+    # Market + strategy
     symbol: str = 'NIFTY'
     index_symbol: str = 'NIFTY 50'
-    expiry: str = '2026-03-26'
+    expiry: str = '2026-04-09'
 
+    # Runtime
     trading_mode: str = 'PAPER'
     enable_real_trading: bool = False
-    api_key: str = ''
+    scheduler_interval: int = 1
+    market_tick_interval_seconds: float = 1.0
 
-    scheduler_interval: int = 30
-    min_market_poll_seconds: int = 3
-    option_chain_ttl: int = 30
-    spot_ttl: int = 3
-    candle_ttl: int = 120
-    funds_ttl: int = 20
+    # API safety
     request_timeout: int = 10
     max_api_retries: int = 4
-    base_retry_delay_seconds: float = 1.0
+    base_retry_delay_seconds: float = 0.5
+    max_api_calls_per_second: float = 3.0
+    option_chain_ttl: int = 10
+    spot_ttl: int = 1
 
-    risk_per_trade_pct: float = 2.0
-    max_trades_per_day: int = 3
-    max_daily_loss: float = 2000.0
-    max_drawdown: float = 5000.0
+    # Risk
+    risk_per_trade_pct: float = 1.0
+    capital_allocation_pct: float = 20.0
+    max_trades_per_day: int = 6
+    max_daily_loss: float = 3000.0
+    max_drawdown: float = 7000.0
     max_position_size: int = 500
     max_consecutive_losses: int = 3
     default_lot_size: int = 50
     paper_capital: float = 100000.0
 
+    # Storage
     frontend_dir: str = str(ROOT_DIR / 'frontend')
     logs_dir: str = str(ROOT_DIR / 'logs')
     trading_log_file: str = str(ROOT_DIR / 'logs' / 'trading.log')
