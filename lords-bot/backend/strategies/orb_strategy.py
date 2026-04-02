@@ -36,7 +36,8 @@ class OrbSignal:
 
 
 class OrbStrategy:
-    def generate_signal(self, market_data: dict[str, Any]) -> dict[str, Any]:
+    name = 'ORB_BREAKOUT'
+    def evaluate_signal(self, market_data: dict[str, Any]) -> dict[str, Any]:
         signal = self.generate(
             spot_price=float(market_data.get('spot_price') or 0.0),
             orb_high=float(market_data.get('orb_high') or 0.0),

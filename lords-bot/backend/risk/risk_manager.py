@@ -22,8 +22,10 @@ class RiskManager:
         per_unit_risk = abs(entry - stop)
         if capital <= 0 or per_unit_risk < 0.01:
             return 0
+
         risk_amount = capital * (settings.risk_per_trade_pct / 100)
-        qty = int(risk_amount / per_unit_risk)
+        allocation_cap = capital * (settings.capital_allocation_pct / 100)
+        qty = int(min(risk_amount / per_unit_risk, allocation_cap / max(0.01, entry)))
         qty = max(settings.default_lot_size, qty)
         qty = min(settings.max_position_size, qty)
         return max(settings.default_lot_size, (qty // settings.default_lot_size) * settings.default_lot_size)
@@ -44,10 +46,10 @@ class RiskManager:
             return RiskDecision(False, 'max_trades_reached')
         if state.realized_pnl <= -abs(settings.max_daily_loss):
             return RiskDecision(False, 'daily_loss_limit_hit')
-        if self._drawdown_guard(state):
-            return RiskDecision(False, 'max_drawdown_limit_hit')
         if state.consecutive_losses >= settings.max_consecutive_losses:
             return RiskDecision(False, 'max_consecutive_losses')
+        if self._drawdown_guard(state):
+            return RiskDecision(False, 'max_drawdown_limit_hit')
         if entry <= 0 or stop <= 0:
             return RiskDecision(False, 'invalid_entry_or_stop')
 
@@ -70,7 +72,6 @@ class RiskManager:
         if not api_ok:
             return 'API_UNSTABLE'
         return 'RUNNING'
-
 
     def should_exit_trade(self, active_trade: dict, spot_price: float, option_price: float) -> bool:
         stop = float(active_trade.get('stop_loss') or 0.0)
