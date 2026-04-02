@@ -1,25 +1,16 @@
 from __future__ import annotations
 
-import asyncio
+from typing import Any
 
-from engine.market_feed_engine import TickEvent
-from strategies.orb_strategy import OrbStrategy, TradeSignal
+from strategies.strategy_manager import StrategyManager, SignalStrategy
 
 
 class StrategyEngine:
-    def __init__(self, strategy: OrbStrategy, tick_queue: asyncio.Queue[TickEvent], signal_queue: asyncio.Queue[TradeSignal]) -> None:
-        self._strategy = strategy
-        self._tick_queue = tick_queue
-        self._signal_queue = signal_queue
-        self._running = False
+    def __init__(self, strategies: list[SignalStrategy]) -> None:
+        self._manager = StrategyManager(strategies)
 
-    async def run(self) -> None:
-        self._running = True
-        while self._running:
-            tick = await self._tick_queue.get()
-            signal = self._strategy.on_tick(tick.price, qty=50)
-            if signal:
-                await self._signal_queue.put(signal)
+    def choose(self, market_data: dict[str, Any]) -> dict[str, Any]:
+        return self._manager.choose(market_data)
 
-    def stop(self) -> None:
-        self._running = False
+    def run_all(self, market_data: dict[str, Any]) -> list[dict[str, Any]]:
+        return self._manager.run(market_data)
