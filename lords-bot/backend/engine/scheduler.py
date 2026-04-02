@@ -112,6 +112,7 @@ class Scheduler:
                         "orb_high": orb["high"],
                         "orb_low": orb["low"],
                         "option_chain_bias": bias,
+                        "option_chain": chain,
                         "candles": candles,
                     }
                 )
@@ -122,7 +123,13 @@ class Scheduler:
                 # TRADE EXECUTION LOGIC
                 # ------------------------------------------------
 
-                if signal.get("signal") == "BUY" and not self.state.active_trade:
+                if (
+                    signal.get("signal") == "BUY"
+                    and signal.get("strategy") == "OrbStrategy"
+                    and not self.state.active_trade
+                    and float(signal.get("stop_loss") or 0) > 0
+                    and float(signal.get("target_price") or 0) > 0
+                ):
 
                     option = self.option_chain_service.pick_option_contract(
                         chain,
@@ -131,6 +138,20 @@ class Scheduler:
                         settings.symbol,
                         settings.expiry,
                     )
+
+                    if not option or float(option.get("premium") or 0.0) <= 0:
+                        self.state.last_error = "invalid_option_contract"
+                        return
+
+                    risk = self.risk_manager.pre_trade_check(
+                        self.state,
+                        capital=settings.paper_capital,
+                        entry=float(spot),
+                        stop=float(signal.get("stop_loss") or 0.0),
+                    )
+                    if not risk.allowed:
+                        self.state.last_error = f"risk_block:{risk.reason}"
+                        return
 
                     payload = {
                         "exchange": "NFO",
@@ -141,7 +162,7 @@ class Scheduler:
                         "transactionType": "BUY",
                         "orderType": "MARKET",
                         "productType": "MIS",
-                        "quantity": settings.quantity,
+                        "quantity": risk.quantity,
                         "price": option["premium"],
                     }
 
@@ -158,11 +179,12 @@ class Scheduler:
                             "order_id": order_id,
                             "symbol": option["option_symbol"],
                             "entry_price": option["premium"],
-                            "quantity": settings.quantity,
+                            "quantity": risk.quantity,
                             "side": signal.get("option_side"),
                             "stop_loss": signal.get("stop_loss"),
                             "target": signal.get("target_price"),
                         }
+                        self.state.trades_today += 1
 
                         logger.info("Trade opened %s", option["option_symbol"])
 
@@ -180,13 +202,24 @@ class Scheduler:
                     )
 
                     if (
+                        pos.get("stop_loss", 0) > 0
+                        and pos.get("target", 0) > 0
+                        and (
                         spot <= pos["stop_loss"]
                         or spot >= pos["target"]
+                        )
                     ):
 
                         trade = self.order_manager.close_position(
                             pos["order_id"],
                             spot,
+                        )
+                        trade_pnl = float(trade.get("pnl") or pnl)
+                        self.state.realized_pnl += trade_pnl
+                        self.state.consecutive_losses = (
+                            self.state.consecutive_losses + 1
+                            if trade_pnl < 0
+                            else 0
                         )
 
                         self.trade_logger.log_trade(trade)

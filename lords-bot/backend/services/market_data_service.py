@@ -48,12 +48,14 @@ class MarketDataService:
             return float(cached)
 
         try:
-
-            raw = await samco_client.get_quote("NIFTY")
-
+            raw = await samco_client.index_quote("NIFTY")
             response = self._normalize_response(raw)
-
             details = response.get("indexDetails") or response.get("data") or []
+
+            if not details:
+                raw = await samco_client.get_quote("NIFTY")
+                response = self._normalize_response(raw)
+                details = response.get("indexDetails") or response.get("data") or []
 
             if details:
 
