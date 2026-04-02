@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -15,15 +15,15 @@ class Settings(BaseSettings):
     environment: str = 'dev'
 
     samco_base_url: str = 'https://api.stocknote.com'
-    samco_api_key: str = Field(default='', validation_alias='API_KEY')
+    samco_api_key: str = Field(default='', validation_alias=AliasChoices('SAMCO_API_KEY', 'API_KEY'))
 
-    samco_api_secret: str = Field(default='', validation_alias='API_SECRET')
-    samco_institution_id: str = Field(default='', validation_alias='INSTITUTION_ID')
-    samco_access_token: str = ''
-    samco_session_token: str = ''
-    samco_user_id: str = ''
-    samco_password: str = ''
-    samco_yob: str = ''
+    samco_api_secret: str = Field(default='', validation_alias=AliasChoices('SAMCO_API_SECRET', 'API_SECRET'))
+    samco_institution_id: str = Field(default='', validation_alias=AliasChoices('SAMCO_INSTITUTION_ID', 'INSTITUTION_ID'))
+    samco_access_token: str = Field(default='', validation_alias=AliasChoices('SAMCO_ACCESS_TOKEN', 'ACCESS_TOKEN'))
+    samco_session_token: str = Field(default='', validation_alias=AliasChoices('SAMCO_SESSION_TOKEN', 'SESSION_TOKEN'))
+    samco_user_id: str = Field(default='', validation_alias=AliasChoices('SAMCO_USER_ID', 'USER_ID'))
+    samco_password: str = Field(default='', validation_alias=AliasChoices('SAMCO_PASSWORD', 'PASSWORD'))
+    samco_yob: str = Field(default='', validation_alias=AliasChoices('SAMCO_YOB', 'YOB'))
 
     symbol: str = 'NIFTY'
     expiry: str = '2026-03-26'
