@@ -72,6 +72,9 @@ class Scheduler:
                     self.state_manager.save(self.state)
                     return
                 self.state.system_status = self.risk_manager.circuit_breaker(self.state, broker_ok=True, api_ok=True)
+                if self.state.system_status != 'RUNNING':
+                    self.state_manager.save(self.state)
+                    return
 
                 try:
                     spot = await self.market_data_service.get_spot_price()
@@ -136,12 +139,12 @@ class Scheduler:
                                 'quantity': risk.quantity,
                                 'price': option['premium'],
                             }
-                            order = await self.order_manager.place_order(payload, self.state.trading_mode)
+                            order = await self.order_manager.place_market_order(payload, self.state.trading_mode)
                             if str(order.get('status', '')).lower() == 'success':
                                 self.state.active_trade = {
                                     'order_id': order.get('order_id'),
                                     'symbol': option['option_symbol'],
-                                    'entry_price': option['premium'],
+                                    'entry_price': float(order.get('fill_price') or option['premium']),
                                     'quantity': risk.quantity,
                                     'side': signal.get('option_side'),
                                     'stop_loss': signal.get('stop_loss'),
@@ -152,12 +155,11 @@ class Scheduler:
                 if self.state.active_trade:
                     pos = self.state.active_trade
                     order_id = pos.get('order_id', '')
-                    pnl = self.order_manager.update_pnl(order_id, spot)
-                    should_exit = (
-                        pos.get('stop_loss', 0) > 0 and pos.get('target', 0) > 0 and (spot <= pos['stop_loss'] or spot >= pos['target'])
-                    )
+                    option_quote = await self.market_data_service.get_option_ltp(str(pos.get('symbol') or ''))
+                    pnl = self.order_manager.update_pnl(order_id, option_quote)
+                    should_exit = self.risk_manager.should_exit_trade(pos, spot, option_quote)
                     if should_exit:
-                        trade = self.order_manager.close_position(order_id, spot)
+                        trade = self.order_manager.close_position(order_id, option_quote)
                         trade_pnl = float(trade.get('pnl') or pnl)
                         self.state.realized_pnl += trade_pnl
                         self.state.consecutive_losses = self.state.consecutive_losses + 1 if trade_pnl < 0 else 0

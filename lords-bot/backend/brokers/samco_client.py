@@ -156,7 +156,7 @@ class SamcoClient:
         return {'status': 'Error', 'message': 'Invalid response'}
 
     def _rate_limit_market_calls(self) -> None:
-        min_gap = max(1, settings.min_market_poll_seconds)
+        min_gap = max(3, settings.min_market_poll_seconds)
         now = time.time()
         elapsed = now - self._last_market_request_ts
         if elapsed < min_gap:
@@ -200,21 +200,23 @@ class SamcoClient:
 
     async def multi_quote(self, payload: dict[str, list[str]]) -> dict[str, Any]:
         if hasattr(self.samco, 'multi_quote'):
-            return await self._run_io(self.samco.multi_quote, symbol_list=payload, rate_limited=True)
+            return await self._run_io(self.samco.multi_quote, body=payload, rate_limited=True)
+        if hasattr(self.samco, 'get_multi_quote'):
+            return await self._run_io(self.samco.get_multi_quote, body=payload, rate_limited=True)
         index_name = ((payload or {}).get('INDEX') or [''])[0]
-        return await self._run_io(self.samco.index_quote, exchange='NSE', indexName=index_name, rate_limited=True)
+        return await self._run_io(self.samco.index_quote, indexName=index_name, rate_limited=True)
 
     async def index_quote(self, index_name: str) -> dict[str, Any]:
         return await self.multi_quote({'INDEX': [index_name]})
 
-    async def get_quote(self, symbol_name: str) -> dict[str, Any]:
-        return await self._run_io(self.samco.get_quote, symbol_name=symbol_name, exchange='NSE', rate_limited=True)
+    async def get_quote(self, symbol_name: str, exchange: str = 'NFO') -> dict[str, Any]:
+        return await self._run_io(self.samco.get_quote, symbol_name=symbol_name, exchange=exchange, rate_limited=True)
 
     async def get_positions(self) -> dict[str, Any]:
         return await self._run_io(self.samco.get_positions)
 
     async def get_option_chain(self, symbol: str, expiry: str | None = None, strike_price: str | None = None) -> dict[str, Any]:
-        payload: dict[str, Any] = {'search_symbol_name': symbol, 'exchange': self.samco.EXCHANGE_NFO}
+        payload: dict[str, Any] = {'search_symbol_name': symbol.upper(), 'exchange': 'NFO'}
         if expiry:
             payload['expiry_date'] = self.to_expiry_api_date(expiry)
         if strike_price:
@@ -229,6 +231,13 @@ class SamcoClient:
 
     async def get_order_status(self, order_id: str) -> dict[str, Any]:
         return await self._run_io(self.samco.get_order_status, order_id=order_id)
+
+    async def user_details(self) -> dict[str, Any]:
+        if hasattr(self.samco, 'user_details'):
+            return await self._run_io(self.samco.user_details)
+        if hasattr(self.samco, 'get_profile'):
+            return await self._run_io(self.samco.get_profile)
+        return {'status': 'Error', 'message': 'user_details_not_supported'}
 
 
 samco_client = SamcoClient()
