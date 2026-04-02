@@ -30,6 +30,17 @@ class SamcoClient:
 
         self._bootstrap_session()
 
+    @staticmethod
+    def _is_success(payload: dict[str, Any]) -> bool:
+
+        return payload.get("status", "").lower() == "success"
+
+    @staticmethod
+    def _is_session_error(payload: dict[str, Any]) -> bool:
+
+        msg = str(payload.get("message") or payload.get("errorMessage") or "").lower()
+        return "session" in msg and ("expire" in msg or "invalid" in msg or "token" in msg)
+
     # -------------------------------------------------
     # Expiry helpers
     # -------------------------------------------------
@@ -73,6 +84,13 @@ class SamcoClient:
     # -------------------------------------------------
 
     def _bootstrap_session(self) -> None:
+
+        if settings.samco_session_token:
+            self.set_session_token(settings.samco_session_token, persist=False)
+            self._authenticated = True
+            self._session_restored = True
+            logger.info("Samco session restored from environment")
+            return
 
         if self._load_session():
             self._authenticated = True
@@ -147,7 +165,7 @@ class SamcoClient:
 
                 payload = self._parse_response(response)
 
-                if payload.get("status", "").lower() != "success":
+                if not self._is_success(payload):
 
                     logger.error("Samco login failed")
 
@@ -203,21 +221,33 @@ class SamcoClient:
 
             try:
 
+                if fn != self.samco.login and not self._authenticated:
+                    if not self.login():
+                        return {"status": "Error", "message": "Samco login failed"}
+
                 response = fn(**kwargs)
 
                 payload = self._parse_response(response)
 
-                if payload.get("status", "").lower() == "success":
+                if self._is_success(payload):
 
                     return payload
+
+                if self._is_session_error(payload):
+                    logger.warning("Samco session expired/invalid. Re-authenticating.")
+                    self._authenticated = False
+                    if self.login():
+                        continue
+
+                logger.error("Samco API error: %s", payload.get("message") or payload)
 
             except Exception as e:
 
                 logger.error("Samco SDK call failed: %s", e)
 
-            time.sleep(delay)
-
-            delay *= 2
+            if attempt < retries:
+                time.sleep(delay)
+                delay *= 2
 
         return {"status": "Error", "message": "API call failed"}
 
