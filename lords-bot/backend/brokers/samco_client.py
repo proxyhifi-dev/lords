@@ -26,6 +26,7 @@ class SamcoClient:
         self._lock = Lock()
         self._authenticated = False
         self._token = ""
+        self._session_restored = False
 
         self._bootstrap_session()
 
@@ -75,6 +76,7 @@ class SamcoClient:
 
         if self._load_session():
             self._authenticated = True
+            self._session_restored = True
             logger.info("Samco session restored from file")
             return
 
@@ -130,6 +132,8 @@ class SamcoClient:
     def login(self) -> bool:
 
         with self._lock:
+            if self._authenticated and self._token and not self._session_restored:
+                return True
 
             try:
 
@@ -160,6 +164,7 @@ class SamcoClient:
                 self.set_session_token(token)
 
                 self._authenticated = True
+                self._session_restored = False
 
                 logger.info("Samco login successful")
 
@@ -281,24 +286,25 @@ class SamcoClient:
 
     async def place_order(
         self,
-        symbol_name: str,
-        quantity: int,
-        transaction_type: str,
+        symbol_name: str | None = None,
+        quantity: int | None = None,
+        transaction_type: str | None = None,
         order_type: str = "MARKET",
         exchange: str = "NFO",
         product_type: str = "INTRADAY",
         price: float = 0,
+        body: dict[str, Any] | None = None,
     ):
-
-        body = {
-            "symbolName": symbol_name,
-            "exchange": exchange,
-            "transactionType": transaction_type,
-            "orderType": order_type,
-            "quantity": quantity,
-            "productType": product_type,
-            "price": price,
-        }
+        if body is None:
+            body = {
+                "symbolName": symbol_name,
+                "exchange": exchange,
+                "transactionType": transaction_type,
+                "orderType": order_type,
+                "quantity": quantity,
+                "productType": product_type,
+                "price": price,
+            }
 
         return await self._run_io(self.samco.place_order, body=body)
 
