@@ -11,4 +11,5 @@ router = APIRouter(tags=['option-chain'])
 @router.get('/option-chain')
 async def option_chain() -> dict:
     chain = await option_chain_service.get_option_chain(settings.symbol, settings.expiry)
-    return {'symbol': settings.symbol, 'expiry': settings.expiry, 'records': chain}
+    live_expiry = option_chain_service.get_live_expiry(settings.symbol, settings.expiry)
+    return {'symbol': settings.symbol, 'expiry': live_expiry, 'records': chain}

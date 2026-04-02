@@ -103,6 +103,7 @@ class Scheduler:
                     settings.symbol,
                     settings.expiry,
                 )
+                live_expiry = self.option_chain_service.get_live_expiry(settings.symbol, settings.expiry)
 
                 bias = self.option_chain_service.get_option_chain_bias(chain)
 
@@ -136,7 +137,7 @@ class Scheduler:
                         spot,
                         signal.get("option_side"),
                         settings.symbol,
-                        settings.expiry,
+                        live_expiry,
                     )
 
                     if not option or float(option.get("premium") or 0.0) <= 0:

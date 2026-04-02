@@ -172,6 +172,38 @@ def test_option_chain_service_accepts_string_payload(monkeypatch) -> None:
     assert chain[0]['call_oi'] == 150.0
 
 
+def test_option_chain_auto_rolls_live_expiry(monkeypatch) -> None:
+    from services.option_chain_service import OptionChainService
+
+    service = OptionChainService(TTLCache())
+
+    async def _fake_get_option_chain(symbol: str, expiry: str | None, strike_price: str | None = None):
+        if expiry == '2026-03-26':
+            return {'status': 'Failure', 'statusMessage': 'No data for expiry'}
+        if expiry is None:
+            return {
+                'optionDetails': [
+                    {'strikePrice': '22100', 'optionType': 'CE', 'openInterest': '100', 'lastTradedPrice': '120', 'expiryDate': '03APR2026'},
+                ]
+            }
+        if expiry == '2026-04-03':
+            return {
+                'optionDetails': [
+                    {'strikePrice': '22100', 'optionType': 'CE', 'openInterest': '120', 'lastTradedPrice': '140', 'expiryDate': '03APR2026'},
+                ]
+            }
+        return {'optionDetails': []}
+
+    async def _run() -> tuple[list[dict], str]:
+        monkeypatch.setattr('services.option_chain_service.samco_client.get_option_chain', _fake_get_option_chain)
+        chain = await service.get_option_chain('NIFTY', '2026-03-26')
+        return chain, service.get_live_expiry('NIFTY', '2026-03-26')
+
+    chain, live_expiry = asyncio.run(_run())
+    assert chain[0]['call_oi'] == 120.0
+    assert live_expiry == '2026-04-03'
+
+
 def test_market_data_service_accepts_string_payload(monkeypatch) -> None:
     from services.market_data_service import MarketDataService
 
@@ -186,3 +218,20 @@ def test_market_data_service_accepts_string_payload(monkeypatch) -> None:
 
     spot = asyncio.run(_run())
     assert spot == 22456.5
+
+
+def test_market_data_service_uses_last_live_price_not_dummy(monkeypatch) -> None:
+    from services.market_data_service import MarketDataService
+
+    async def _fake_index_quote(index_name: str) -> dict:
+        return {'status': 'Failure', 'statusMessage': 'Please enter a valid Index Name.'}
+
+    service = MarketDataService(TTLCache())
+    service._last_price = 22555.0
+
+    async def _run() -> float:
+        monkeypatch.setattr('services.market_data_service.samco_client.index_quote', _fake_index_quote)
+        return await service.get_nifty_spot()
+
+    spot = asyncio.run(_run())
+    assert spot == 22555.0
