@@ -20,7 +20,7 @@ class MarketDataService:
         self.cache = cache
         self._tick_buffer: deque[dict[str, Any]] = deque(maxlen=7200)
         self._last_price: float = 0.0
-        self._index_candidates = [settings.index_symbol, settings.symbol, 'NIFTY 50', 'NIFTY']
+        self._index_candidates = [settings.index_symbol, 'NIFTY 50']
 
     @staticmethod
     def _normalize_response(response: Any) -> dict[str, Any]:
@@ -36,13 +36,13 @@ class MarketDataService:
 
     @staticmethod
     def _extract_spot(response: dict[str, Any]) -> float:
-        rows = response.get('multiQuotesDetails') or response.get('indexDetails') or response.get('data') or []
+        rows = response.get('multiQuotes') or response.get('multiQuotesDetails') or response.get('indexDetails') or response.get('data') or []
         if isinstance(rows, dict):
             rows = [rows]
         for row in rows:
             if not isinstance(row, dict):
                 continue
-            for key in ('spotPrice', 'indexLtp', 'ltp', 'lastTradedPrice'):
+            for key in ('spotPrice', 'indexLtp', 'lastTradePrice', 'ltp', 'lastTradedPrice'):
                 value = row.get(key)
                 if value is None:
                     continue
@@ -64,6 +64,9 @@ class MarketDataService:
             try:
                 response = self._normalize_response(await samco_client.index_quote(index_name))
                 spot = self._extract_spot(response)
+                if spot <= 0:
+                    response = self._normalize_response(await samco_client.multi_quote({'INDEX': [index_name]}))
+                    spot = self._extract_spot(response)
                 if spot > 0:
                     self._last_price = spot
                     self.cache.set(cache_key, spot, settings.spot_ttl)
@@ -80,6 +83,25 @@ class MarketDataService:
 
     async def get_nifty_spot(self) -> float:
         return await self.get_spot_price()
+
+    async def get_option_ltp(self, symbol_name: str) -> float:
+        if not symbol_name:
+            return 0.0
+        quote = self._normalize_response(await samco_client.get_quote(symbol_name, exchange='NFO'))
+        for key in ('lastTradedPrice', 'lastTradePrice', 'ltp'):
+            value = quote.get(key)
+            if value is not None:
+                try:
+                    ltp = float(value)
+                    if ltp > 0:
+                        return ltp
+                except (TypeError, ValueError):
+                    continue
+        return 0.0
+
+    async def get_historical_candles(self, symbol: str, limit: int = 120, interval_minutes: int = 1) -> list[dict[str, Any]]:
+        _ = symbol
+        return self.build_candles(interval_minutes=interval_minutes, limit=limit)
 
     def add_tick(self, price: float, timestamp: datetime | None = None, volume: float = 0.0) -> None:
         if price <= 0:
