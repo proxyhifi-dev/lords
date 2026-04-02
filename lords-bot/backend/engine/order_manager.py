@@ -39,6 +39,13 @@ class OrderManager:
         valid, reason = self.validate_payload(payload)
         if not valid:
             return {'status': 'Error', 'statusMessage': reason}
+        symbol = str(payload.get('symbolName') or '')
+        duplicate = any(
+            str(pos.get('symbol') or '') == symbol
+            for pos in self.open_positions.values()
+        )
+        if duplicate:
+            return {'status': 'Error', 'statusMessage': 'duplicate_open_position'}
 
         if mode == 'PAPER':
             order_id = f'paper-{uuid.uuid4().hex[:8]}'
@@ -110,3 +117,26 @@ class OrderManager:
         if str(response.get('status', '')).upper() == 'SUCCESS':
             return {'ok': True, 'reason': ''}
         return {'ok': False, 'reason': response.get('statusMessage', 'order_rejected')}
+
+    def close_position(self, order_id: str, exit_price: float) -> dict[str, Any]:
+        pos = self.open_positions.pop(order_id, None)
+        if not pos:
+            return {'order_id': order_id, 'status': 'Error', 'message': 'POSITION_NOT_FOUND', 'pnl': 0.0}
+        pnl = self.update_pnl(order_id, exit_price)
+        if pnl == 0.0:
+            entry = float(pos.get('entry_price') or 0.0)
+            qty = int(pos.get('quantity') or 0)
+            side = str(pos.get('side') or 'BUY').upper()
+            pnl = (float(exit_price) - entry) * qty
+            if side == 'SELL':
+                pnl *= -1
+        return {
+            'order_id': order_id,
+            'symbol': pos.get('symbol', ''),
+            'entry_price': float(pos.get('entry_price') or 0.0),
+            'exit_price': float(exit_price),
+            'quantity': int(pos.get('quantity') or 0),
+            'side': pos.get('side', ''),
+            'pnl': float(pnl),
+            'status': 'Success',
+        }
