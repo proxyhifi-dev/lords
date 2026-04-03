@@ -1,7 +1,7 @@
 {
   "spot_price": 22713.1,
-  "orb_high": null,
-  "orb_low": null,
+  "orb_high": 22713.1,
+  "orb_low": 22713.1,
   "signal": null,
   "active_trade": null,
   "daily_pnl": 0.0,
