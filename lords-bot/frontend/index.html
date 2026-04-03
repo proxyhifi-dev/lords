@@ -1,19 +1,68 @@
-<div>Bot Status: <span id="bot-status"></span></div>
-
-<div>Trading Mode: <span id="trading-mode"></span></div>
-
-<div>NIFTY Spot: <span id="nifty-spot"></span></div>
-
-<div>ORB Range: <span id="orb-range"></span></div>
-
-<div>Signal: <span id="signal"></span></div>
-
-<div>Active Trade:</div>
-<pre id="active-trade"></pre>
-
-<div>PnL: <span id="daily-pnl"></span></div>
-
-<div>Trade History:</div>
-<div id="trade-history"></div>
-
-<button id="refresh-btn">Refresh</button>
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>Lords Bot Dashboard</title>
+	<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+	<div class="dashboard">
+		<div class="header">
+			<h1>LORDS BOT</h1>
+			<div class="sub-header">
+				<span id="bot-status" class="status">-</span>
+				<span id="trading-mode" class="mode">-</span>
+			</div>
+		</div>
+		<div class="main-cards">
+			<div class="card">
+				<h3>NIFTY Spot</h3>
+				<span id="nifty-spot">-</span>
+			</div>
+			<div class="card">
+				<h3>ORB RANGE (9:15–9:30)</h3>
+				<div id="orb-range-block">
+					<div>HIGH: <span id="orb-high">-</span></div>
+					<div>LOW: <span id="orb-low">-</span></div>
+					<div>RANGE: <span id="orb-points">-</span> pts</div>
+				</div>
+			</div>
+			<div class="card">
+				<h3>Signal</h3>
+				<span id="signal">NONE</span>
+			</div>
+			<div class="card">
+				<h3>Daily PnL</h3>
+				<span id="daily-pnl">0</span>
+			</div>
+			<div class="card">
+				<h3>Trades Today</h3>
+				<span id="trade-count">0</span>
+			</div>
+		</div>
+		<div class="panel">
+			<h2>Active Trade</h2>
+			<pre id="active-trade">No Active Trade</pre>
+		</div>
+		<div class="panel">
+			<h2>Today's Trades</h2>
+			<table id="trade-history-table">
+				<thead>
+					<tr>
+						<th>Time</th>
+						<th>Symbol</th>
+						<th>Side</th>
+						<th>Entry</th>
+						<th>Exit</th>
+						<th>PnL</th>
+						<th>Status</th>
+					</tr>
+				</thead>
+				<tbody id="trade-history"></tbody>
+			</table>
+		</div>
+		<button id="refresh-btn">Refresh</button>
+	</div>
+	<script src="app.js"></script>
+</body>
+</html>
