@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import asyncio
 import json
 from typing import Any, Callable
@@ -10,12 +9,10 @@ from backend.app.core.config_loader import get_settings
 from backend.app.utils.logger import get_logger
 from backend.app.core.circuit_breaker import CircuitBreaker
 
-
 settings = get_settings()
 
 
 class SamcoClient:
-
     """
     SAMCO Broker Adapter
     """
@@ -38,7 +35,6 @@ class SamcoClient:
     # --------------------------------------------------
     # LOGIN
     # --------------------------------------------------
-
     async def login(self) -> dict[str, Any]:
 
         async with self._lock:
@@ -81,7 +77,6 @@ class SamcoClient:
     # --------------------------------------------------
     # SESSION CHECK
     # --------------------------------------------------
-
     async def ensure_session(self):
 
         if not self._session_live:
@@ -90,7 +85,6 @@ class SamcoClient:
     # --------------------------------------------------
     # INDEX QUOTE
     # --------------------------------------------------
-
     async def get_index_quote(self, index_name: str):
 
         await self.ensure_session()
@@ -103,7 +97,6 @@ class SamcoClient:
     # --------------------------------------------------
     # STOCK QUOTE
     # --------------------------------------------------
-
     async def get_quote(self, symbol_name: str, exchange: str):
 
         await self.ensure_session()
@@ -119,7 +112,6 @@ class SamcoClient:
     # --------------------------------------------------
     # OPTION CHAIN
     # --------------------------------------------------
-
     async def get_option_chain(
         self,
         symbol_name: str,
@@ -141,9 +133,24 @@ class SamcoClient:
         )
 
     # --------------------------------------------------
+    # HISTORICAL CANDLES (FOR ORB REBUILD)
+    # --------------------------------------------------
+    async def get_intraday_candles(self):
+
+        await self.ensure_session()
+
+        return await self._call_sdk(
+            lambda: self.samco.get_intraday_candle_data(
+                symbolName="NIFTY",
+                exchange="NSE",
+                interval="5minute"
+            ),
+            "get_intraday_candle_data",
+        )
+
+    # --------------------------------------------------
     # PLACE ORDER
     # --------------------------------------------------
-
     async def place_order(self, symbol: str, side: str, quantity: int):
 
         await self.ensure_session()
@@ -172,7 +179,6 @@ class SamcoClient:
     # --------------------------------------------------
     # ORDER BOOK
     # --------------------------------------------------
-
     async def get_orders(self):
 
         await self.ensure_session()
@@ -185,7 +191,6 @@ class SamcoClient:
     # --------------------------------------------------
     # POSITIONS (SAFE MODE)
     # --------------------------------------------------
-
     async def get_positions(self):
 
         return {"positions": []}
@@ -193,19 +198,21 @@ class SamcoClient:
     # --------------------------------------------------
     # HEALTHCHECK
     # --------------------------------------------------
-
     async def healthcheck(self) -> bool:
 
         try:
+
             await self.get_index_quote("NIFTY 50")
+
             return True
+
         except Exception:
+
             return False
 
     # --------------------------------------------------
     # INTERNAL SDK CALL
     # --------------------------------------------------
-
     async def _call_sdk(
         self,
         fn: Callable[[], Any],
@@ -218,7 +225,9 @@ class SamcoClient:
             raise RuntimeError(f"Circuit breaker OPEN for {api_name}")
 
         attempts = settings.reconnect_max_attempts
+
         delay = settings.reconnect_base_delay
+
         last_error = None
 
         for attempt in range(1, attempts + 1):
@@ -227,7 +236,6 @@ class SamcoClient:
 
                 result = await asyncio.to_thread(fn)
 
-                # SAMCO sometimes returns empty string
                 if result is None:
                     return {}
 
