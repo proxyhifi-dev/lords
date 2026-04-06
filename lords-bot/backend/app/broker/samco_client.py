@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import asyncio
 import json
 from typing import Any, Callable
@@ -9,13 +10,11 @@ from backend.app.core.config_loader import get_settings
 from backend.app.utils.logger import get_logger
 from backend.app.core.circuit_breaker import CircuitBreaker
 
+
 settings = get_settings()
 
 
 class SamcoClient:
-    """
-    SAMCO Broker Adapter
-    """
 
     def __init__(self):
 
@@ -42,19 +41,25 @@ class SamcoClient:
 
             self.logger.info("Attempting SAMCO login")
 
+            body = {
+                "userId": settings.samco_user_id,
+                "password": settings.samco_password,
+                "yob": settings.samco_yob,
+            }
+
+            if getattr(settings, "samco_access_token", None):
+                body["accessToken"] = settings.samco_access_token
+
             response = await asyncio.to_thread(
                 self.samco.login,
-                body={
-                    "userId": settings.samco_user_id,
-                    "password": settings.samco_password,
-                    "yob": settings.samco_yob,
-                    "accessToken": settings.samco_access_token,
-                },
+                body=body,
             )
 
             if isinstance(response, str):
 
-                if response.strip() == "":
+                response = response.strip()
+
+                if response == "":
                     raise RuntimeError("Empty SAMCO login response")
 
                 response = json.loads(response)
@@ -62,7 +67,10 @@ class SamcoClient:
             if response.get("status") != "Success":
                 raise RuntimeError(f"SAMCO login failed: {response}")
 
-            session_token = response["sessionToken"]
+            session_token = response.get("sessionToken")
+
+            if not session_token:
+                raise RuntimeError("SAMCO login succeeded but sessionToken missing")
 
             await asyncio.to_thread(
                 self.samco.set_session_token,
@@ -98,14 +106,20 @@ class SamcoClient:
         )
 
     # --------------------------------------------------
-    # STOCK / OPTION QUOTE
+    # GET QUOTE
     # --------------------------------------------------
 
     async def get_quote(self, symbol_name: str, exchange: str):
 
         await self.ensure_session()
 
-        return await self._call_sdk(
+        if exchange == "NFO":
+            exchange = self.samco.EXCHANGE_NFO
+
+        elif exchange == "NSE":
+            exchange = self.samco.EXCHANGE_NSE
+
+        result = await self._call_sdk(
             lambda: self.samco.get_quote(
                 symbol_name=symbol_name,
                 exchange=exchange,
@@ -113,46 +127,165 @@ class SamcoClient:
             "get_quote",
         )
 
+        self.logger.debug(
+            "get_quote raw response symbol=%s response=%s",
+            symbol_name,
+            result,
+        )
+
+        return result
+
     # --------------------------------------------------
     # OPTION CHAIN
     # --------------------------------------------------
 
     async def get_option_chain(
         self,
-        symbol_name: str,
+        search_symbol_name: str,
         exchange: str,
-        strike_price: int,
         expiry_date: str,
+        strike_price: str,
+        option_type: str,
     ):
 
         await self.ensure_session()
 
-        return await self._call_sdk(
+        if exchange == "NFO":
+            exchange = self.samco.EXCHANGE_NFO
+
+        elif exchange == "NSE":
+            exchange = self.samco.EXCHANGE_NSE
+
+        result = await self._call_sdk(
             lambda: self.samco.get_option_chain(
-                symbolName=symbol_name,
+                search_symbol_name=search_symbol_name,
                 exchange=exchange,
-                strikePrice=str(strike_price),
-                expiryDate=expiry_date,
+                expiry_date=expiry_date,
+                strike_price=strike_price,
+                option_type=option_type,
             ),
             "get_option_chain",
         )
 
+        return result
+
     # --------------------------------------------------
-    # HISTORICAL CANDLES
+    # PARSE SPOT
     # --------------------------------------------------
 
-    async def get_intraday_candles(self):
+    @staticmethod
+    def parse_spot(quote: dict | None) -> float | None:
 
-        await self.ensure_session()
+        if not quote:
+            return None
 
-        return await self._call_sdk(
-            lambda: self.samco.get_intraday_candle_data(
-                symbolName="NIFTY",
-                exchange="NSE",
-                interval="5minute",
-            ),
-            "get_intraday_candle_data",
-        )
+        try:
+
+            if "spotPrice" in quote:
+
+                price = quote.get("spotPrice")
+
+                if price is not None:
+                    return float(str(price).replace(",", ""))
+
+            details = quote.get("indexDetails")
+
+            if isinstance(details, list) and details:
+
+                price = details[0].get("spotPrice")
+
+                if price is not None:
+                    return float(str(price).replace(",", ""))
+
+            if "lastTradedPrice" in quote:
+
+                price = quote.get("lastTradedPrice")
+
+                if price is not None:
+                    return float(str(price).replace(",", ""))
+
+        except Exception:
+            return None
+
+        return None
+
+    # --------------------------------------------------
+    # PARSE LTP
+    # --------------------------------------------------
+
+    @staticmethod
+    def parse_ltp(quote: dict | None) -> float | None:
+
+        if not quote:
+            return None
+
+        try:
+
+            keys = (
+                "lastTradedPrice",
+                "lastTradePrice",
+                "ltp",
+                "last_price",
+            )
+
+            def extract(d: dict):
+
+                for key in keys:
+
+                    if key not in d:
+                        continue
+
+                    val = d[key]
+
+                    if val is None:
+                        continue
+
+                    val = str(val).replace(",", "").strip()
+
+                    if val == "":
+                        continue
+
+                    try:
+                        return float(val)
+                    except:
+                        continue
+
+                return None
+
+            qd = quote.get("quoteDetails")
+
+            if isinstance(qd, dict):
+
+                val = extract(qd)
+
+                if val:
+                    return val
+
+            val = extract(quote)
+
+            if val:
+                return val
+
+            data = quote.get("data")
+
+            if isinstance(data, dict):
+
+                val = extract(data)
+
+                if val:
+                    return val
+
+            if isinstance(data, list) and data:
+
+                val = extract(data[0])
+
+                if val:
+                    return val
+
+        except Exception:
+            return None
+
+        return None
 
     # --------------------------------------------------
     # PLACE ORDER
@@ -184,58 +317,33 @@ class SamcoClient:
         )
 
     # --------------------------------------------------
-    # ORDER BOOK
-    # --------------------------------------------------
-
-    async def get_orders(self):
-
-        await self.ensure_session()
-
-        return await self._call_sdk(
-            lambda: self.samco.get_order_book(),
-            "get_order_book",
-        )
-
-    # --------------------------------------------------
-    # POSITIONS
-    # --------------------------------------------------
-
-    async def get_positions(self):
-
-        return {"positions": []}
-
-    # --------------------------------------------------
     # HEALTHCHECK
     # --------------------------------------------------
 
     async def healthcheck(self) -> bool:
 
         try:
+
             await self.get_index_quote("NIFTY 50")
+
             return True
+
         except Exception:
+
             return False
 
     # --------------------------------------------------
-    # INTERNAL SDK CALL
+    # INTERNAL SDK WRAPPER
     # --------------------------------------------------
 
-    async def _call_sdk(
-        self,
-        fn: Callable[[], Any],
-        api_name: str,
-        *,
-        use_breaker: bool = True,
-    ):
+    async def _call_sdk(self, fn: Callable[[], Any], api_name: str):
 
-        if use_breaker and not self._breaker.allow_request():
-            raise RuntimeError(f"Circuit breaker OPEN for {api_name}")
+        if not self._breaker.allow_request():
+            raise RuntimeError(f"Circuit breaker open — skipping {api_name}")
 
         attempts = settings.reconnect_max_attempts
 
         delay = settings.reconnect_base_delay
-
-        last_error = None
 
         for attempt in range(1, attempts + 1):
 
@@ -243,33 +351,34 @@ class SamcoClient:
 
                 result = await asyncio.to_thread(fn)
 
+                self._breaker.record_success()
+
                 if result is None:
                     return {}
 
                 if isinstance(result, str):
 
-                    if result.strip() == "":
+                    result = result.strip()
+
+                    if result == "":
                         return {}
 
                     try:
                         result = json.loads(result)
-                    except Exception:
+                    except json.JSONDecodeError:
                         return {}
-
-                self._breaker.record_success()
 
                 return result
 
             except Exception as exc:
 
-                last_error = exc
-
                 self._breaker.record_failure()
 
                 self.logger.error(
-                    "SAMCO API failed api=%s attempt=%s error=%s",
+                    "SAMCO API failed api=%s attempt=%s/%s error=%s",
                     api_name,
                     attempt,
+                    attempts,
                     exc,
                 )
 
@@ -279,12 +388,4 @@ class SamcoClient:
 
                     delay = min(delay * 2, 60)
 
-                    if "session" in str(exc).lower():
-
-                        self._session_live = False
-
-                        await self.login()
-
-        raise RuntimeError(
-            f"{api_name} failed after retries: {last_error}"
-        )
+        return {}

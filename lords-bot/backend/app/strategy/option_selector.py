@@ -5,68 +5,26 @@ from datetime import datetime, timedelta
 
 class OptionSelector:
     """
-    Select ATM NIFTY option contract
+    Utility helpers for option selection.
+    Actual trading symbol resolution is handled by SamcoClient.get_option_symbol()
+    via the option chain API — NOT by constructing symbol strings here.
     """
-
-    # --------------------------------
-    # ATM STRIKE
-    # --------------------------------
 
     @staticmethod
     def get_atm_strike(spot: float) -> int:
+        """Round spot to nearest 50-point Nifty strike."""
         step = 50
         return int(round(spot / step) * step)
 
-    # --------------------------------
-    # NEXT THURSDAY EXPIRY
-    # --------------------------------
+    @staticmethod
+    def get_option_type(signal: str) -> str:
+        """CALL → CE, PUT → PE"""
+        return "CE" if signal == "CALL" else "PE"
 
     @staticmethod
-    def get_expiry() -> str:
-
-        today = datetime.now()
-
-        # Thursday = 3
-        days_ahead = 3 - today.weekday()
-
-        if days_ahead < 0:
-            days_ahead += 7
-
+    def get_next_thursday_iso() -> str:
+        """Returns nearest upcoming Thursday as ISO string (YYYY-MM-DD)."""
+        today = datetime.now().date()
+        days_ahead = (3 - today.weekday()) % 7
         expiry_date = today + timedelta(days=days_ahead)
-
-        return expiry_date.strftime("%d%b%y").upper()
-
-    # --------------------------------
-    # BUILD SYMBOL
-    # --------------------------------
-
-    @staticmethod
-    def build_symbol(strike: int, option_type: str) -> str:
-
-        expiry = OptionSelector.get_expiry()
-
-        # Example
-        # NIFTY04APR2422500CE
-
-        return f"NIFTY{expiry}{strike}{option_type}"
-
-    # --------------------------------
-    # SELECT OPTION
-    # --------------------------------
-
-    @staticmethod
-    def select(spot: float, signal: str):
-
-        strike = OptionSelector.get_atm_strike(spot)
-
-        if signal == "CALL":
-            option_type = "CE"
-        else:
-            option_type = "PE"
-
-        symbol = OptionSelector.build_symbol(
-            strike,
-            option_type
-        )
-
-        return symbol, strike
+        return expiry_date.isoformat()
