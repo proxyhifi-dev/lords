@@ -38,7 +38,7 @@ class RuntimeState:
 
 class StateManager:
 
-    def __init__(self, state_file: str | None = None) -> None:
+    def __init__(self, state_file: str | None = None):
 
         self._lock = asyncio.Lock()
 
@@ -49,10 +49,10 @@ class StateManager:
         self._state = RuntimeState()
 
     # -------------------------------------------
-    # LOAD STATE FROM DISK
+    # LOAD STATE
     # -------------------------------------------
 
-    async def load(self) -> None:
+    async def load(self):
 
         if not self._state_file.exists():
 
@@ -73,7 +73,7 @@ class StateManager:
             await self.persist()
 
     # -------------------------------------------
-    # SNAPSHOT (READ ONLY)
+    # SNAPSHOT
     # -------------------------------------------
 
     async def snapshot(self) -> RuntimeState:
@@ -83,10 +83,10 @@ class StateManager:
             return RuntimeState(**asdict(self._state))
 
     # -------------------------------------------
-    # UPDATE STATE
+    # UPDATE
     # -------------------------------------------
 
-    async def update(self, **kwargs: Any) -> None:
+    async def update(self, **kwargs: Any):
 
         async with self._lock:
 
@@ -99,10 +99,10 @@ class StateManager:
             await self.persist()
 
     # -------------------------------------------
-    # SAVE STATE
+    # SAVE
     # -------------------------------------------
 
-    async def persist(self) -> None:
+    async def persist(self):
 
         self._state_file.write_text(
 
@@ -113,3 +113,10 @@ class StateManager:
 
             encoding="utf-8"
         )
+
+
+# -------------------------------------------------
+# GLOBAL INSTANCE
+# -------------------------------------------------
+
+state_manager = StateManager()

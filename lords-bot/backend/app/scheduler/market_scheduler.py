@@ -5,7 +5,7 @@ from datetime import datetime, time
 
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.event_bus import EventBus
-from backend.app.engine.state_manager import StateManager
+from backend.app.engine.state_manager import state_manager
 from backend.app.engine.trading_engine import TradingEngine
 from backend.app.storage.trade_store import TradeStore
 from backend.app.utils.logger import get_logger
@@ -22,9 +22,13 @@ class MarketScheduler:
 
         self.logger = get_logger("market_scheduler")
 
-        self.state = StateManager()
+        # ⭐ USE GLOBAL STATE MANAGER
+        self.state = state_manager
+
         self.trade_store = TradeStore()
+
         self.broker = SamcoClient()
+
         self.event_bus = EventBus()
 
         self.engine = TradingEngine(
@@ -42,7 +46,9 @@ class MarketScheduler:
 
         self.orb_built = False
         self._orb_rebuild_in_progress = False
+
         self._last_reset_date: str | None = None
+
         self._last_signal_time: float = 0
 
         self._previous_spot: float | None = None
@@ -82,6 +88,7 @@ class MarketScheduler:
         for task in (self._task, self._engine_task, self._rebuild_task):
 
             if task and not task.done():
+
                 task.cancel()
 
     # ------------------------------------------------
@@ -99,6 +106,7 @@ class MarketScheduler:
 
         self.orb_built = False
         self._orb_rebuild_in_progress = False
+
         self._last_signal_time = 0
         self._previous_spot = None
 
@@ -107,7 +115,6 @@ class MarketScheduler:
             orb_low=None,
             trade_count=0,
             daily_pnl=0.0,
-            live_pnl=0.0,
             active_trade=None,
             signal=None,
         )
@@ -170,6 +177,7 @@ class MarketScheduler:
             )
 
         self.orb_built = True
+
         self._orb_rebuild_in_progress = False
 
     # ------------------------------------------------
@@ -187,9 +195,11 @@ class MarketScheduler:
             if time(9, 15) <= now <= time(15, 30):
 
                 try:
+
                     await self._tick(now)
 
                 except Exception as exc:
+
                     self.logger.error("Market loop error: %s", exc)
 
             await asyncio.sleep(2)
@@ -252,6 +262,7 @@ class MarketScheduler:
                 return
 
             if self._orb_rebuild_in_progress:
+
                 return
 
         if state.active_trade:
@@ -319,4 +330,5 @@ class MarketScheduler:
         self._previous_spot = spot
 
 
+# ⭐ GLOBAL SCHEDULER
 scheduler = MarketScheduler()

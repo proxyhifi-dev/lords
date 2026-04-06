@@ -5,7 +5,7 @@ from datetime import UTC, datetime, time, timedelta
 
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.event_bus import EventBus
-from backend.app.engine.state_manager import StateManager
+from backend.app.engine.state_manager import state_manager
 from backend.app.storage.trade_store import TradeStore
 from backend.app.strategy.option_selector import OptionSelector
 from backend.app.utils.logger import get_logger
@@ -21,22 +21,28 @@ class TradingEngine:
     def __init__(
         self,
         event_bus: EventBus,
-        state_manager: StateManager,
+        state_manager,
         trade_store: TradeStore,
         broker: SamcoClient,
     ):
 
         self.event_bus = event_bus
+
+        # ⭐ GLOBAL STATE
         self.state_manager = state_manager
+
         self.trade_store = trade_store
+
         self.broker = broker
 
         self.logger = get_logger("trading_engine")
 
         self._trade_lock = asyncio.Lock()
+
         self._broker_healthy = True
 
         self.max_trades_per_day = 3
+
         self.stoploss_pct = 0.30
         self.target_pct = 0.60
 
@@ -68,7 +74,11 @@ class TradingEngine:
                 if not signal:
                     continue
 
-                # 🔥 FIX
+                state = await self.state_manager.snapshot()
+
+                if state.signal is not None:
+                    continue
+
                 await self.state_manager.update(signal=signal)
 
                 self.logger.info("Signal event received → %s", signal)
@@ -78,7 +88,7 @@ class TradingEngine:
                 self.logger.error("Signal parse error: %s", exc)
 
     # ------------------------------------------------
-    # OPTION SYMBOL RESOLVER
+    # OPTION SYMBOL
     # ------------------------------------------------
 
     async def _resolve_option_symbol(self, strike: int, signal: str):
@@ -114,13 +124,11 @@ class TradingEngine:
 
             if not rows:
 
-                self.logger.warning("Empty option chain response")
+                self.logger.warning("Empty option chain")
 
                 return None
 
-            symbol = rows[0].get("tradingSymbol")
-
-            return symbol
+            return rows[0].get("tradingSymbol")
 
         except Exception as exc:
 
@@ -155,19 +163,19 @@ class TradingEngine:
                 if now >= NO_ENTRY_AFTER:
 
                     await self.state_manager.update(signal=None)
+
                     continue
 
                 if state.trade_count >= self.max_trades_per_day:
 
                     await self.state_manager.update(signal=None)
+
                     continue
 
                 if state.daily_pnl <= MAX_DAILY_LOSS:
 
                     await self.state_manager.update(signal=None)
-                    continue
 
-                if not self._broker_healthy:
                     continue
 
                 if state.spot_price is None:
@@ -186,10 +194,9 @@ class TradingEngine:
 
                     if not symbol:
 
-                        self.logger.warning("Option symbol not resolved")
-                        continue
+                        await self.state_manager.update(signal=None)
 
-                    self.logger.info("Resolved option symbol → %s", symbol)
+                        continue
 
                     quote = await self.broker.get_quote(
                         symbol_name=symbol,
@@ -200,7 +207,8 @@ class TradingEngine:
 
                     if ltp is None:
 
-                        self.logger.warning("LTP unavailable %s", symbol)
+                        await self.state_manager.update(signal=None)
+
                         continue
 
                     qty = 50
@@ -275,15 +283,15 @@ class TradingEngine:
 
                 qty = trade["qty"]
 
-                live_pnl = (ltp - entry) * qty
+                pnl = (ltp - entry) * qty
 
-                await self.state_manager.update(live_pnl=live_pnl)
+                await self.state_manager.update(live_pnl=pnl)
 
                 now = datetime.now().time()
 
                 if now >= SQUAREOFF_TIME:
 
-                    await self._exit_trade("EOD_SQUAREOFF", ltp)
+                    await self._exit_trade("EOD", ltp)
 
                 elif ltp <= entry * (1 - self.stoploss_pct):
 
@@ -301,7 +309,7 @@ class TradingEngine:
     # EXIT TRADE
     # ------------------------------------------------
 
-    async def _exit_trade(self, reason: str, exit_price: float):
+    async def _exit_trade(self, reason: str, price: float):
 
         async with self._trade_lock:
 
@@ -327,11 +335,11 @@ class TradingEngine:
 
                 self.logger.error("SELL order failed %s", exc)
 
-            pnl = (exit_price - trade["entry_price"]) * qty
+            pnl = (price - trade["entry_price"]) * qty
 
             closed_trade = {
                 **trade,
-                "exit_price": exit_price,
+                "exit_price": price,
                 "exit_time": datetime.now(UTC).isoformat(),
                 "status": "CLOSED",
                 "exit_reason": reason,
@@ -346,14 +354,10 @@ class TradingEngine:
                 live_pnl=0,
             )
 
-            self.logger.info(
-                "Trade closed %s pnl=%.2f",
-                symbol,
-                pnl,
-            )
+            self.logger.info("Trade closed %s pnl=%.2f", symbol, pnl)
 
     # ------------------------------------------------
-    # HEALTH MONITOR
+    # BROKER HEALTH
     # ------------------------------------------------
 
     async def _health_monitor_loop(self):
@@ -364,18 +368,4 @@ class TradingEngine:
 
             healthy = await self.broker.healthcheck()
 
-            if healthy:
-
-                if not self._broker_healthy:
-
-                    self.logger.info("Broker recovered")
-
-                    self._broker_healthy = True
-
-            else:
-
-                if self._broker_healthy:
-
-                    self.logger.warning("Broker unhealthy")
-
-                    self._broker_healthy = False
+            self._broker_healthy = healthy
