@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 import asyncio
 from datetime import UTC, datetime
-from typing import Any
 
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.event_bus import EventBus
@@ -20,7 +18,7 @@ class TradingEngine:
         state_manager: StateManager,
         trade_store: TradeStore,
         broker: SamcoClient,
-    ) -> None:
+    ):
 
         self.event_bus = event_bus
         self.state_manager = state_manager
@@ -29,325 +27,225 @@ class TradingEngine:
 
         self.logger = get_logger("trading_engine")
 
-    # ------------------------------------------------
-    # MAIN ENGINE
-    # ------------------------------------------------
+        self._trade_lock = asyncio.Lock()
 
-    async def run(self) -> None:
+        # OPTION PREMIUM BASED RISK
+        self.max_trades_per_day = 3
+        self.stoploss_points = 15
+        self.target_points = 30
+
+
+    async def run(self):
 
         await asyncio.gather(
-
-            self._on_tick(),
-
-            self._on_orb_updated(),
-
-            self._on_signal(),
-
-            self._on_order_placed(),
-
-            self._on_square_off(),
-
-            self._reconcile_loop(),
-
+            self._signal_watcher(),
+            self._monitor_trade_loop(),
             self._health_monitor_loop(),
         )
 
-    # ------------------------------------------------
-    # TICK EVENT
-    # ------------------------------------------------
-
-    async def _on_tick(self) -> None:
-
-        queue = self.event_bus.subscribe("TICK")
-
-        async for event in self.event_bus.iter_events(queue):
-
-            price = float(event.payload.get("price", 0))
-
-            await self.state_manager.update(spot_price=price)
 
     # ------------------------------------------------
-    # ORB UPDATE
+    # SIGNAL WATCHER
     # ------------------------------------------------
 
-    async def _on_orb_updated(self) -> None:
+    async def _signal_watcher(self):
 
-        queue = self.event_bus.subscribe("ORB_UPDATED")
+        while True:
 
-        async for event in self.event_bus.iter_events(queue):
+            await asyncio.sleep(1)
 
-            await self.state_manager.update(
+            async with self._trade_lock:
 
-                orb_high=event.payload.get("orb_high"),
+                state = await self.state_manager.snapshot()
+                signal = state.signal
 
-                orb_low=event.payload.get("orb_low"),
-            )
+                if not signal:
+                    continue
+
+                if state.active_trade:
+                    continue
+
+                if state.trade_count >= self.max_trades_per_day:
+                    continue
+
+                try:
+
+                    symbol, strike = OptionSelector.select(
+                        state.spot_price,
+                        signal
+                    )
+
+                    qty = 50
+
+                    # get OPTION price
+                    quote = await self.broker.get_quote(
+                        symbol_name=symbol,
+                        exchange="NFO"
+                    )
+
+                    ltp = None
+
+                    if isinstance(quote, dict):
+
+                        details = quote.get("tradeDetails")
+
+                        if details and isinstance(details, list):
+
+                            ltp = float(details[0].get("lastTradedPrice", 0))
+
+                    if ltp is None:
+                        continue
+
+                    await self.broker.place_order(
+                        symbol=symbol,
+                        side="BUY",
+                        quantity=qty
+                    )
+
+                    trade = {
+                        "symbol": symbol,
+                        "qty": qty,
+                        "entry_price": ltp,
+                        "entry_time": datetime.now(UTC).isoformat(),
+                        "status": "OPEN",
+                        "signal": signal
+                    }
+
+                    await self.state_manager.update(
+                        active_trade=trade,
+                        trade_count=state.trade_count + 1,
+                        signal=None
+                    )
+
+                    self.logger.info(f"Trade opened {symbol} at {ltp}")
+
+                except Exception as exc:
+
+                    self.logger.error(
+                        f"order_execution_failed={exc}"
+                    )
+
 
     # ------------------------------------------------
-    # SIGNAL HANDLER
+    # TRADE MONITOR
     # ------------------------------------------------
 
-    async def _on_signal(self) -> None:
+    async def _monitor_trade_loop(self):
 
-        queue = self.event_bus.subscribe("SIGNAL")
+        while True:
 
-        async for event in self.event_bus.iter_events(queue):
-
-            signal = event.payload.get("signal")
-
-            await self.state_manager.update(signal=signal)
+            await asyncio.sleep(2)
 
             state = await self.state_manager.snapshot()
+            trade = state.active_trade
 
-            # avoid multiple trades
-
-            if state.active_trade:
+            if not trade:
                 continue
 
             try:
 
-                symbol, strike = OptionSelector.select(
-
-                    state.spot_price,
-
-                    signal,
+                quote = await self.broker.get_quote(
+                    symbol_name=trade["symbol"],
+                    exchange="NFO"
                 )
 
-                qty = 50
+                ltp = None
 
-                side = "BUY"
+                if isinstance(quote, dict):
 
-                order = await self.broker.place_order(
+                    details = quote.get("tradeDetails")
 
-                    symbol=symbol,
+                    if details and isinstance(details, list):
 
-                    side=side,
+                        ltp = float(details[0].get("lastTradedPrice", 0))
 
-                    quantity=qty
+                if ltp is None:
+                    continue
+
+                entry = trade["entry_price"]
+                qty = trade["qty"]
+
+                # LIVE PNL
+                live_pnl = (ltp - entry) * qty
+
+                await self.state_manager.update(
+                    live_pnl=live_pnl
                 )
 
-                trade = {
+                # STOPLOSS
+                if ltp <= entry - self.stoploss_points:
+                    await self._exit_trade("STOPLOSS", ltp)
 
-                    "symbol": symbol,
-
-                    "side": side,
-
-                    "entry_time": datetime.now(UTC).isoformat(),
-
-                    "entry_price": state.spot_price,
-
-                    "order": order,
-
-                    "status": "OPEN",
-                }
-
-                await self.event_bus.publish(
-
-                    "ORDER_PLACED",
-
-                    {"trade": trade},
-                )
+                # TARGET
+                elif ltp >= entry + self.target_points:
+                    await self._exit_trade("TARGET", ltp)
 
             except Exception as exc:
 
                 self.logger.error(
-
-                    "order_execution_failed=%s",
-
-                    exc,
+                    f"monitor_error={exc}"
                 )
 
-    # ------------------------------------------------
-    # ORDER PLACED
-    # ------------------------------------------------
-
-    async def _on_order_placed(self) -> None:
-
-        queue = self.event_bus.subscribe("ORDER_PLACED")
-
-        async for event in self.event_bus.iter_events(queue):
-
-            trade = event.payload["trade"]
-
-            state = await self.state_manager.snapshot()
-
-            await self.state_manager.update(
-
-                active_trade=trade,
-
-                trade_count=state.trade_count + 1,
-            )
-
-            self.trade_store.append_trade(trade)
 
     # ------------------------------------------------
-    # SQUARE OFF
+    # EXIT TRADE
     # ------------------------------------------------
 
-    async def _on_square_off(self) -> None:
+    async def _exit_trade(self, reason, exit_price):
 
-        queue = self.event_bus.subscribe("SCHEDULE_SQUARE_OFF")
+        state = await self.state_manager.snapshot()
+        trade = state.active_trade
 
-        async for _event in self.event_bus.iter_events(queue):
+        if not trade:
+            return
 
-            state = await self.state_manager.snapshot()
+        symbol = trade["symbol"]
+        qty = trade["qty"]
 
-            if not state.active_trade:
-                continue
+        await self.broker.place_order(
+            symbol=symbol,
+            side="SELL",
+            quantity=qty
+        )
 
-            symbol = state.active_trade["symbol"]
+        pnl = (exit_price - trade["entry_price"]) * qty
 
-            quantity = state.active_trade["order"].get("quantity", 0)
+        closed_trade = {
+            **trade,
+            "exit_price": exit_price,
+            "exit_time": datetime.now(UTC).isoformat(),
+            "status": "CLOSED",
+            "exit_reason": reason,
+            "pnl": pnl
+        }
 
-            exit_order = await self.broker.place_order(
+        self.trade_store.append_trade(closed_trade)
 
-                symbol=symbol,
+        await self.state_manager.update(
+            active_trade=None,
+            daily_pnl=state.daily_pnl + pnl,
+            live_pnl=0
+        )
 
-                side="SELL",
+        self.logger.info(
+            f"Trade closed reason={reason} pnl={pnl}"
+        )
 
-                quantity=quantity,
-            )
-
-            pnl = self._calculate_pnl(state)
-
-            closed_trade = {
-
-                **state.active_trade,
-
-                "exit_time": datetime.now(UTC).isoformat(),
-
-                "status": "EXITED",
-
-                "exit_order": exit_order,
-
-                "pnl": pnl,
-            }
-
-            self.trade_store.append_trade(closed_trade)
-
-            await self.state_manager.update(
-
-                active_trade=None,
-
-                daily_pnl=state.daily_pnl + pnl,
-            )
 
     # ------------------------------------------------
-    # RECONCILIATION LOOP
+    # BROKER HEALTH CHECK
     # ------------------------------------------------
 
-    async def _reconcile_loop(self) -> None:
+    async def _health_monitor_loop(self):
 
         while True:
 
-            await asyncio.sleep(30)
-
-            try:
-
-                broker_orders = await self.broker.get_orders()
-
-                broker_positions = await self.broker.get_positions()
-
-                await self.event_bus.publish(
-
-                    "RECONCILIATION",
-
-                    {
-
-                        "orders": broker_orders,
-
-                        "positions": broker_positions,
-                    },
-                )
-
-                await self._repair_state_if_needed(
-
-                    broker_orders,
-
-                    broker_positions,
-                )
-
-            except Exception as exc:
-
-                self.logger.error(
-
-                    "reconciliation_error=%s",
-
-                    exc,
-                )
-
-    # ------------------------------------------------
-    # BROKER HEALTH
-    # ------------------------------------------------
-
-    async def _health_monitor_loop(self) -> None:
-
-        while True:
-
-            await asyncio.sleep(15)
+            await asyncio.sleep(20)
 
             healthy = await self.broker.healthcheck()
 
-            await self.event_bus.publish(
+            if not healthy:
 
-                "BROKER_HEALTH",
-
-                {"healthy": healthy},
-            )
-
-    # ------------------------------------------------
-    # STATE REPAIR
-    # ------------------------------------------------
-
-    async def _repair_state_if_needed(
-
-        self,
-
-        orders: dict[str, Any],
-
-        positions: dict[str, Any],
-
-    ) -> None:
-
-        state = await self.state_manager.snapshot()
-
-        active_trade = state.active_trade
-
-        if not active_trade:
-            return
-
-        orders_blob = str(orders).upper()
-
-        if "REJECT" in orders_blob:
-
-            await self.state_manager.update(active_trade=None)
-
-        elif "CANCEL" in orders_blob:
-
-            await self.state_manager.update(active_trade=None)
-
-        elif "PARTIAL" in orders_blob:
-
-            trade = {**active_trade, "status": "PARTIAL_FILL"}
-
-            await self.state_manager.update(active_trade=trade)
-
-        elif "COMPLETE" in orders_blob or "FILLED" in orders_blob:
-
-            trade = {**active_trade, "status": "FILLED"}
-
-            await self.state_manager.update(active_trade=trade)
-
-    # ------------------------------------------------
-    # PNL CALCULATION
-    # ------------------------------------------------
-
-    @staticmethod
-    def _calculate_pnl(state: Any) -> float:
-
-        if not state.active_trade or state.spot_price is None:
-            return 0.0
-
-        entry = float(state.active_trade.get("entry_price") or 0)
-
-        return float(state.spot_price) - entry
+                self.logger.warning(
+                    "Broker unhealthy"
+                )

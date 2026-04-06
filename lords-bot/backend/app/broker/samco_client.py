@@ -35,6 +35,7 @@ class SamcoClient:
     # --------------------------------------------------
     # LOGIN
     # --------------------------------------------------
+
     async def login(self) -> dict[str, Any]:
 
         async with self._lock:
@@ -77,6 +78,7 @@ class SamcoClient:
     # --------------------------------------------------
     # SESSION CHECK
     # --------------------------------------------------
+
     async def ensure_session(self):
 
         if not self._session_live:
@@ -85,6 +87,7 @@ class SamcoClient:
     # --------------------------------------------------
     # INDEX QUOTE
     # --------------------------------------------------
+
     async def get_index_quote(self, index_name: str):
 
         await self.ensure_session()
@@ -95,15 +98,16 @@ class SamcoClient:
         )
 
     # --------------------------------------------------
-    # STOCK QUOTE
+    # STOCK / OPTION QUOTE
     # --------------------------------------------------
+
     async def get_quote(self, symbol_name: str, exchange: str):
 
         await self.ensure_session()
 
         return await self._call_sdk(
             lambda: self.samco.get_quote(
-                symbolName=symbol_name,
+                symbol_name=symbol_name,
                 exchange=exchange,
             ),
             "get_quote",
@@ -112,6 +116,7 @@ class SamcoClient:
     # --------------------------------------------------
     # OPTION CHAIN
     # --------------------------------------------------
+
     async def get_option_chain(
         self,
         symbol_name: str,
@@ -133,8 +138,9 @@ class SamcoClient:
         )
 
     # --------------------------------------------------
-    # HISTORICAL CANDLES (FOR ORB REBUILD)
+    # HISTORICAL CANDLES
     # --------------------------------------------------
+
     async def get_intraday_candles(self):
 
         await self.ensure_session()
@@ -143,7 +149,7 @@ class SamcoClient:
             lambda: self.samco.get_intraday_candle_data(
                 symbolName="NIFTY",
                 exchange="NSE",
-                interval="5minute"
+                interval="5minute",
             ),
             "get_intraday_candle_data",
         )
@@ -151,6 +157,7 @@ class SamcoClient:
     # --------------------------------------------------
     # PLACE ORDER
     # --------------------------------------------------
+
     async def place_order(self, symbol: str, side: str, quantity: int):
 
         await self.ensure_session()
@@ -179,6 +186,7 @@ class SamcoClient:
     # --------------------------------------------------
     # ORDER BOOK
     # --------------------------------------------------
+
     async def get_orders(self):
 
         await self.ensure_session()
@@ -189,8 +197,9 @@ class SamcoClient:
         )
 
     # --------------------------------------------------
-    # POSITIONS (SAFE MODE)
+    # POSITIONS
     # --------------------------------------------------
+
     async def get_positions(self):
 
         return {"positions": []}
@@ -198,21 +207,19 @@ class SamcoClient:
     # --------------------------------------------------
     # HEALTHCHECK
     # --------------------------------------------------
+
     async def healthcheck(self) -> bool:
 
         try:
-
             await self.get_index_quote("NIFTY 50")
-
             return True
-
         except Exception:
-
             return False
 
     # --------------------------------------------------
     # INTERNAL SDK CALL
     # --------------------------------------------------
+
     async def _call_sdk(
         self,
         fn: Callable[[], Any],
