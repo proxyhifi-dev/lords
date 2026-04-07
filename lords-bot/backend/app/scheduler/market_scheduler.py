@@ -8,10 +8,12 @@ from backend.app.engine.trading_engine import TradingEngine
 from backend.app.storage.trade_store import TradeStore
 from backend.app.utils.logger import get_logger
 
-
 MIN_ORB_RANGE = 5.0
 BREAKOUT_BUFFER = 2.0
 SIGNAL_COOLDOWN = 10
+
+# TESTING FRIENDLY ORB WINDOW
+ORB_DURATION = 120   # seconds
 
 
 class MarketScheduler:
@@ -22,7 +24,6 @@ class MarketScheduler:
 
         self.state = state_manager
         self.trade_store = TradeStore()
-
         self.broker = SamcoClient()
         self.event_bus = EventBus()
 
@@ -34,15 +35,16 @@ class MarketScheduler:
         )
 
         self.running = False
+
         self._task: asyncio.Task | None = None
         self._engine_task: asyncio.Task | None = None
 
         self._last_signal_time = 0
         self._previous_spot: float | None = None
 
-    # -------------------------------------------------
-    # START
-    # -------------------------------------------------
+        # ORB start tracker
+        self._orb_start_time = None
+
 
     async def start(self):
 
@@ -57,11 +59,9 @@ class MarketScheduler:
         await self.broker.login()
 
         self._engine_task = asyncio.create_task(self.engine.run())
+
         self._task = asyncio.create_task(self._loop())
 
-    # -------------------------------------------------
-    # STOP
-    # -------------------------------------------------
 
     async def stop(self):
 
@@ -75,12 +75,10 @@ class MarketScheduler:
         await self.event_bus.stop()
 
         for task in (self._task, self._engine_task):
+
             if task and not task.done():
                 task.cancel()
 
-    # -------------------------------------------------
-    # LOOP
-    # -------------------------------------------------
 
     async def _loop(self):
 
@@ -88,14 +86,12 @@ class MarketScheduler:
 
             try:
                 await self._tick()
+
             except Exception as exc:
                 self.logger.error("Market loop error: %s", exc)
 
             await asyncio.sleep(1)
 
-    # -------------------------------------------------
-    # OPTION SYMBOL RESOLVER
-    # -------------------------------------------------
 
     async def _resolve_option_symbol(self, signal: str, spot: float):
 
@@ -128,11 +124,9 @@ class MarketScheduler:
         except Exception as e:
 
             self.logger.error("Option symbol resolve failed: %s", e)
+
             return None
 
-    # -------------------------------------------------
-    # ORDER EXECUTION
-    # -------------------------------------------------
 
     async def _validate_and_place_order(self, signal: str, spot: float):
 
@@ -167,9 +161,6 @@ class MarketScheduler:
             signal=signal
         )
 
-    # -------------------------------------------------
-    # MAIN TICK
-    # -------------------------------------------------
 
     async def _tick(self):
 
@@ -178,6 +169,7 @@ class MarketScheduler:
         spot = SamcoClient.parse_spot(quote)
 
         if spot is None:
+
             self.logger.warning("Spot price unavailable")
             return
 
@@ -189,26 +181,45 @@ class MarketScheduler:
 
         state = await self.state.snapshot()
 
-        # ORB UPDATE
+        now = datetime.now().timestamp()
 
-        high = state.orb_high
-        low = state.orb_low
+        # -----------------------------------------
+        # START ORB TIMER
+        # -----------------------------------------
 
-        high = spot if high is None else max(high, spot)
-        low = spot if low is None else min(low, spot)
+        if self._orb_start_time is None:
+            self._orb_start_time = now
 
-        await self.state.update(
-            orb_high=high,
-            orb_low=low,
-        )
+        orb_elapsed = now - self._orb_start_time
 
-        self.logger.info(
-            "ORB update high=%.2f low=%.2f",
-            high,
-            low,
-        )
+        # -----------------------------------------
+        # ORB BUILD WINDOW
+        # -----------------------------------------
 
-        state = await self.state.snapshot()
+        if orb_elapsed < ORB_DURATION:
+
+            high = state.orb_high
+            low = state.orb_low
+
+            high = spot if high is None else max(high, spot)
+            low = spot if low is None else min(low, spot)
+
+            await self.state.update(
+                orb_high=high,
+                orb_low=low
+            )
+
+            self.logger.info(
+                "ORB building high=%.2f low=%.2f",
+                high,
+                low
+            )
+
+            return
+
+        # -----------------------------------------
+        # TRADE LOGIC
+        # -----------------------------------------
 
         if state.active_trade:
             return
@@ -226,16 +237,14 @@ class MarketScheduler:
         if now_ts - self._last_signal_time < SIGNAL_COOLDOWN:
             return
 
+        breakout_up = state.orb_high + BREAKOUT_BUFFER
+        breakout_down = state.orb_low - BREAKOUT_BUFFER
+
         if self._previous_spot is None:
             self._previous_spot = spot
             return
 
-        # CALL BREAKOUT
-
-        if (
-            self._previous_spot <= state.orb_high + BREAKOUT_BUFFER
-            and spot > state.orb_high + BREAKOUT_BUFFER
-        ):
+        if self._previous_spot <= breakout_up and spot > breakout_up:
 
             self.logger.info("ORB BREAKOUT UP → CALL %.2f", spot)
 
@@ -245,12 +254,7 @@ class MarketScheduler:
 
             self._last_signal_time = now_ts
 
-        # PUT BREAKOUT
-
-        elif (
-            self._previous_spot >= state.orb_low - BREAKOUT_BUFFER
-            and spot < state.orb_low - BREAKOUT_BUFFER
-        ):
+        elif self._previous_spot >= breakout_down and spot < breakout_down:
 
             self.logger.info("ORB BREAKOUT DOWN → PUT %.2f", spot)
 
