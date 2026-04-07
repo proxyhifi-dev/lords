@@ -129,6 +129,7 @@ class SamcoClient:
             symbol_name,
             result,
         )
+        self.logger.info("INDEX QUOTE RESPONSE: %s", result)
 
         return result
 
