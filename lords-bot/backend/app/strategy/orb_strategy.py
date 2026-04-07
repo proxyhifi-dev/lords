@@ -44,7 +44,7 @@ class OrbStrategy:
 
                 if ce_break and above:
                     self.signal_emitted = True
-                    await self.event_bus.publish("SIGNAL", {"signal": "BUY_CE", "spot_price": price})
+                    await self.event_bus.publish("SIGNAL", {"signal": "CALL", "spot_price": price})
                 elif pe_break and below:
                     self.signal_emitted = True
-                    await self.event_bus.publish("SIGNAL", {"signal": "BUY_PE", "spot_price": price})
+                    await self.event_bus.publish("SIGNAL", {"signal": "PUT", "spot_price": price})

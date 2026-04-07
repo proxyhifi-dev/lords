@@ -27,6 +27,8 @@ class RuntimeState:
 
     daily_pnl: float = 0.0
 
+    live_pnl: float = 0.0
+
     trade_count: int = 0
 
     trading_enabled: bool = True
@@ -63,7 +65,9 @@ class StateManager:
         try:
 
             data = json.loads(
+
                 self._state_file.read_text(encoding="utf-8")
+
             )
 
             self._state = RuntimeState(**data)
@@ -107,11 +111,15 @@ class StateManager:
         self._state_file.write_text(
 
             json.dumps(
+
                 asdict(self._state),
+
                 indent=2
+
             ),
 
             encoding="utf-8"
+
         )
 
 

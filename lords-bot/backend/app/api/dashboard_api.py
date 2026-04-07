@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from backend.app.engine.state_manager import state_manager
+from backend.app.engine.state_manager import StateManager
 
 
-def build_dashboard_router() -> APIRouter:
+def build_dashboard_router(state_manager: StateManager) -> APIRouter:
 
     router = APIRouter()
 
@@ -20,7 +20,7 @@ def build_dashboard_router() -> APIRouter:
             "signal": state.signal,
             "active_trade": state.active_trade,
             "daily_pnl": state.daily_pnl,
-            "trade_count": state.trade_count,
+            "live_pnl": state.live_pnl
         }
 
     return router

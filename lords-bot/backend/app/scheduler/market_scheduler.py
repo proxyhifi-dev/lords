@@ -50,7 +50,6 @@ class MarketScheduler:
         self._last_reset_date: str | None = None
 
         self._last_signal_time: float = 0
-
         self._previous_spot: float | None = None
 
     # ------------------------------------------------
@@ -65,6 +64,9 @@ class MarketScheduler:
         self.logger.info("Starting market scheduler")
 
         self.running = True
+
+        # ⭐ FIX 1 — START EVENT BUS
+        await self.event_bus.start()
 
         await self.broker.login()
 
@@ -85,10 +87,11 @@ class MarketScheduler:
 
         self.running = False
 
+        # ⭐ FIX 2 — STOP EVENT BUS
+        await self.event_bus.stop()
+
         for task in (self._task, self._engine_task, self._rebuild_task):
-
             if task and not task.done():
-
                 task.cancel()
 
     # ------------------------------------------------
@@ -177,7 +180,6 @@ class MarketScheduler:
             )
 
         self.orb_built = True
-
         self._orb_rebuild_in_progress = False
 
     # ------------------------------------------------
@@ -195,7 +197,6 @@ class MarketScheduler:
             if time(9, 15) <= now <= time(15, 30):
 
                 try:
-
                     await self._tick(now)
 
                 except Exception as exc:
@@ -227,7 +228,6 @@ class MarketScheduler:
         state = await self.state.snapshot()
 
         # ORB BUILD WINDOW
-
         if time(9, 15) <= now <= time(9, 30):
 
             high = state.orb_high
@@ -244,26 +244,6 @@ class MarketScheduler:
             self._previous_spot = spot
 
             return
-
-        # ORB REBUILD
-
-        if now > time(9, 30):
-
-            if (
-                state.orb_high is None
-                and not self.orb_built
-                and not self._orb_rebuild_in_progress
-            ):
-
-                self._orb_rebuild_in_progress = True
-
-                self._rebuild_task = asyncio.create_task(self.rebuild_orb())
-
-                return
-
-            if self._orb_rebuild_in_progress:
-
-                return
 
         if state.active_trade:
             return
@@ -288,7 +268,6 @@ class MarketScheduler:
             return
 
         # CALL BREAKOUT
-
         if (
             self._previous_spot <= state.orb_high + BREAKOUT_BUFFER
             and spot > state.orb_high + BREAKOUT_BUFFER
@@ -308,7 +287,6 @@ class MarketScheduler:
             self._last_signal_time = now_ts
 
         # PUT BREAKOUT
-
         elif (
             self._previous_spot >= state.orb_low - BREAKOUT_BUFFER
             and spot < state.orb_low - BREAKOUT_BUFFER

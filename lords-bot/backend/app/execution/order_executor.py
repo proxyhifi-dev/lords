@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.event_bus import EventBus
-from backend.app.options.option_selector import OptionSelector
+from backend.app.strategy.option_selector import OptionSelector
 from backend.app.utils.logger import get_logger
 from backend.config import settings
 

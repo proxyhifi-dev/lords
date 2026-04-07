@@ -17,13 +17,11 @@ settings = get_settings()
 class SamcoClient:
 
     def __init__(self):
-
         self.logger = get_logger("samco_client")
 
         self.samco = StocknoteAPIPythonBridge()
 
         self._session_live = False
-
         self._lock = asyncio.Lock()
 
         self._breaker = CircuitBreaker(
@@ -59,7 +57,7 @@ class SamcoClient:
 
                 response = response.strip()
 
-                if response == "":
+                if not response:
                     raise RuntimeError("Empty SAMCO login response")
 
                 response = json.loads(response)
@@ -115,7 +113,6 @@ class SamcoClient:
 
         if exchange == "NFO":
             exchange = self.samco.EXCHANGE_NFO
-
         elif exchange == "NSE":
             exchange = self.samco.EXCHANGE_NSE
 
@@ -152,11 +149,10 @@ class SamcoClient:
 
         if exchange == "NFO":
             exchange = self.samco.EXCHANGE_NFO
-
         elif exchange == "NSE":
             exchange = self.samco.EXCHANGE_NSE
 
-        result = await self._call_sdk(
+        return await self._call_sdk(
             lambda: self.samco.get_option_chain(
                 search_symbol_name=search_symbol_name,
                 exchange=exchange,
@@ -166,8 +162,6 @@ class SamcoClient:
             ),
             "get_option_chain",
         )
-
-        return result
 
     # --------------------------------------------------
     # PARSE SPOT
@@ -182,26 +176,20 @@ class SamcoClient:
         try:
 
             if "spotPrice" in quote:
-
                 price = quote.get("spotPrice")
-
-                if price is not None:
+                if price:
                     return float(str(price).replace(",", ""))
 
             details = quote.get("indexDetails")
 
             if isinstance(details, list) and details:
-
                 price = details[0].get("spotPrice")
-
-                if price is not None:
+                if price:
                     return float(str(price).replace(",", ""))
 
             if "lastTradedPrice" in quote:
-
                 price = quote.get("lastTradedPrice")
-
-                if price is not None:
+                if price:
                     return float(str(price).replace(",", ""))
 
         except Exception:
@@ -219,31 +207,28 @@ class SamcoClient:
         if not quote:
             return None
 
+        keys = [
+            "lastTradedPrice",
+            "lastTradePrice",
+            "ltp",
+            "last_price",
+        ]
+
         try:
 
-            keys = (
-                "lastTradedPrice",
-                "lastTradePrice",
-                "ltp",
-                "last_price",
-            )
-
-            def extract(d: dict):
+            def extract(data):
 
                 for key in keys:
 
-                    if key not in d:
+                    if key not in data:
                         continue
 
-                    val = d[key]
+                    val = data[key]
 
-                    if val is None:
+                    if not val:
                         continue
 
                     val = str(val).replace(",", "").strip()
-
-                    if val == "":
-                        continue
 
                     try:
                         return float(val)
@@ -251,15 +236,6 @@ class SamcoClient:
                         continue
 
                 return None
-
-            qd = quote.get("quoteDetails")
-
-            if isinstance(qd, dict):
-
-                val = extract(qd)
-
-                if val:
-                    return val
 
             val = extract(quote)
 
@@ -269,18 +245,10 @@ class SamcoClient:
             data = quote.get("data")
 
             if isinstance(data, dict):
-
-                val = extract(data)
-
-                if val:
-                    return val
+                return extract(data)
 
             if isinstance(data, list) and data:
-
-                val = extract(data[0])
-
-                if val:
-                    return val
+                return extract(data[0])
 
         except Exception:
             return None
@@ -323,13 +291,9 @@ class SamcoClient:
     async def healthcheck(self) -> bool:
 
         try:
-
             await self.get_index_quote("NIFTY 50")
-
             return True
-
         except Exception:
-
             return False
 
     # --------------------------------------------------
@@ -342,7 +306,6 @@ class SamcoClient:
             raise RuntimeError(f"Circuit breaker open — skipping {api_name}")
 
         attempts = settings.reconnect_max_attempts
-
         delay = settings.reconnect_base_delay
 
         for attempt in range(1, attempts + 1):
@@ -360,7 +323,7 @@ class SamcoClient:
 
                     result = result.strip()
 
-                    if result == "":
+                    if not result:
                         return {}
 
                     try:
@@ -383,9 +346,7 @@ class SamcoClient:
                 )
 
                 if attempt < attempts:
-
                     await asyncio.sleep(delay)
-
                     delay = min(delay * 2, 60)
 
         return {}

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, time
 
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.event_bus import EventBus
-from backend.app.engine.state_manager import state_manager
 from backend.app.storage.trade_store import TradeStore
 from backend.app.strategy.option_selector import OptionSelector
 from backend.app.utils.logger import get_logger
@@ -27,22 +26,16 @@ class TradingEngine:
     ):
 
         self.event_bus = event_bus
-
-        # ⭐ GLOBAL STATE
         self.state_manager = state_manager
-
         self.trade_store = trade_store
-
         self.broker = broker
 
         self.logger = get_logger("trading_engine")
 
         self._trade_lock = asyncio.Lock()
-
         self._broker_healthy = True
 
         self.max_trades_per_day = 3
-
         self.stoploss_pct = 0.30
         self.target_pct = 0.60
 
@@ -76,6 +69,7 @@ class TradingEngine:
 
                 state = await self.state_manager.snapshot()
 
+                # FIXED BUG
                 if state.signal is not None:
                     continue
 
@@ -95,16 +89,7 @@ class TradingEngine:
 
         option_type = OptionSelector.get_option_type(signal)
 
-        today = datetime.now()
-
-        days = 3 - today.weekday()
-
-        if days <= 0:
-            days += 7
-
-        expiry = today + timedelta(days=days)
-
-        expiry_date = expiry.strftime("%Y-%m-%d")
+        expiry_date = OptionSelector.get_next_thursday_iso()
 
         try:
 
@@ -123,17 +108,13 @@ class TradingEngine:
             )
 
             if not rows:
-
                 self.logger.warning("Empty option chain")
-
                 return None
 
             return rows[0].get("tradingSymbol")
 
         except Exception as exc:
-
             self.logger.error("option_symbol_resolve_failed: %s", exc)
-
             return None
 
     # ------------------------------------------------
@@ -155,27 +136,26 @@ class TradingEngine:
                 if signal is None:
                     continue
 
+                if not self._broker_healthy:
+                    self.logger.warning("Broker unhealthy — skip trade")
+                    await self.state_manager.update(signal=None)
+                    continue
+
                 if state.active_trade:
                     continue
 
                 now = datetime.now().time()
 
                 if now >= NO_ENTRY_AFTER:
-
                     await self.state_manager.update(signal=None)
-
                     continue
 
                 if state.trade_count >= self.max_trades_per_day:
-
                     await self.state_manager.update(signal=None)
-
                     continue
 
                 if state.daily_pnl <= MAX_DAILY_LOSS:
-
                     await self.state_manager.update(signal=None)
-
                     continue
 
                 if state.spot_price is None:
@@ -183,9 +163,7 @@ class TradingEngine:
 
                 try:
 
-                    strike = OptionSelector.get_atm_strike(
-                        state.spot_price
-                    )
+                    strike = OptionSelector.get_atm_strike(state.spot_price)
 
                     symbol = await self._resolve_option_symbol(
                         strike,
@@ -193,9 +171,7 @@ class TradingEngine:
                     )
 
                     if not symbol:
-
                         await self.state_manager.update(signal=None)
-
                         continue
 
                     quote = await self.broker.get_quote(
@@ -205,19 +181,16 @@ class TradingEngine:
 
                     ltp = self.broker.parse_ltp(quote)
 
-                    if ltp is None:
-
+                    if ltp is None or ltp <= 0:
+                        self.logger.warning(
+                            "Invalid option LTP symbol=%s ltp=%s",
+                            symbol,
+                            ltp,
+                        )
                         await self.state_manager.update(signal=None)
-
                         continue
 
                     qty = 50
-
-                    self.logger.info(
-                        "Placing BUY order %s qty=%s",
-                        symbol,
-                        qty,
-                    )
 
                     await self.broker.place_order(
                         symbol=symbol,
@@ -247,7 +220,6 @@ class TradingEngine:
                     )
 
                 except Exception as exc:
-
                     self.logger.error("order_execution_failed: %s", exc)
 
     # ------------------------------------------------
@@ -259,6 +231,9 @@ class TradingEngine:
         while True:
 
             await asyncio.sleep(2)
+
+            if not self._broker_healthy:
+                continue
 
             state = await self.state_manager.snapshot()
 
@@ -276,11 +251,10 @@ class TradingEngine:
 
                 ltp = self.broker.parse_ltp(quote)
 
-                if ltp is None:
+                if ltp is None or ltp <= 0:
                     continue
 
                 entry = trade["entry_price"]
-
                 qty = trade["qty"]
 
                 pnl = (ltp - entry) * qty
@@ -290,19 +264,15 @@ class TradingEngine:
                 now = datetime.now().time()
 
                 if now >= SQUAREOFF_TIME:
-
                     await self._exit_trade("EOD", ltp)
 
                 elif ltp <= entry * (1 - self.stoploss_pct):
-
                     await self._exit_trade("STOPLOSS", ltp)
 
                 elif ltp >= entry * (1 + self.target_pct):
-
                     await self._exit_trade("TARGET", ltp)
 
             except Exception as exc:
-
                 self.logger.error("monitor_error: %s", exc)
 
     # ------------------------------------------------
@@ -332,7 +302,6 @@ class TradingEngine:
                 )
 
             except Exception as exc:
-
                 self.logger.error("SELL order failed %s", exc)
 
             pnl = (price - trade["entry_price"]) * qty
