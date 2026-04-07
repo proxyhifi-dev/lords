@@ -1,15 +1,13 @@
 from __future__ import annotations
-
 import asyncio
 import json
+import time
 from typing import Any, Callable
 
 from snapi_py_client.snapi_bridge import StocknoteAPIPythonBridge
-
 from backend.app.core.config_loader import get_settings
 from backend.app.utils.logger import get_logger
 from backend.app.core.circuit_breaker import CircuitBreaker
-
 
 settings = get_settings()
 
@@ -17,8 +15,8 @@ settings = get_settings()
 class SamcoClient:
 
     def __init__(self):
-        self.logger = get_logger("samco_client")
 
+        self.logger = get_logger("samco_client")
         self.samco = StocknoteAPIPythonBridge()
 
         self._session_live = False
@@ -28,6 +26,18 @@ class SamcoClient:
             failure_threshold=settings.circuit_failure_threshold,
             cooldown_seconds=settings.circuit_cooldown_seconds,
         )
+
+        # --------------------------------------------------
+        # PERFORMANCE CACHES
+        # --------------------------------------------------
+
+        self._quote_cache: dict = {}
+        self._quote_cache_ttl = 1
+
+        self._chain_cache: dict = {}
+        self._chain_cache_ttl = 5
+
+        self._symbol_cache: dict = {}
 
     # --------------------------------------------------
     # LOGIN
@@ -54,12 +64,9 @@ class SamcoClient:
             )
 
             if isinstance(response, str):
-
                 response = response.strip()
-
                 if not response:
                     raise RuntimeError("Empty SAMCO login response")
-
                 response = json.loads(response)
 
             if response.get("status") != "Success":
@@ -104,12 +111,19 @@ class SamcoClient:
         )
 
     # --------------------------------------------------
-    # GET QUOTE
+    # GET QUOTE (WITH CACHE)
     # --------------------------------------------------
 
     async def get_quote(self, symbol_name: str, exchange: str):
 
         await self.ensure_session()
+
+        cache_key = f"{symbol_name}_{exchange}"
+
+        cached = self._quote_cache.get(cache_key)
+
+        if cached and (time.time() - cached["ts"]) < self._quote_cache_ttl:
+            return cached["data"]
 
         if exchange == "NFO":
             exchange = self.samco.EXCHANGE_NFO
@@ -124,17 +138,24 @@ class SamcoClient:
             "get_quote",
         )
 
+        if not isinstance(result, dict):
+            result = {}
+
+        self._quote_cache[cache_key] = {
+            "ts": time.time(),
+            "data": result
+        }
+
         self.logger.debug(
             "get_quote raw response symbol=%s response=%s",
             symbol_name,
             result,
         )
-        self.logger.info("INDEX QUOTE RESPONSE: %s", result)
 
         return result
 
     # --------------------------------------------------
-    # OPTION CHAIN
+    # OPTION CHAIN (WITH CACHE)
     # --------------------------------------------------
 
     async def get_option_chain(
@@ -148,12 +169,19 @@ class SamcoClient:
 
         await self.ensure_session()
 
+        cache_key = f"{search_symbol_name}_{expiry_date}_{strike_price}_{option_type}"
+
+        cached = self._chain_cache.get(cache_key)
+
+        if cached and (time.time() - cached["ts"]) < self._chain_cache_ttl:
+            return cached["data"]
+
         if exchange == "NFO":
             exchange = self.samco.EXCHANGE_NFO
         elif exchange == "NSE":
             exchange = self.samco.EXCHANGE_NSE
 
-        return await self._call_sdk(
+        result = await self._call_sdk(
             lambda: self.samco.get_option_chain(
                 search_symbol_name=search_symbol_name,
                 exchange=exchange,
@@ -163,6 +191,16 @@ class SamcoClient:
             ),
             "get_option_chain",
         )
+
+        if not isinstance(result, dict):
+            result = {}
+
+        self._chain_cache[cache_key] = {
+            "ts": time.time(),
+            "data": result
+        }
+
+        return result
 
     # --------------------------------------------------
     # PARSE SPOT
@@ -232,7 +270,13 @@ class SamcoClient:
                     val = str(val).replace(",", "").strip()
 
                     try:
-                        return float(val)
+                        val = float(val)
+
+                        if val <= 0:
+                            return None
+
+                        return val
+
                     except:
                         continue
 
@@ -270,7 +314,7 @@ class SamcoClient:
             else self.samco.TRANSACTION_TYPE_SELL
         )
 
-        return await self._call_sdk(
+        response = await self._call_sdk(
             lambda: self.samco.place_order(
                 body={
                     "symbolName": symbol,
@@ -284,6 +328,11 @@ class SamcoClient:
             ),
             "place_order",
         )
+
+        if response.get("status") != "Success":
+            self.logger.error("Order rejected %s", response)
+
+        return response
 
     # --------------------------------------------------
     # HEALTHCHECK
@@ -347,7 +396,9 @@ class SamcoClient:
                 )
 
                 if attempt < attempts:
+
                     await asyncio.sleep(delay)
+
                     delay = min(delay * 2, 60)
 
         return {}

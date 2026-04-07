@@ -1,18 +1,18 @@
 from __future__ import annotations
-
 import asyncio
 from datetime import UTC, datetime, time
-
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.event_bus import EventBus
 from backend.app.storage.trade_store import TradeStore
 from backend.app.strategy.option_selector import OptionSelector
 from backend.app.utils.logger import get_logger
 
-
 NO_ENTRY_AFTER = time(14, 0)
 SQUAREOFF_TIME = time(15, 15)
 MAX_DAILY_LOSS = -5000.0
+
+MIN_OPTION_VOLUME = 100
+TRADE_COOLDOWN = 10
 
 
 class TradingEngine:
@@ -33,11 +33,18 @@ class TradingEngine:
         self.logger = get_logger("trading_engine")
 
         self._trade_lock = asyncio.Lock()
+
         self._broker_healthy = True
+        self._symbol_cache = {}
+
+        self._last_trade_time = 0
 
         self.max_trades_per_day = 3
+
         self.stoploss_pct = 0.30
         self.target_pct = 0.60
+
+        self.trailing_pct = 0.20
 
     async def run(self):
 
@@ -69,7 +76,6 @@ class TradingEngine:
 
                 state = await self.state_manager.snapshot()
 
-                # FIXED BUG
                 if state.signal is not None:
                     continue
 
@@ -86,6 +92,11 @@ class TradingEngine:
     # ------------------------------------------------
 
     async def _resolve_option_symbol(self, strike: int, signal: str):
+
+        cache_key = f"{strike}_{signal}"
+
+        if cache_key in self._symbol_cache:
+            return self._symbol_cache[cache_key]
 
         option_type = OptionSelector.get_option_type(signal)
 
@@ -108,13 +119,21 @@ class TradingEngine:
             )
 
             if not rows:
+
                 self.logger.warning("Empty option chain")
+
                 return None
 
-            return rows[0].get("tradingSymbol")
+            symbol = rows[0].get("tradingSymbol")
+
+            self._symbol_cache[cache_key] = symbol
+
+            return symbol
 
         except Exception as exc:
+
             self.logger.error("option_symbol_resolve_failed: %s", exc)
+
             return None
 
     # ------------------------------------------------
@@ -181,13 +200,29 @@ class TradingEngine:
 
                     ltp = self.broker.parse_ltp(quote)
 
+                    volume = quote.get("volume", 0)
+
+                    if volume < MIN_OPTION_VOLUME:
+
+                        self.logger.warning(
+                            "Liquidity filter blocked trade volume=%s",
+                            volume,
+                        )
+
+                        await self.state_manager.update(signal=None)
+
+                        continue
+
                     if ltp is None or ltp <= 0:
+
                         self.logger.warning(
                             "Invalid option LTP symbol=%s ltp=%s",
                             symbol,
                             ltp,
                         )
+
                         await self.state_manager.update(signal=None)
+
                         continue
 
                     qty = 50
@@ -205,6 +240,7 @@ class TradingEngine:
                         "entry_time": datetime.now(UTC).isoformat(),
                         "status": "OPEN",
                         "signal": signal,
+                        "max_price": ltp,
                     }
 
                     await self.state_manager.update(
@@ -213,6 +249,8 @@ class TradingEngine:
                         signal=None,
                     )
 
+                    self._last_trade_time = datetime.now().timestamp()
+
                     self.logger.info(
                         "Trade opened %s entry=%.2f",
                         symbol,
@@ -220,6 +258,7 @@ class TradingEngine:
                     )
 
                 except Exception as exc:
+
                     self.logger.error("order_execution_failed: %s", exc)
 
     # ------------------------------------------------
@@ -255,11 +294,16 @@ class TradingEngine:
                     continue
 
                 entry = trade["entry_price"]
+
                 qty = trade["qty"]
 
                 pnl = (ltp - entry) * qty
 
                 await self.state_manager.update(live_pnl=pnl)
+
+                trade["max_price"] = max(trade["max_price"], ltp)
+
+                trailing_stop = trade["max_price"] * (1 - self.trailing_pct)
 
                 now = datetime.now().time()
 
@@ -272,7 +316,11 @@ class TradingEngine:
                 elif ltp >= entry * (1 + self.target_pct):
                     await self._exit_trade("TARGET", ltp)
 
+                elif ltp < trailing_stop:
+                    await self._exit_trade("TRAILING_STOP", ltp)
+
             except Exception as exc:
+
                 self.logger.error("monitor_error: %s", exc)
 
     # ------------------------------------------------
@@ -291,6 +339,7 @@ class TradingEngine:
                 return
 
             symbol = trade["symbol"]
+
             qty = trade["qty"]
 
             try:
@@ -302,6 +351,7 @@ class TradingEngine:
                 )
 
             except Exception as exc:
+
                 self.logger.error("SELL order failed %s", exc)
 
             pnl = (price - trade["entry_price"]) * qty
