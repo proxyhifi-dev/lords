@@ -1,0 +1,12 @@
+{
+  "spot_price": 23775.1,
+  "orb_high": null,
+  "orb_low": null,
+  "signal": null,
+  "active_trade": null,
+  "daily_pnl": 0.0,
+  "live_pnl": 0.0,
+  "trade_count": 0,
+  "trading_enabled": true,
+  "trading_mode": "PAPER"
+}
