@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     samco_user_id: str
     samco_password: str
     samco_yob: str
-    samco_access_token: str = ""          # optional — TOTP / access token
+    samco_access_token: str = ""
 
     # -------------------------
     # MARKET
@@ -30,27 +30,47 @@ class Settings(BaseSettings):
     order_qty: int = 50
     max_daily_loss: float = 5000.0
     max_trades: int = 3
-    stop_loss_pct: float = 0.30           # 30 % SL
-    target_pct: float = 0.60             # 60 % target
-    trailing_pct: float = 0.20           # 20 % trailing SL
-    min_option_volume: int = 0            # set > 0 to filter illiquid strikes
+    otm_distance: int = 1
+
+    # ── ULTRA PRO MAX: SL + 2-stage exit ──────────────
+    stop_loss_pct: float = 0.25   # 25% SL on full position
+
+    # Stage 1: book 50% qty at 40% profit
+    t1_pct: float = 0.40
+
+    # Stage 2: remaining 50% target at 100% profit
+    t2_pct: float = 1.00
+
+    # Trailing SL % — only activates AFTER T1 is booked
+    trailing_pct: float = 0.25
+
+    # Min premium to enter — skip cheap illiquid options
+    min_entry_premium: float = 50.0
+
+    # Min option volume filter
+    min_option_volume: int = 500
 
     # -------------------------
     # ORB
     # -------------------------
     orb_start: str = "09:15"
     orb_end: str = "09:30"
-    orb_duration_seconds: int = 900       # 15 min = 900 s
-    min_orb_range: float = 5.0
+    orb_duration_seconds: int = 900
+
+    # ULTRA PRO MAX: ATR-based ORB quality filter
+    # Skip if ORB range < orb_atr_multiplier * ATR (choppy day)
+    min_orb_range: float = 5.0            # absolute floor
+    orb_atr_multiplier: float = 1.5       # ORB must be > 1.5x ATR
+
     breakout_buffer: float = 2.0
-    signal_cooldown: int = 10
+    signal_cooldown: int = 60             # 60s cooldown between signals
     gap_threshold: float = 5.0
 
     # -------------------------
     # SQUARE OFF
     # -------------------------
-    no_entry_after: str = "15:10"
-    square_off: str = "15:15"
+    no_entry_after: str = "13:30"         # ULTRA PRO MAX: no new entries after 13:30
+    square_off: str = "15:10"
 
     # -------------------------
     # RECONNECT

@@ -1,6 +1,7 @@
 from __future__ import annotations
+
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time as dtime
 
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.config_loader import get_settings
@@ -21,19 +22,19 @@ class TradingEngine:
         trade_store: TradeStore,
         broker: SamcoClient,
     ):
-        self.event_bus = event_bus
+        self.event_bus     = event_bus
         self.state_manager = state_manager
-        self.trade_store = trade_store
-        self.broker = broker
+        self.trade_store   = trade_store
+        self.broker        = broker
 
         self.logger = get_logger("trading_engine")
 
-        self._trade_lock = asyncio.Lock()
+        self._trade_lock     = asyncio.Lock()
         self._broker_healthy = True
         self._symbol_cache: dict[str, str] = {}
 
     # --------------------------------------------------
-    # MAIN RUN — gather all coroutines
+    # MAIN RUN
     # --------------------------------------------------
     async def run(self):
         await asyncio.gather(
@@ -50,34 +51,43 @@ class TradingEngine:
         queue = self.event_bus.subscribe("SIGNAL")
 
         async for event in self.event_bus.iter_events(queue):
-
             payload = getattr(event, "payload", event)
-            signal = payload.get("signal")
+            signal  = payload.get("signal")
 
             if not signal:
                 continue
 
             state = await self.state_manager.snapshot()
 
-            # Ignore if already have a pending signal or active trade
             if state.signal is not None or state.active_trade:
                 continue
 
+            # Store size_label from scheduler for position sizing
+            size_label  = payload.get("size_label", "FULL")
+            trend_score = payload.get("trend_score", 0)
+
             await self.state_manager.update(signal=signal)
-            self.logger.info("Signal received → %s", signal)
+            self.logger.info(
+                "Signal received → %s  size=%s  trend=%d",
+                signal, size_label, trend_score,
+            )
+
+            # Store size in state for executor to use
+            await self.state_manager.update(
+                signal=signal,
+                signal_meta={"size_label": size_label, "trend_score": trend_score},
+            )
 
     # --------------------------------------------------
-    # RESOLVE OPTION SYMBOL  (with symbol cache)
+    # RESOLVE OPTION SYMBOL
     # --------------------------------------------------
     async def _resolve_option_symbol(self, strike: int, signal: str) -> str | None:
-
         cache_key = f"{strike}_{signal}"
-
         if cache_key in self._symbol_cache:
             return self._symbol_cache[cache_key]
 
         option_type = OptionSelector.get_option_type(signal)
-        expiry = OptionSelector.get_expiry()
+        expiry      = OptionSelector.get_expiry_api()   # yyyy-mm-dd format
 
         self.logger.info(
             "Resolving option: strike=%s signal=%s expiry=%s type=%s",
@@ -102,27 +112,41 @@ class TradingEngine:
             return None
 
         best_symbol = None
-        best_diff = 999_999.0
+        best_diff   = 999_999.0
 
         for row in rows:
             row_strike = float(row.get("strikePrice", 0))
             diff = abs(row_strike - strike)
             if diff < best_diff:
-                best_diff = diff
+                best_diff   = diff
                 best_symbol = row.get("tradingSymbol")
 
         if not best_symbol:
             self.logger.error(
-                "Option symbol resolve failed strike=%s signal=%s", strike, signal
+                "Symbol resolve failed strike=%s signal=%s", strike, signal
             )
             return None
 
         self._symbol_cache[cache_key] = best_symbol
-        self.logger.info("Resolved option symbol: %s", best_symbol)
+        self.logger.info("Resolved: %s", best_symbol)
         return best_symbol
 
     # --------------------------------------------------
-    # TRADE EXECUTOR  (polls every 1 s for a pending signal)
+    # ULTRA PRO MAX: Get effective qty based on size label
+    # FULL=50, MEDIUM=37, HALF=25 (rounded to lot multiples)
+    # --------------------------------------------------
+    def _get_qty(self, size_label: str) -> int:
+        base = settings.order_qty
+        if size_label == "FULL":
+            return base
+        elif size_label == "MEDIUM":
+            return max(int(base * 0.75 / 25) * 25, 25)
+        elif size_label == "HALF":
+            return max(int(base * 0.50 / 25) * 25, 25)
+        return base
+
+    # --------------------------------------------------
+    # TRADE EXECUTOR
     # --------------------------------------------------
     async def _trade_executor(self):
         while True:
@@ -132,7 +156,6 @@ class TradingEngine:
 
                 state = await self.state_manager.snapshot()
 
-                # Guard conditions
                 if state.signal is None:
                     continue
                 if state.active_trade:
@@ -151,18 +174,21 @@ class TradingEngine:
                 if state.spot_price is None:
                     continue
 
-                now = datetime.now().time()
-                from datetime import time as dtime
                 no_entry = dtime(*map(int, settings.no_entry_after.split(":")))
-                if now >= no_entry:
+                if datetime.now().time() >= no_entry:
                     await self.state_manager.update(signal=None)
                     self.logger.info("Past no-entry time — signal cleared")
                     continue
 
-                signal = state.signal
+                signal     = state.signal
+                meta       = getattr(state, "signal_meta", {}) or {}
+                size_label = meta.get("size_label", "FULL")
 
                 try:
-                    strike = OptionSelector.get_otm_strike(state.spot_price, signal)
+                    strike = OptionSelector.get_otm_strike(
+                        state.spot_price, signal,
+                        distance=settings.otm_distance,
+                    )
                     symbol = await self._resolve_option_symbol(strike, signal)
 
                     if not symbol:
@@ -175,15 +201,20 @@ class TradingEngine:
                     ltp = self.broker.parse_ltp(quote)
 
                     if not ltp:
-                        self.logger.warning("LTP unavailable for %s — skipping", symbol)
+                        self.logger.warning("LTP unavailable for %s", symbol)
                         await self.state_manager.update(signal=None)
                         continue
 
-                    volume = (
-                        quote.get("volume")
-                        or quote.get("tradedVolume")
-                        or 0
-                    )
+                    # Min premium filter
+                    if ltp < settings.min_entry_premium:
+                        self.logger.warning(
+                            "Premium ₹%.1f below minimum ₹%.1f — skipping",
+                            ltp, settings.min_entry_premium,
+                        )
+                        await self.state_manager.update(signal=None)
+                        continue
+
+                    volume = quote.get("volume") or quote.get("tradedVolume") or 0
                     try:
                         volume = int(volume)
                     except (ValueError, TypeError):
@@ -197,41 +228,79 @@ class TradingEngine:
                         await self.state_manager.update(signal=None)
                         continue
 
-                    qty = settings.order_qty
+                    # ULTRA PRO MAX: time-weighted quantity
+                    qty = self._get_qty(size_label)
 
-                    await self.broker.place_order(
+                    order_resp = await self.broker.place_order(
                         symbol=symbol,
                         side="BUY",
                         quantity=qty,
                     )
+                    order_id = (
+                        order_resp.get("orderNumber")
+                        or order_resp.get("orderId")
+                        or order_resp.get("order_id")
+                    )
+
+                    if not order_id:
+                        self.logger.error(
+                            "BUY rejected — no order ID — resp=%s", order_resp
+                        )
+                        await self.state_manager.update(signal=None)
+                        continue
+
+                    self.logger.info(
+                        "BUY placed — order_id=%s  symbol=%s  ltp=%.2f  "
+                        "qty=%s  size=%s",
+                        order_id, symbol, ltp, qty, size_label,
+                    )
+
+                    # ULTRA PRO MAX: 2-stage exit levels
+                    t1_prem = round(ltp * (1 + settings.t1_pct), 2)   # 40% profit
+                    t2_prem = round(ltp * (1 + settings.t2_pct), 2)   # 100% profit
+                    sl_prem = round(ltp * (1 - settings.stop_loss_pct), 2)
 
                     trade = {
-                        "symbol": symbol,
-                        "qty": qty,
-                        "entry_price": ltp,
-                        "entry_time": datetime.now(UTC).isoformat(),
-                        "status": "OPEN",
-                        "signal": signal,
-                        "max_price": ltp,
+                        "symbol":       symbol,
+                        "qty":          qty,
+                        "entry_price":  ltp,
+                        "entry_time":   datetime.now(UTC).isoformat(),
+                        "status":       "OPEN",
+                        "signal":       signal,
+                        "max_price":    ltp,
+                        "order_id":     order_id,
+                        "size_label":   size_label,
+                        # ULTRA PRO MAX: 2-stage exit tracking
+                        "t1_price":     t1_prem,
+                        "t2_price":     t2_prem,
+                        "sl_price":     sl_prem,
+                        "t1_hit":       False,
+                        "t1_booked":    False,   # True once T1 sell order placed
+                        "t1_qty":       qty // 2,
+                        "t2_qty":       qty - (qty // 2),
                     }
 
                     await self.state_manager.update(
                         active_trade=trade,
                         trade_count=state.trade_count + 1,
                         signal=None,
+                        signal_meta=None,
                     )
 
                     self.logger.info(
-                        "Trade OPENED — symbol=%s entry=%.2f qty=%s",
-                        symbol, ltp, qty,
+                        "Trade OPENED — symbol=%s  entry=%.2f  qty=%s  "
+                        "SL=%.2f  T1=%.2f  T2=%.2f",
+                        symbol, ltp, qty, sl_prem, t1_prem, t2_prem,
                     )
 
                 except Exception as exc:
-                    self.logger.error("Trade execution failed: %s", exc, exc_info=True)
+                    self.logger.error(
+                        "Trade execution failed: %s", exc, exc_info=True
+                    )
                     await self.state_manager.update(signal=None)
 
     # --------------------------------------------------
-    # MONITOR TRADE LOOP  (SL / target / trailing / EOD)
+    # MONITOR TRADE LOOP — ULTRA PRO MAX 2-STAGE EXIT
     # --------------------------------------------------
     async def _monitor_trade_loop(self):
         while True:
@@ -252,71 +321,228 @@ class TradingEngine:
                 if not ltp:
                     continue
 
-                entry = trade["entry_price"]
-                qty = trade["qty"]
-                pnl = (ltp - entry) * qty
+                entry  = trade["entry_price"]
+                qty    = trade["qty"]
+                pnl    = (ltp - entry) * qty
 
                 await self.state_manager.update(live_pnl=pnl)
 
                 # Update trailing high
                 trade["max_price"] = max(trade.get("max_price", ltp), ltp)
 
-                trailing_sl = trade["max_price"] * (1 - settings.trailing_pct)
+                sq_time  = dtime(*map(int, settings.square_off.split(":")))
+                now_time = datetime.now().time()
 
-                now = datetime.now().time()
-                from datetime import time as dtime
-                sq_time = dtime(*map(int, settings.square_off.split(":")))
+                sl_price = trade.get("sl_price",  entry * (1 - settings.stop_loss_pct))
+                t1_price = trade.get("t1_price",  entry * (1 + settings.t1_pct))
+                t2_price = trade.get("t2_price",  entry * (1 + settings.t2_pct))
+                t1_hit   = trade.get("t1_hit",    False)
+                t1_booked= trade.get("t1_booked", False)
+                max_p    = trade["max_price"]
+                trail_sl = round(max_p * (1 - settings.trailing_pct), 2)
 
-                if now >= sq_time:
+                # ── EOD square off ───────────────────────────
+                if now_time >= sq_time:
                     await self._exit_trade(trade, "EOD", ltp)
+                    continue
 
-                elif ltp <= entry * (1 - settings.stop_loss_pct):
+                # ── Hard SL — always active ──────────────────
+                if ltp <= sl_price:
                     await self._exit_trade(trade, "STOPLOSS", ltp)
+                    continue
 
-                elif ltp >= entry * (1 + settings.target_pct):
-                    await self._exit_trade(trade, "TARGET", ltp)
+                # ── ULTRA PRO MAX: Stage 1 — partial profit ──
+                # Book 50% qty at T1 (40% profit)
+                if not t1_booked and ltp >= t1_price:
+                    trade["t1_hit"]    = True
+                    trade["t1_booked"] = True
+                    await self._book_partial(trade, ltp)
+                    await self.state_manager.update(active_trade=trade)
+                    self.logger.info(
+                        "T1 HIT — booked 50%% at %.2f  remaining qty=%s",
+                        ltp, trade["t2_qty"],
+                    )
+                    continue
 
-                elif ltp < trailing_sl and ltp < entry:
-                    # Trailing SL only active after price moved in favour
-                    await self._exit_trade(trade, "TRAILING_SL", ltp)
+                # ── ULTRA PRO MAX: Stage 2 — after T1 hit ────
+                if t1_hit:
+                    # Target 2: 100% profit on remaining half
+                    if ltp >= t2_price:
+                        await self._exit_remaining(trade, "TARGET_2", ltp)
+                        continue
+
+                    # Trailing SL on remaining half
+                    # Only activates after T1 is already booked
+                    if ltp < trail_sl:
+                        await self._exit_remaining(trade, "TRAIL_AFTER_T1", ltp)
+                        continue
+
+                # ── No T1 yet — check full exit conditions ───
+                else:
+                    if ltp >= t2_price:
+                        await self._exit_trade(trade, "TARGET", ltp)
+                        continue
 
             except Exception as exc:
                 self.logger.error("Monitor loop error: %s", exc, exc_info=True)
 
     # --------------------------------------------------
-    # EXIT TRADE
+    # ULTRA PRO MAX: Book partial (T1) — sell half qty
     # --------------------------------------------------
-    async def _exit_trade(self, trade: dict, reason: str, price: float):
+    async def _book_partial(self, trade: dict, price: float):
         async with self._trade_lock:
+            state = await self.state_manager.snapshot()
+            if not state.active_trade:
+                return
 
-            # Re-fetch state to avoid race
+            t1_qty = trade.get("t1_qty", trade["qty"] // 2)
+            symbol = trade["symbol"]
+
+            try:
+                sell_resp = await self.broker.place_order(
+                    symbol=symbol,
+                    side="SELL",
+                    quantity=t1_qty,
+                )
+                sell_id = (
+                    sell_resp.get("orderNumber")
+                    or sell_resp.get("orderId")
+                    or sell_resp.get("order_id")
+                )
+                if not sell_id:
+                    self.logger.error(
+                        "T1 partial SELL failed — resp=%s", sell_resp
+                    )
+                    return
+
+                t1_pnl = round((price - trade["entry_price"]) * t1_qty, 2)
+                self.logger.info(
+                    "T1 PARTIAL BOOKED — symbol=%s  qty=%s  "
+                    "price=%.2f  pnl=₹%.2f  order_id=%s",
+                    symbol, t1_qty, price, t1_pnl, sell_id,
+                )
+
+                # Update daily PnL with T1 portion
+                await self.state_manager.update(
+                    daily_pnl=round(state.daily_pnl + t1_pnl, 2),
+                    live_pnl=0.0,
+                )
+
+            except Exception as exc:
+                self.logger.error("T1 partial sell exception: %s", exc)
+
+    # --------------------------------------------------
+    # ULTRA PRO MAX: Exit remaining qty (after T1)
+    # --------------------------------------------------
+    async def _exit_remaining(self, trade: dict, reason: str, price: float):
+        async with self._trade_lock:
             state = await self.state_manager.snapshot()
             if not state.active_trade:
                 return
 
             symbol = trade["symbol"]
-            qty = trade["qty"]
+            t2_qty = trade.get("t2_qty", trade["qty"] // 2)
 
             try:
-                await self.broker.place_order(
+                sell_resp = await self.broker.place_order(
+                    symbol=symbol,
+                    side="SELL",
+                    quantity=t2_qty,
+                )
+                sell_id = (
+                    sell_resp.get("orderNumber")
+                    or sell_resp.get("orderId")
+                    or sell_resp.get("order_id")
+                )
+                if not sell_id:
+                    self.logger.error(
+                        "T2 SELL failed — resp=%s — position open!", sell_resp
+                    )
+                    return
+
+            except Exception as exc:
+                self.logger.error("T2 sell exception: %s — position open!", exc)
+                return
+
+            t2_pnl = round((price - trade["entry_price"]) * t2_qty, 2)
+            total_pnl = round(state.daily_pnl + t2_pnl, 2)
+
+            closed = {
+                **trade,
+                "exit_price":    price,
+                "exit_time":     datetime.now(UTC).isoformat(),
+                "status":        "CLOSED",
+                "exit_reason":   reason,
+                "pnl":           t2_pnl,
+                "sell_order_id": sell_id,
+            }
+            self.trade_store.append_trade(closed)
+
+            await self.state_manager.update(
+                active_trade=None,
+                daily_pnl=total_pnl,
+                live_pnl=0.0,
+            )
+
+            self.logger.info(
+                "STAGE 2 CLOSED — symbol=%s  reason=%s  "
+                "price=%.2f  pnl=₹%.2f  order_id=%s",
+                symbol, reason, price, t2_pnl, sell_id,
+            )
+
+    # --------------------------------------------------
+    # EXIT TRADE — full position exit
+    # --------------------------------------------------
+    async def _exit_trade(self, trade: dict, reason: str, price: float):
+        async with self._trade_lock:
+
+            state = await self.state_manager.snapshot()
+            if not state.active_trade:
+                return
+
+            symbol = trade["symbol"]
+
+            # If T1 was already booked, only sell remaining t2_qty
+            if trade.get("t1_booked", False):
+                qty = trade.get("t2_qty", trade["qty"] // 2)
+            else:
+                qty = trade["qty"]
+
+            try:
+                sell_resp = await self.broker.place_order(
                     symbol=symbol,
                     side="SELL",
                     quantity=qty,
                 )
-            except Exception as exc:
-                self.logger.error("SELL order failed: %s", exc)
+                sell_id = (
+                    sell_resp.get("orderNumber")
+                    or sell_resp.get("orderId")
+                    or sell_resp.get("order_id")
+                )
+                if not sell_id:
+                    self.logger.error(
+                        "SELL rejected — resp=%s — position may be open!",
+                        sell_resp,
+                    )
+                    return
 
-            pnl = (price - trade["entry_price"]) * qty
+            except Exception as exc:
+                self.logger.error(
+                    "SELL exception: %s — position may be open!", exc
+                )
+                return
+
+            pnl = round((price - trade["entry_price"]) * qty, 2)
 
             closed = {
                 **trade,
-                "exit_price": price,
-                "exit_time": datetime.now(UTC).isoformat(),
-                "status": "CLOSED",
-                "exit_reason": reason,
-                "pnl": round(pnl, 2),
+                "exit_price":    price,
+                "exit_time":     datetime.now(UTC).isoformat(),
+                "status":        "CLOSED",
+                "exit_reason":   reason,
+                "pnl":           pnl,
+                "sell_order_id": sell_id,
             }
-
             self.trade_store.append_trade(closed)
 
             await self.state_manager.update(
@@ -326,8 +552,9 @@ class TradingEngine:
             )
 
             self.logger.info(
-                "Trade CLOSED — symbol=%s reason=%s pnl=%.2f",
-                symbol, reason, pnl,
+                "Trade CLOSED — symbol=%s  reason=%s  "
+                "price=%.2f  pnl=₹%.2f  order_id=%s",
+                symbol, reason, price, pnl, sell_id,
             )
 
     # --------------------------------------------------
@@ -340,7 +567,9 @@ class TradingEngine:
                 healthy = await self.broker.healthcheck()
                 self._broker_healthy = healthy
                 if not healthy:
-                    self.logger.warning("Broker healthcheck FAILED — attempting re-login")
+                    self.logger.warning(
+                        "Broker healthcheck FAILED — attempting re-login"
+                    )
                     await self.broker.login()
             except Exception as exc:
                 self.logger.error("Health monitor error: %s", exc)
