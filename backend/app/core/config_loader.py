@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # -------------------------
     # TRADING
     # -------------------------
-    order_qty: int = 50
+    order_qty: int = 65
     max_daily_loss: float = 5000.0
     max_trades: int = 3
     otm_distance: int = 1

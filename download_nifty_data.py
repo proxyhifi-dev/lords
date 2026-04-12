@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT))
 from backend.app.broker.samco_client import SamcoClient
 
 # ── Config ──────────────────────────────────────────────
-START_DATE  = date(2026, 3, 1)
+START_DATE  = date(2025, 11, 12)
 END_DATE    = date.today()
 OUTPUT_DIR  = ROOT / "data"
 # Samco intraday endpoint allows 1 day per call only

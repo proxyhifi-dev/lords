@@ -38,7 +38,7 @@ try:
     BUF         = getattr(s, "breakout_buffer",         2.0)
     MIN_ORB     = getattr(s, "min_orb_range",           5.0)
     TREND_ON    = getattr(s, "trend_filter_enabled",    False)
-    ORDER_QTY   = getattr(s, "order_qty",               50)
+    ORDER_QTY   = getattr(s, "order_qty",               65)
     MAX_LOSS    = getattr(s, "max_daily_loss",          5000.0)
     NO_ENTRY    = time(*map(int, getattr(s,"no_entry_after","13:30").split(":")))
     SQ_OFF      = time(*map(int, getattr(s,"square_off","15:10").split(":")))
