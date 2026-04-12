@@ -1,258 +1,335 @@
 """
-Lords Bot — Nifty 1-Min Historical Data Downloader
+Lords Bot — Nifty Data Downloader
 ====================================================
-Uses your existing Samco credentials to download
-1-minute OHLC data for Nifty 50 from March 1 to today.
+Downloads Nifty 50 data using Samco API.
+
+API REALITY (discovered via debug):
+  get_index_candle_data(index_name, from_date)
+    → Returns DAILY OHLC from from_date to today
+    → Works for ANY historical date
+    → One row per trading day
+
+  get_index_intraday_candle_data(index_name, from_date, to_date)
+    → Returns 1-MIN candles
+    → Works for TODAY only (recent session)
 
 USAGE:
 ------
-  cd C:\\Users\\bollu\\github\\lords
+  # Interactive menu
   python download_nifty_data.py
 
-OUTPUT:
--------
-  data/nifty_1min_YYYYMMDD.csv   — use this with backtest.py
+  # Daily OHLC — any date range
+  python download_nifty_data.py --mode daily --start 2020-01-01
+  python download_nifty_data.py --mode daily --start 2020-01-01 --end 2024-12-31
+
+  # Today's 1-min (append to growing dataset)
+  python download_nifty_data.py --mode intraday
 """
 
 import asyncio
+import argparse
 import csv
-import json
-import os
 import sys
-import time
+import time as time_module
 from datetime import datetime, timedelta, date
 from pathlib import Path
 
-# ── Make sure project root is in path ──────────────────
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
 from backend.app.broker.samco_client import SamcoClient
 
-# ── Config ──────────────────────────────────────────────
-START_DATE  = date(2026, 3, 1)
-END_DATE    = date.today()
-OUTPUT_DIR  = ROOT / "data"
-# Samco intraday endpoint allows 1 day per call only
-RATE_LIMIT  = 0.5   # seconds between API calls
+OUTPUT_DIR = ROOT / "data"
 
 
-def trading_days(start: date, end: date):
-    """Yield each weekday between start and end inclusive."""
-    current = start
-    while current <= end:
-        if current.weekday() < 5:   # Mon–Fri only
-            yield current
-        current += timedelta(days=1)
-
-
-def parse_candles(response: dict, trade_date: date) -> list[dict]:
-    """Parse Samco intraday candle response into list of OHLC rows."""
-    rows = []
-
-    data = (
-        response.get("data")
-        or response.get("intradayCandleData")
-        or response.get("indexCandleData")
-        or []
-    )
-
-    if not isinstance(data, list):
-        return rows
-
-    for item in data:
+def parse_date(s: str) -> date:
+    for fmt in ["%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y"]:
         try:
-            if isinstance(item, list) and len(item) >= 5:
-                # [datetime_str, open, high, low, close, volume?]
-                rows.append({
-                    "datetime": str(item[0]),
-                    "open":     float(item[1]),
-                    "high":     float(item[2]),
-                    "low":      float(item[3]),
-                    "close":    float(item[4]),
-                    "volume":   float(item[5]) if len(item) > 5 else 0,
-                })
-            elif isinstance(item, dict):
-                dt = (
-                    item.get("dateTime") or item.get("time") or
-                    item.get("date")     or item.get("timestamp")
-                )
-                rows.append({
-                    "datetime": str(dt),
-                    "open":     float(item.get("open", 0)),
-                    "high":     float(item.get("high", 0)),
-                    "low":      float(item.get("low", 0)),
-                    "close":    float(item.get("close", 0)),
-                    "volume":   float(item.get("volume", 0)),
-                })
-        except (ValueError, TypeError, IndexError):
+            return datetime.strptime(s.strip(), fmt).date()
+        except ValueError:
             continue
-
-    return rows
-
-
-async def download_day(client: SamcoClient, trade_date: date) -> list[dict]:
-    """Download 1-min candles for a single trading day."""
-
-    date_str = trade_date.strftime("%Y-%m-%d")
-
-    try:
-        # PRIMARY: get_index_intraday_candle_data — 1-min index data
-        result = await asyncio.to_thread(
-            client.samco.get_index_intraday_candle_data,
-            index_name="NIFTY 50",
-            from_date=f"{date_str} 09:15:00",
-            to_date=f"{date_str} 15:30:00",
-        )
-        response = SamcoClient._parse_response(result)
-
-        if response.get("status") == "Success":
-            candles = parse_candles(response, trade_date)
-            if candles:
-                return candles
-
-        # FALLBACK: get_index_candle_data with time interval
-        result2 = await asyncio.to_thread(
-            client.samco.get_index_candle_data,
-            index_name="NIFTY 50",
-            from_date=f"{date_str} 09:15:00",
-            to_date=f"{date_str} 15:30:00",
-            time_interval_type="minutes",
-            time_interval=1,
-        )
-        response2 = SamcoClient._parse_response(result2)
-
-        if response2.get("status") == "Success":
-            candles2 = parse_candles(response2, trade_date)
-            if candles2:
-                return candles2
-
-        # Log failure
-        err = response.get("message") or response.get("validationErrors") or response
-        print(f"    ⚠️  No data for {date_str}: {err}")
-        return []
-
-    except Exception as exc:
-        print(f"    ❌ Error for {date_str}: {exc}")
-        return []
+    raise ValueError(f"Cannot parse '{s}' — use YYYY-MM-DD")
 
 
-def save_csv(rows: list[dict], filepath: Path):
+def save_csv(rows: list[dict], filepath: Path, fieldnames: list[str]):
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, "w", newline="") as f:
-        writer = csv.DictWriter(
-            f, fieldnames=["datetime", "open", "high", "low", "close", "volume"]
-        )
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
 
-async def main():
-    days = list(trading_days(START_DATE, END_DATE))
+# ── MODE 1: DAILY OHLC ──────────────────────────────────
+async def download_daily(start_date: date, end_date: date):
+    """
+    Download daily OHLC for any date range.
+    Uses get_index_candle_data — proven to work for all historical dates.
+    """
+    client = SamcoClient()
+    print("\n  Logging into Samco...")
+    await client.login()
+    print("  ✅ Login successful\n")
 
-    print("\n" + "═" * 55)
-    print("  LORDS BOT — Nifty 1-Min Data Downloader")
-    print(f"  Range  : {START_DATE} → {END_DATE}")
-    print(f"  Days   : {len(days)} trading days")
-    print(f"  Output : {OUTPUT_DIR}/")
-    print("═" * 55 + "\n")
+    # API takes only from_date — returns from that date to today
+    # We filter to our requested range afterward
+    start_str = start_date.strftime("%Y-%m-%d")
+
+    print(f"  Fetching Nifty daily OHLC from {start_str} → {end_date} ...")
+
+    result   = await asyncio.to_thread(
+        client.samco.get_index_candle_data,
+        index_name="NIFTY 50",
+        from_date=start_str,
+    )
+    response = SamcoClient._parse_response(result)
+
+    if response.get("status") != "Success":
+        msg = response.get("statusMessage") or response.get("message") or str(response)
+        print(f"  ❌ API error: {msg}")
+        return
+
+    raw_rows = response.get("indexCandleData") or []
+
+    # Parse + filter to requested range
+    rows = []
+    for item in raw_rows:
+        try:
+            d = date.fromisoformat(str(item.get("date", "")))
+            if start_date <= d <= end_date:
+                rows.append({
+                    "date":   str(d),
+                    "open":   float(item.get("open",   0)),
+                    "high":   float(item.get("high",   0)),
+                    "low":    float(item.get("low",    0)),
+                    "close":  float(item.get("close",  0)),
+                    "volume": float(item.get("volume", 0)),
+                })
+        except (ValueError, TypeError):
+            continue
+
+    rows.sort(key=lambda r: r["date"])
+
+    if not rows:
+        print("  ❌ No data in requested range")
+        return
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    fname    = f"nifty_daily_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
+    csv_path = OUTPUT_DIR / fname
+    save_csv(rows, csv_path, ["date","open","high","low","close","volume"])
+
+    print(f"\n{'═'*58}")
+    print(f"  ✅ Daily OHLC downloaded!")
+    print(f"  Trading days : {len(rows):,}")
+    print(f"  Range        : {rows[0]['date']} → {rows[-1]['date']}")
+    print(f"  File         : {fname}")
+    print(f"{'═'*58}")
+    print(f"\n  ⚠️  NOTE: Daily data = 1 row per day (open/high/low/close).")
+    print(f"  ORB backtesting needs 1-min candles — use --mode intraday")
+    print(f"  to capture today's 1-min data and build up over time.\n")
+
+
+# ── MODE 2: TODAY'S INTRADAY 1-MIN ──────────────────────
+async def download_intraday(append: bool = True):
+    """
+    Download today's 1-min candles and append to rolling dataset.
+    Run this every trading day after 3:30 PM.
+    """
+    today    = date.today()
+    date_str = today.strftime("%Y-%m-%d")
+
+    client = SamcoClient()
+    print("\n  Logging into Samco...")
+    await client.login()
+    print("  ✅ Login successful\n")
+
+    print(f"  Fetching today's 1-min candles ({date_str}) ...")
+
+    result   = await asyncio.to_thread(
+        client.samco.get_index_intraday_candle_data,
+        index_name="NIFTY 50",
+        from_date=f"{date_str} 09:15:00",
+        to_date=f"{date_str} 15:30:00",
+    )
+    response = SamcoClient._parse_response(result)
+
+    if response.get("status") != "Success":
+        msg = response.get("statusMessage") or response.get("message") or str(response)
+        print(f"  ❌ API error: {msg}")
+        print(f"  Note: Intraday 1-min only works during/after market hours (9:15–15:30)")
+        return
+
+    raw  = response.get("intradayCandleData") or []
+    rows = []
+    for item in raw:
+        try:
+            rows.append({
+                "datetime": str(item.get("dateTime", "")),
+                "open":     float(item.get("open",   0)),
+                "high":     float(item.get("high",   0)),
+                "low":      float(item.get("low",    0)),
+                "close":    float(item.get("close",  0)),
+                "volume":   float(item.get("volume", 0)),
+            })
+        except (ValueError, TypeError):
+            continue
+
+    if not rows:
+        print("  ❌ No candles — market may not have started yet")
+        return
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # ── Login ───────────────────────────────────────────
-    client = SamcoClient()
-    print("Logging into Samco...")
-    await client.login()
-    print("Login successful ✅\n")
+    # Save today's file
+    today_path = OUTPUT_DIR / f"nifty_1min_{today.strftime('%Y%m%d')}.csv"
+    save_csv(rows, today_path, ["datetime","open","high","low","close","volume"])
 
-    # ── Check for existing partial download ─────────────
-    today_str    = END_DATE.strftime("%Y%m%d")
-    csv_path     = OUTPUT_DIR / f"nifty_1min_{today_str}.csv"
-    already_done = set()
+    new_added = len(rows)
+    total_days = 1
 
-    if csv_path.exists():
-        with open(csv_path) as f:
-            reader = csv.DictReader(f)
-            for row in reader:
+    if append:
+        # Merge into rolling dataset
+        dataset_path = OUTPUT_DIR / "nifty_1min_dataset.csv"
+        existing = []
+        seen     = set()
+
+        if dataset_path.exists():
+            with open(dataset_path) as f:
+                for row in csv.DictReader(f):
+                    if row["datetime"] not in seen:
+                        seen.add(row["datetime"])
+                        existing.append(row)
+
+        new_rows = [r for r in rows if r["datetime"] not in seen]
+        new_added = len(new_rows)
+        combined  = existing + new_rows
+        combined.sort(key=lambda r: r["datetime"])
+
+        save_csv(combined, dataset_path, ["datetime","open","high","low","close","volume"])
+
+        all_dates  = sorted(set(
+            datetime.fromisoformat(r["datetime"]).date() for r in combined
+        ))
+        total_days = len(all_dates)
+        d_start    = all_dates[0] if all_dates else today
+        d_end      = all_dates[-1] if all_dates else today
+
+        print(f"\n{'═'*58}")
+        print(f"  ✅ Today's 1-min data saved!")
+        print(f"  Today's candles   : {len(rows)}")
+        print(f"  New candles added : {new_added}")
+        print(f"  Dataset total     : {len(combined):,} candles")
+        print(f"  Dataset days      : {total_days} trading days")
+        print(f"  Dataset range     : {d_start} → {d_end}")
+        print(f"  Files saved       :")
+        print(f"    data/nifty_1min_{today.strftime('%Y%m%d')}.csv  (today only)")
+        print(f"    data/nifty_1min_dataset.csv  (full rolling dataset)")
+        print(f"{'═'*58}")
+        print(f"\n  Run backtest:")
+        print(f"  python backtest_runner.py --file data\\nifty_1min_dataset.csv\n")
+        print(f"  💡 Tip: Run this every day after 3:30 PM to grow your dataset.")
+        print(f"         After 1 month = 22 days of 1-min data for backtesting.\n")
+    else:
+        print(f"\n{'═'*58}")
+        print(f"  ✅ Today's 1-min data saved!")
+        print(f"  Candles : {len(rows)}")
+        print(f"  File    : nifty_1min_{today.strftime('%Y%m%d')}.csv")
+        print(f"{'═'*58}\n")
+
+
+def _dataset_info() -> str:
+    p = OUTPUT_DIR / "nifty_1min_dataset.csv"
+    if not p.exists():
+        return "0 days (not started yet)"
+    try:
+        days = set()
+        with open(p) as f:
+            for row in csv.DictReader(f):
                 try:
-                    d = datetime.fromisoformat(row["datetime"]).date()
-                    already_done.add(d)
+                    days.add(datetime.fromisoformat(row["datetime"]).date())
                 except Exception:
                     pass
-        print(f"Resuming — {len(already_done)} days already downloaded\n")
+        if not days:
+            return "0 days"
+        return f"{len(days)} days ({min(days)} → {max(days)})"
+    except Exception:
+        return "unknown"
 
-    # ── Download day by day ─────────────────────────────
-    all_rows = []
-    ok_days  = 0
-    fail_days = 0
 
-    for i, day in enumerate(days, 1):
-        if day in already_done:
-            print(f"  [{i:>2}/{len(days)}] {day} — already have ✅")
-            continue
+def interactive():
+    print(f"\n{'═'*58}")
+    print(f"  LORDS BOT — Nifty Data Downloader")
+    print(f"{'═'*58}\n")
+    print(f"  SAMCO API CAPABILITIES:")
+    print(f"  • Daily OHLC   → any date from 2006 onwards ✅")
+    print(f"  • 1-min data   → TODAY only (build up day by day)")
+    print(f"\n  OPTIONS:\n")
+    print(f"  1 → Download Daily OHLC (any date range)")
+    print(f"      One row per trading day — use for long-term backtest")
+    print(f"\n  2 → Download Today's 1-min candles + append to dataset")
+    print(f"      Current dataset: {_dataset_info()}")
+    print(f"      Run every day after 3:30 PM to build 1-min history")
+    print(f"\n  3 → Download Today's 1-min candles only (no append)")
 
-        print(f"  [{i:>2}/{len(days)}] {day} ... ", end="", flush=True)
-        candles = await download_day(client, day)
+    choice = input("\n  Choice (1/2/3): ").strip()
 
-        if candles:
-            all_rows.extend(candles)
-            ok_days += 1
-            print(f"{len(candles)} candles ✅")
-        else:
-            fail_days += 1
-            print("no data ⚠️")
+    if choice == "1":
+        print(f"\n  Enter date range (YYYY-MM-DD)")
+        while True:
+            try:
+                start = parse_date(input("  FROM: ").strip())
+                break
+            except ValueError as e:
+                print(f"  ❌ {e}")
+        while True:
+            try:
+                raw = input("  TO (Enter = today): ").strip()
+                end = date.today() if not raw else parse_date(raw)
+                if end < start:
+                    print("  ❌ End must be after start")
+                    continue
+                end = min(end, date.today())
+                break
+            except ValueError as e:
+                print(f"  ❌ {e}")
+        asyncio.run(download_daily(start, end))
 
-        time.sleep(RATE_LIMIT)
+    elif choice == "2":
+        asyncio.run(download_intraday(append=True))
 
-    if not all_rows and not already_done:
-        print("\n❌ No data downloaded at all.")
-        print("\nThe Samco intraday index API may require a different parameter format.")
-        print("Please paste the error messages above and I'll fix the script.\n")
-        return
+    elif choice == "3":
+        asyncio.run(download_intraday(append=False))
 
-    # ── Merge with existing if resuming ─────────────────
-    existing_rows = []
-    if csv_path.exists() and already_done:
-        with open(csv_path) as f:
-            reader = csv.DictReader(f)
-            existing_rows = list(reader)
+    else:
+        print("  ❌ Invalid — enter 1, 2, or 3")
+        sys.exit(1)
 
-    combined = existing_rows + all_rows
 
-    # Deduplicate and sort
-    seen   = set()
-    unique = []
-    for row in combined:
-        key = row["datetime"]
-        if key not in seen:
-            seen.add(key)
-            unique.append(row)
+def main():
+    parser = argparse.ArgumentParser(description="Lords Bot — Nifty Data Downloader")
+    parser.add_argument("--mode",   choices=["daily","intraday"], default=None)
+    parser.add_argument("--start",  type=str, default=None, help="YYYY-MM-DD")
+    parser.add_argument("--end",    type=str, default=None, help="YYYY-MM-DD (default: today)")
+    parser.add_argument("--no-append", action="store_true",
+                        help="Don't append to dataset (intraday mode)")
+    args = parser.parse_args()
 
-    unique.sort(key=lambda r: r["datetime"])
+    if args.mode == "daily":
+        if not args.start:
+            print("❌ --start required  e.g. --start 2023-01-01"); sys.exit(1)
+        try:
+            start = parse_date(args.start)
+            end   = parse_date(args.end) if args.end else date.today()
+        except ValueError as e:
+            print(f"❌ {e}"); sys.exit(1)
+        asyncio.run(download_daily(start, end))
 
-    # ── Save ────────────────────────────────────────────
-    save_csv(unique, csv_path)
+    elif args.mode == "intraday":
+        asyncio.run(download_intraday(append=not args.no_append))
 
-    # Also save JSON
-    json_path = OUTPUT_DIR / f"nifty_1min_{today_str}.json"
-    with open(json_path, "w") as f:
-        json.dump(unique, f, indent=2)
-
-    # ── Summary ─────────────────────────────────────────
-    print(f"\n{'═'*55}")
-    print(f"  ✅ Done!")
-    print(f"  Total candles : {len(unique):,}")
-    print(f"  Days OK       : {ok_days + len(already_done)}")
-    print(f"  Days failed   : {fail_days}")
-    print(f"  CSV           : {csv_path}")
-    print(f"{'═'*55}")
-    print(f"\nRun backtest with real data:")
-    print(f"  python backtest.py --file {csv_path} --start 2026-03-01 --end 2026-04-10\n")
+    else:
+        interactive()
 
 
 if __name__ == "__main__":
-    if "--probe" in sys.argv:
-        # Already ran probe — this shouldn't be called again
-        print("Probe already complete. Run without --probe to download data.")
-    else:
-        asyncio.run(main())
+    main()
