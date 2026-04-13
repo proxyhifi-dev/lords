@@ -103,3 +103,20 @@
 2026-04-12 18:56:57,738 | INFO | market_scheduler | NIFTY spot=24050.60
 2026-04-12 18:56:58,836 | INFO | market_scheduler | NIFTY spot=24050.60
 2026-04-12 18:56:58,950 | INFO | market_scheduler | Stopping MarketScheduler
+2026-04-13 16:28:37,386 | INFO | market_scheduler | Starting MarketScheduler
+2026-04-13 16:28:37,386 | INFO | samco_client | Attempting SAMCO login
+2026-04-13 16:29:53,215 | INFO | market_scheduler | Starting MarketScheduler
+2026-04-13 16:29:53,215 | INFO | samco_client | Attempting SAMCO login
+2026-04-13 16:30:27,543 | INFO | market_scheduler | Starting MarketScheduler
+2026-04-13 16:30:27,547 | INFO | samco_client | Attempting SAMCO login
+2026-04-13 16:30:28,097 | INFO | samco_client | SAMCO login successful
+2026-04-13 16:30:28,203 | INFO | market_scheduler | NIFTY spot=23842.65
+2026-04-13 16:30:28,203 | WARNING | market_scheduler | Bot started after ORB window — no range built. Trading disabled today. Restart before 09:15 tomorrow.
+2026-04-13 16:30:29,256 | INFO | market_scheduler | NIFTY spot=23842.65
+2026-04-13 16:30:30,301 | INFO | market_scheduler | NIFTY spot=23842.65
+2026-04-13 16:30:31,342 | INFO | market_scheduler | NIFTY spot=23842.65
+2026-04-13 16:30:32,456 | INFO | market_scheduler | NIFTY spot=23842.65
+2026-04-13 16:30:33,510 | INFO | market_scheduler | NIFTY spot=23842.65
+2026-04-13 16:30:34,585 | INFO | market_scheduler | NIFTY spot=23842.65
+2026-04-13 16:30:35,648 | INFO | market_scheduler | NIFTY spot=23842.65
+2026-04-13 16:30:35,756 | INFO | market_scheduler | Stopping MarketScheduler
