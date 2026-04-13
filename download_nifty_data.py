@@ -1,60 +1,80 @@
 """
 Lords Bot — Nifty 1-Min Historical Data Downloader
 ====================================================
-Uses your existing Samco credentials to download
-1-minute OHLC data for Nifty 50 from March 1 to today.
+Downloads 1-minute OHLC candles day-by-day using your existing SamcoClient bridge.
 
-USAGE:
-------
-  cd C:\\Users\\bollu\\github\\lords
-  python download_nifty_data.py
+What this script does:
+- Logs into Samco once
+- Uses the live SDK bridge from SamcoClient
+- Tries intraday 1-min endpoint for each trading day
+- Parses multiple possible response shapes
+- Saves combined CSV + JSON into /data
 
-OUTPUT:
--------
-  data/nifty_1min_YYYYMMDD.csv   — use this with backtest.py
+Notes:
+- If Samco returns "No Records Found" for a day, that day is skipped.
+- This script is written to be tolerant of different SDK response shapes.
 """
+
+from __future__ import annotations
 
 import asyncio
 import csv
 import json
-import os
 import sys
-import time
-from datetime import datetime, timedelta, date
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Any, Iterable
 
-# ── Make sure project root is in path ──────────────────
+# project root
 ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
 from backend.app.broker.samco_client import SamcoClient
 
-# ── Config ──────────────────────────────────────────────
-START_DATE  = date(2025, 11, 12)
-END_DATE    = date.today()
-OUTPUT_DIR  = ROOT / "data"
-# Samco intraday endpoint allows 1 day per call only
-RATE_LIMIT  = 0.5   # seconds between API calls
+# --------------------------------------------------
+# CONFIG
+# --------------------------------------------------
+START_DATE = date(2025, 11, 12)
+END_DATE = date.today()
+OUTPUT_DIR = ROOT / "data"
+RATE_LIMIT_SECONDS = 0.5
+
+INDEX_NAME = "NIFTY 50"   # keep this as NIFTY 50 unless your SDK requires NIFTY
 
 
-def trading_days(start: date, end: date):
-    """Yield each weekday between start and end inclusive."""
+# --------------------------------------------------
+# HELPERS
+# --------------------------------------------------
+def trading_days(start: date, end: date) -> Iterable[date]:
+    """Yield weekdays only."""
     current = start
     while current <= end:
-        if current.weekday() < 5:   # Mon–Fri only
+        if current.weekday() < 5:  # Mon-Fri
             yield current
         current += timedelta(days=1)
 
 
-def parse_candles(response: dict, trade_date: date) -> list[dict]:
-    """Parse Samco intraday candle response into list of OHLC rows."""
-    rows = []
+def _first_non_empty(*values):
+    for v in values:
+        if v not in (None, "", [], {}):
+            return v
+    return None
 
-    data = (
-        response.get("data")
-        or response.get("intradayCandleData")
-        or response.get("indexCandleData")
-        or []
+
+def parse_candles(response: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Parse candle responses from different possible SAMCO shapes.
+    Expected output:
+      datetime, open, high, low, close, volume
+    """
+    rows: list[dict[str, Any]] = []
+
+    data = _first_non_empty(
+        response.get("data"),
+        response.get("intradayCandleData"),
+        response.get("indexCandleData"),
+        response.get("candles"),
+        response.get("result"),
     )
 
     if not isinstance(data, list):
@@ -62,197 +82,222 @@ def parse_candles(response: dict, trade_date: date) -> list[dict]:
 
     for item in data:
         try:
-            if isinstance(item, list) and len(item) >= 5:
-                # [datetime_str, open, high, low, close, volume?]
-                rows.append({
-                    "datetime": str(item[0]),
-                    "open":     float(item[1]),
-                    "high":     float(item[2]),
-                    "low":      float(item[3]),
-                    "close":    float(item[4]),
-                    "volume":   float(item[5]) if len(item) > 5 else 0,
-                })
-            elif isinstance(item, dict):
-                dt = (
-                    item.get("dateTime") or item.get("time") or
-                    item.get("date")     or item.get("timestamp")
+            # Shape 1: list/tuple
+            if isinstance(item, (list, tuple)):
+                # Common formats:
+                # [datetime, open, high, low, close, volume]
+                # [dateTime, open, high, low, close]
+                dt = str(item[0]) if len(item) > 0 else ""
+                op = float(item[1]) if len(item) > 1 else 0.0
+                hi = float(item[2]) if len(item) > 2 else 0.0
+                lo = float(item[3]) if len(item) > 3 else 0.0
+                cl = float(item[4]) if len(item) > 4 else 0.0
+                vol = float(item[5]) if len(item) > 5 else 0.0
+
+                rows.append(
+                    {
+                        "datetime": dt,
+                        "open": op,
+                        "high": hi,
+                        "low": lo,
+                        "close": cl,
+                        "volume": vol,
+                    }
                 )
-                rows.append({
-                    "datetime": str(dt),
-                    "open":     float(item.get("open", 0)),
-                    "high":     float(item.get("high", 0)),
-                    "low":      float(item.get("low", 0)),
-                    "close":    float(item.get("close", 0)),
-                    "volume":   float(item.get("volume", 0)),
-                })
+                continue
+
+            # Shape 2: dict
+            if isinstance(item, dict):
+                dt = _first_non_empty(
+                    item.get("dateTime"),
+                    item.get("datetime"),
+                    item.get("timestamp"),
+                    item.get("time"),
+                    item.get("date"),
+                )
+
+                rows.append(
+                    {
+                        "datetime": str(dt) if dt is not None else "",
+                        "open": float(item.get("open", 0) or 0),
+                        "high": float(item.get("high", 0) or 0),
+                        "low": float(item.get("low", 0) or 0),
+                        "close": float(item.get("close", 0) or 0),
+                        "volume": float(item.get("volume", 0) or 0),
+                    }
+                )
+
         except (ValueError, TypeError, IndexError):
             continue
 
     return rows
 
 
-async def download_day(client: SamcoClient, trade_date: date) -> list[dict]:
-    """Download 1-min candles for a single trading day."""
+def _normalize_sort_key(row: dict[str, Any]) -> str:
+    return str(row.get("datetime", ""))
 
+
+def save_csv(rows: list[dict[str, Any]], filepath: Path) -> None:
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["datetime", "open", "high", "low", "close", "volume"],
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def load_existing_rows(csv_path: Path) -> list[dict[str, Any]]:
+    if not csv_path.exists():
+        return []
+
+    rows: list[dict[str, Any]] = []
+    try:
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rows.append(
+                    {
+                        "datetime": row.get("datetime", ""),
+                        "open": float(row.get("open", 0) or 0),
+                        "high": float(row.get("high", 0) or 0),
+                        "low": float(row.get("low", 0) or 0),
+                        "close": float(row.get("close", 0) or 0),
+                        "volume": float(row.get("volume", 0) or 0),
+                    }
+                )
+    except Exception:
+        return []
+
+    return rows
+
+
+# --------------------------------------------------
+# DOWNLOAD ONE DAY
+# --------------------------------------------------
+async def download_day(bridge, trade_date: date) -> tuple[list[dict[str, Any]], str]:
+    """
+    Returns:
+      (candles, error_message)
+
+    If candles are available, error_message will be empty.
+    """
     date_str = trade_date.strftime("%Y-%m-%d")
 
     try:
-        # PRIMARY: get_index_intraday_candle_data — 1-min index data
+        # Primary call: intraday 1-min candles
         result = await asyncio.to_thread(
-            client.samco.get_index_intraday_candle_data,
-            index_name="NIFTY 50",
+            bridge.get_index_intraday_candle_data,
+            index_name=INDEX_NAME,
             from_date=f"{date_str} 09:15:00",
             to_date=f"{date_str} 15:30:00",
         )
         response = SamcoClient._parse_response(result)
 
         if response.get("status") == "Success":
-            candles = parse_candles(response, trade_date)
+            candles = parse_candles(response)
             if candles:
-                return candles
+                return candles, ""
 
-        # FALLBACK: get_index_candle_data with time interval
-        result2 = await asyncio.to_thread(
-            client.samco.get_index_candle_data,
-            index_name="NIFTY 50",
-            from_date=f"{date_str} 09:15:00",
-            to_date=f"{date_str} 15:30:00",
-            time_interval_type="minutes",
-            time_interval=1,
+        # If API returns a structured error, preserve it
+        err = _first_non_empty(
+            response.get("message"),
+            response.get("statusMessage"),
+            response.get("validationErrors"),
+            response,
         )
-        response2 = SamcoClient._parse_response(result2)
-
-        if response2.get("status") == "Success":
-            candles2 = parse_candles(response2, trade_date)
-            if candles2:
-                return candles2
-
-        # Log failure
-        err = response.get("message") or response.get("validationErrors") or response
-        print(f"    ⚠️  No data for {date_str}: {err}")
-        return []
+        return [], str(err)
 
     except Exception as exc:
-        print(f"    ❌ Error for {date_str}: {exc}")
-        return []
+        return [], str(exc)
 
 
-def save_csv(rows: list[dict], filepath: Path):
-    filepath.parent.mkdir(parents=True, exist_ok=True)
-    with open(filepath, "w", newline="") as f:
-        writer = csv.DictWriter(
-            f, fieldnames=["datetime", "open", "high", "low", "close", "volume"]
-        )
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-async def main():
+# --------------------------------------------------
+# MAIN
+# --------------------------------------------------
+async def main() -> None:
     days = list(trading_days(START_DATE, END_DATE))
 
-    print("\n" + "═" * 55)
-    print("  LORDS BOT — Nifty 1-Min Data Downloader")
-    print(f"  Range  : {START_DATE} → {END_DATE}")
-    print(f"  Days   : {len(days)} trading days")
-    print(f"  Output : {OUTPUT_DIR}/")
-    print("═" * 55 + "\n")
+    print("\n═══════════════════════════════════════════════════════")
+    print("LORDS BOT — Nifty 1-Min Data Downloader")
+    print(f"Range : {START_DATE} → {END_DATE}")
+    print(f"Days  : {len(days)}")
+    print("═══════════════════════════════════════════════════════\n")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # ── Login ───────────────────────────────────────────
     client = SamcoClient()
+
     print("Logging into Samco...")
     await client.login()
-    print("Login successful ✅\n")
+    print("Login successful\n")
 
-    # ── Check for existing partial download ─────────────
-    today_str    = END_DATE.strftime("%Y%m%d")
-    csv_path     = OUTPUT_DIR / f"nifty_1min_{today_str}.csv"
-    already_done = set()
+    # Use the actual SDK bridge from SamcoClient
+    bridge = client._get_bridge()
 
-    if csv_path.exists():
-        with open(csv_path) as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                try:
-                    d = datetime.fromisoformat(row["datetime"]).date()
-                    already_done.add(d)
-                except Exception:
-                    pass
-        print(f"Resuming — {len(already_done)} days already downloaded\n")
+    # Resumable output file
+    out_name = f"nifty_1min_{END_DATE.strftime('%Y%m%d')}.csv"
+    csv_path = OUTPUT_DIR / out_name
+    json_path = OUTPUT_DIR / out_name.replace(".csv", ".json")
 
-    # ── Download day by day ─────────────────────────────
-    all_rows = []
-    ok_days  = 0
+    existing_rows = load_existing_rows(csv_path)
+    existing_keys = {row["datetime"] for row in existing_rows}
+
+    all_rows = list(existing_rows)
+    ok_days = 0
     fail_days = 0
 
     for i, day in enumerate(days, 1):
-        if day in already_done:
-            print(f"  [{i:>2}/{len(days)}] {day} — already have ✅")
+        if day in {datetime.fromisoformat(k).date() for k in existing_keys if k}:
+            print(f"[{i}/{len(days)}] {day} ... already present ✅")
             continue
 
-        print(f"  [{i:>2}/{len(days)}] {day} ... ", end="", flush=True)
-        candles = await download_day(client, day)
+        print(f"[{i}/{len(days)}] {day} ... ", end="", flush=True)
+
+        candles, err = await download_day(bridge, day)
 
         if candles:
-            all_rows.extend(candles)
+            new_count = 0
+            for row in candles:
+                key = row["datetime"]
+                if key not in existing_keys:
+                    existing_keys.add(key)
+                    all_rows.append(row)
+                    new_count += 1
+
             ok_days += 1
-            print(f"{len(candles)} candles ✅")
+            print(f"{new_count} candles ✅")
         else:
             fail_days += 1
-            print("no data ⚠️")
+            print(f"no data ⚠️")
+            if err:
+                print(f"    ↳ {err}")
 
-        time.sleep(RATE_LIMIT)
+        await asyncio.sleep(RATE_LIMIT_SECONDS)
 
-    if not all_rows and not already_done:
-        print("\n❌ No data downloaded at all.")
-        print("\nThe Samco intraday index API may require a different parameter format.")
-        print("Please paste the error messages above and I'll fix the script.\n")
+    if not all_rows:
+        print("\n❌ No candles downloaded.")
         return
 
-    # ── Merge with existing if resuming ─────────────────
-    existing_rows = []
-    if csv_path.exists() and already_done:
-        with open(csv_path) as f:
-            reader = csv.DictReader(f)
-            existing_rows = list(reader)
+    all_rows.sort(key=_normalize_sort_key)
 
-    combined = existing_rows + all_rows
+    save_csv(all_rows, csv_path)
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(all_rows, f, indent=2)
 
-    # Deduplicate and sort
-    seen   = set()
-    unique = []
-    for row in combined:
-        key = row["datetime"]
-        if key not in seen:
-            seen.add(key)
-            unique.append(row)
-
-    unique.sort(key=lambda r: r["datetime"])
-
-    # ── Save ────────────────────────────────────────────
-    save_csv(unique, csv_path)
-
-    # Also save JSON
-    json_path = OUTPUT_DIR / f"nifty_1min_{today_str}.json"
-    with open(json_path, "w") as f:
-        json.dump(unique, f, indent=2)
-
-    # ── Summary ─────────────────────────────────────────
     print(f"\n{'═'*55}")
-    print(f"  ✅ Done!")
-    print(f"  Total candles : {len(unique):,}")
-    print(f"  Days OK       : {ok_days + len(already_done)}")
-    print(f"  Days failed   : {fail_days}")
-    print(f"  CSV           : {csv_path}")
+    print("✅ Done!")
+    print(f"Total candles : {len(all_rows):,}")
+    print(f"Days OK       : {ok_days}")
+    print(f"Days failed   : {fail_days}")
+    print(f"CSV           : {csv_path}")
+    print(f"JSON          : {json_path}")
     print(f"{'═'*55}")
-    print(f"\nRun backtest with real data:")
-    print(f"  python backtest.py --file {csv_path} --start 2026-03-01 --end 2026-04-10\n")
+
+    print("\nRun backtest with real data:")
+    print(f"  python backtest_runner.py --file {csv_path}")
 
 
 if __name__ == "__main__":
-    if "--probe" in sys.argv:
-        # Already ran probe — this shouldn't be called again
-        print("Probe already complete. Run without --probe to download data.")
-    else:
-        asyncio.run(main())
+    asyncio.run(main())
