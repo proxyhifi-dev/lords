@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lords Bot — NIFTY Options Trading</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<!-- ══ HEADER ══════════════════════════════════════════ -->
+<header class="header">
+  <div class="header-left">
+    <span class="logo-mark">▲</span>
+    <div>
+      <h1 class="logo-title">LORDS BOT</h1>
+      <p class="logo-sub">NIFTY OPTIONS · ORB STRATEGY</p>
+    </div>
+  </div>
+  <div class="header-center">
+    <div class="spot-display">
+      <span class="spot-label">NIFTY 50</span>
+      <span id="nifty-spot" class="spot-value">—</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-pill" id="status-pill">
+      <span class="status-dot"></span>
+      <span id="status-text">OFFLINE</span>
+    </div>
+    <div class="mode-badge" id="mode-badge">PAPER</div>
+    <span id="last-update" class="timestamp">—</span>
+  </div>
+</header>
+
+<!-- ══ MAIN GRID ════════════════════════════════════════ -->
+<main class="grid">
+
+  <!-- ── ROW 1: P&L Cards ─────────────────────────── -->
+  <section class="card card--pnl" id="card-daily-pnl">
+    <p class="card-label">DAILY P&L</p>
+    <p class="card-value" id="daily-pnl">₹0</p>
+    <p class="card-sub" id="trade-count">0 trades today</p>
+  </section>
+
+  <section class="card card--pnl" id="card-live-pnl">
+    <p class="card-label">LIVE P&L</p>
+    <p class="card-value" id="live-pnl">₹0</p>
+    <p class="card-sub">open position</p>
+  </section>
+
+  <section class="card">
+    <p class="card-label">ORB RANGE</p>
+    <div class="orb-display">
+      <div class="orb-item">
+        <span class="orb-tag">HIGH</span>
+        <span id="orb-high" class="orb-val orb-high">—</span>
+      </div>
+      <div class="orb-sep">↕</div>
+      <div class="orb-item">
+        <span class="orb-tag">LOW</span>
+        <span id="orb-low" class="orb-val orb-low">—</span>
+      </div>
+    </div>
+    <p class="card-sub" id="orb-range-pts">Range: —</p>
+  </section>
+
+  <section class="card">
+    <p class="card-label">SIGNAL</p>
+    <p class="card-value signal-display" id="signal-display">NONE</p>
+    <p class="card-sub" id="signal-sub">waiting for breakout</p>
+  </section>
+
+  <!-- ── ROW 2: Active Trade ───────────────────────── -->
+  <section class="card card--wide card--trade" id="active-trade-card">
+    <div class="trade-header">
+      <p class="card-label">ACTIVE TRADE</p>
+      <span class="trade-status-badge" id="trade-badge">NO POSITION</span>
+    </div>
+    <div id="no-trade" class="no-trade">
+      <span class="no-trade-icon">◈</span>
+      <span>No open position</span>
+    </div>
+    <div id="trade-details" class="trade-details hidden">
+      <div class="trade-grid">
+        <div class="td-item"><span class="td-label">Symbol</span><span id="td-symbol" class="td-val">—</span></div>
+        <div class="td-item"><span class="td-label">Entry</span><span id="td-entry" class="td-val">—</span></div>
+        <div class="td-item"><span class="td-label">LTP</span><span id="td-ltp" class="td-val">—</span></div>
+        <div class="td-item"><span class="td-label">Qty</span><span id="td-qty" class="td-val">—</span></div>
+        <div class="td-item"><span class="td-label">SL</span><span id="td-sl" class="td-val td-danger">—</span></div>
+        <div class="td-item"><span class="td-label">T1</span><span id="td-t1" class="td-val td-warn">—</span></div>
+        <div class="td-item"><span class="td-label">T2</span><span id="td-t2" class="td-val td-good">—</span></div>
+        <div class="td-item"><span class="td-label">T1 Hit</span><span id="td-t1hit" class="td-val">—</span></div>
+      </div>
+    </div>
+    <div class="trade-actions">
+      <button id="btn-flatten" class="btn btn--danger hidden" onclick="flattenPosition()">⚡ FLATTEN</button>
+    </div>
+  </section>
+
+  <!-- ── ROW 2: Controls ──────────────────────────── -->
+  <section class="card card--controls">
+    <p class="card-label">CONTROLS</p>
+    <div class="controls-grid">
+      <button id="btn-start" class="btn btn--primary" onclick="startBot()">▶ START BOT</button>
+      <button id="btn-stop" class="btn btn--secondary" onclick="stopBot()">■ STOP BOT</button>
+      <div class="mode-toggle">
+        <span class="td-label">Mode</span>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="btn-paper" onclick="setMode('PAPER')">PAPER</button>
+          <button class="toggle-btn" id="btn-live" onclick="setMode('LIVE')">LIVE</button>
+        </div>
+      </div>
+      <div class="mode-toggle">
+        <span class="td-label">Trading</span>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="btn-enable" onclick="setTrading(true)">ON</button>
+          <button class="toggle-btn" id="btn-disable" onclick="setTrading(false)">OFF</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ROW 3: P&L Chart ─────────────────────────── -->
+  <section class="card card--chart">
+    <p class="card-label">EQUITY CURVE — TODAY</p>
+    <div class="chart-wrap">
+      <canvas id="pnl-chart"></canvas>
+      <p id="chart-empty" class="chart-empty">No trades yet — chart updates after first exit</p>
+    </div>
+  </section>
+
+  <!-- ── ROW 3: Trade Log ─────────────────────────── -->
+  <section class="card card--log">
+    <p class="card-label">TRADE LOG</p>
+    <div class="table-wrap">
+      <table class="trade-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Signal</th>
+            <th>Symbol</th>
+            <th>Entry</th>
+            <th>Exit</th>
+            <th>Qty</th>
+            <th>P&L</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody id="trade-tbody">
+          <tr><td colspan="8" class="empty-row">No trades today</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<!-- ══ FOOTER ══════════════════════════════════════════ -->
+<footer class="footer">
+  <span>Lords Bot v2.0 · NIFTY ORB Strategy</span>
+  <span id="footer-mode">Mode: —</span>
+  <span>Auto-refresh: 2s</span>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/dashboard.js"></script>
+</body>
+</html>
