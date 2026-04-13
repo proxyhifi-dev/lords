@@ -1,206 +1,131 @@
+"""
+Lords Bot — FastAPI Entry Point
+Run: uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+Dashboard: http://localhost:8000
+"""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, UTC
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-# CONFIG
-from backend.config import settings
+from backend.app.core.config_loader import get_settings
+from backend.app.utils.logger import configure_logging, get_logger
 
-# LOGGER
-from backend.app.utils.logger import configure_logging
-
-# SCHEDULER
-from backend.app.scheduler.market_scheduler import scheduler
-
-
-# -----------------------------
-# INIT LOGGING
-# -----------------------------
 configure_logging()
+logger   = get_logger("main")
+settings = get_settings()
 
 
-# -----------------------------
-# APP LIFESPAN
-# -----------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🚀 Starting Lords Bot Scheduler...")
+    from backend.app.scheduler.market_scheduler import scheduler
+    logger.info("Lords Bot starting — mode=%s", settings.mode.upper())
     await scheduler.start()
     yield
-    print("🛑 Stopping Lords Bot Scheduler...")
+    logger.info("Lords Bot shutting down")
     await scheduler.stop()
 
 
-# -----------------------------
-# FASTAPI APP
-# -----------------------------
-app = FastAPI(
-    title=settings.app_name,
-    lifespan=lifespan
-)
+app = FastAPI(title="Lords Bot", version="3.0.0", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"],
+                   allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
+# ── Static frontend ───────────────────────────────────
+fp = Path(settings.frontend_dir)
+if fp.exists():
+    app.mount("/static", StaticFiles(directory=str(fp)), name="static")
 
-# -----------------------------
-# CORS
-# -----------------------------
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# -----------------------------
-# FRONTEND
-# -----------------------------
-frontend_path = Path(settings.frontend_dir)
-
-print("Frontend path:", frontend_path)
-
-if frontend_path.exists():
-    app.mount(
-        "/static",
-        StaticFiles(directory=str(frontend_path)),
-        name="static"
-    )
-
-
-# -----------------------------
-# ROOT
-# -----------------------------
+# ── API routes ────────────────────────────────────────
 @app.get("/")
 async def root():
-    index_file = frontend_path / "index.html"
+    idx = fp / "index.html"
+    return FileResponse(idx) if idx.exists() else JSONResponse({"message": "Lords Bot API — frontend not found"})
 
-    if index_file.exists():
-        return FileResponse(index_file)
-
-    return {"message": "Lords Bot API running"}
-
-
-# -----------------------------
-# HEALTH
-# -----------------------------
 @app.get("/health")
 async def health():
+    from backend.app.scheduler.market_scheduler import scheduler
+    return {"status": "ok", "scheduler_running": scheduler.running, "mode": settings.mode.upper()}
 
-    return {
-        "status": "ok",
-        "scheduler_running": scheduler.running,
-        "app": settings.app_name
-    }
-
-
-# -----------------------------
-# DASHBOARD
-# -----------------------------
 @app.get("/api/dashboard")
 async def dashboard():
-
+    from backend.app.scheduler.market_scheduler import scheduler
     try:
-
-        state = await scheduler.engine.state_manager.snapshot()
-
-        trades = scheduler.engine.trade_store.get_all_trades()
-
+        state  = await scheduler.state.snapshot()
+        trades = scheduler.trade_store.get_all_trades()
         return {
-
-            "bot_status": "RUNNING" if scheduler.running else "STOPPED",
-
-            "trading_mode": getattr(
-                scheduler.engine.state_manager,
-                "trading_mode",
-                "PAPER"
-            ),
-
-            "nifty_spot": state.spot_price,
-
-            "orb_high": state.orb_high,
-            "orb_low": state.orb_low,
-
-            "signal": state.signal,
-
-            "active_trade": state.active_trade,
-
-            "daily_pnl": state.daily_pnl,
-
-            "trade_count": state.trade_count,
-
-            "trade_history": trades[-20:],   # last 20 trades
-
-            "timestamp": datetime.now(UTC).isoformat()
-
+            "bot_running":     state.bot_running,
+            "trading_mode":    state.trading_mode,
+            "trading_enabled": state.trading_enabled,
+            "nifty_spot":      state.spot_price,
+            "orb_high":        state.orb_high,
+            "orb_low":         state.orb_low,
+            "signal":          state.signal,
+            "active_trade":    state.active_trade,
+            "daily_pnl":       round(state.daily_pnl, 2),
+            "live_pnl":        round(state.live_pnl,  2),
+            "trade_count":     state.trade_count,
+            "trade_history":   trades[-50:],
+            "timestamp":       datetime.now(UTC).isoformat(),
         }
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
 
-    except Exception as e:
+@app.get("/api/status")
+async def status():
+    from backend.app.scheduler.market_scheduler import scheduler
+    state = await scheduler.state.snapshot()
+    return {"bot_running": state.bot_running, "trading_mode": state.trading_mode,
+            "trading_enabled": state.trading_enabled, "mode": settings.mode.upper(),
+            "timestamp": datetime.now(UTC).isoformat()}
 
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+@app.get("/api/pnl")
+async def pnl():
+    from backend.app.scheduler.market_scheduler import scheduler
+    state = await scheduler.state.snapshot()
+    return {"daily_pnl": round(state.daily_pnl, 2), "live_pnl": round(state.live_pnl, 2),
+            "trade_count": state.trade_count}
 
+@app.get("/api/trades")
+async def trades():
+    from backend.app.scheduler.market_scheduler import scheduler
+    return {"trades": scheduler.trade_store.get_all_trades()}
 
-# -----------------------------
-# TRADING MODE
-# -----------------------------
+@app.post("/api/start")
+async def start():
+    from backend.app.scheduler.market_scheduler import scheduler
+    if scheduler.running: return {"status": "already_running"}
+    await scheduler.start()
+    return {"status": "started"}
+
+@app.post("/api/stop")
+async def stop():
+    from backend.app.scheduler.market_scheduler import scheduler
+    if not scheduler.running: return {"status": "already_stopped"}
+    await scheduler.stop()
+    return {"status": "stopped"}
+
 @app.post("/api/trading-mode")
-async def trading_mode(mode: dict):
+async def set_mode(body: dict):
+    from backend.app.scheduler.market_scheduler import scheduler
+    mode = body.get("mode", "PAPER").upper()
+    if mode not in ("PAPER", "LIVE"): return {"status": "error", "message": "mode must be PAPER or LIVE"}
+    await scheduler.state.update(trading_mode=mode)
+    return {"status": "ok", "mode": mode}
 
-    value = mode.get("mode", "PAPER").upper()
+@app.post("/api/trading-enabled")
+async def set_trading(body: dict):
+    from backend.app.scheduler.market_scheduler import scheduler
+    enabled = bool(body.get("enabled", True))
+    await scheduler.state.update(trading_enabled=enabled)
+    return {"status": "ok", "trading_enabled": enabled}
 
-    scheduler.engine.state_manager.trading_mode = value
-
-    return {
-        "status": "ok",
-        "mode": value
-    }
-
-
-# -----------------------------
-# FLATTEN POSITION
-# -----------------------------
 @app.post("/api/trade/flatten")
 async def flatten():
-
-    state = await scheduler.engine.state_manager.snapshot()
-
-    if not state.active_trade:
-
-        return {
-            "status": "no_active_trade"
-        }
-
-    symbol = state.active_trade.get("symbol")
-
-    qty = state.active_trade.get("order", {}).get("quantity", 0)
-
-    try:
-
-        await scheduler.engine.broker.place_order(
-            symbol=symbol,
-            side="SELL",
-            quantity=qty
-        )
-
-        await scheduler.engine.state_manager.update(
-            active_trade=None
-        )
-
-        return {
-            "status": "flattened"
-        }
-
-    except Exception as e:
-
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+    from backend.app.scheduler.market_scheduler import scheduler
+    return await scheduler.flatten_position()
