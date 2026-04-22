@@ -69,6 +69,7 @@ class MarketScheduler:
         self._previous_spot: float | None = None
         self._last_closed_log   = 0.0
         self._daily_reset_date  = ""
+        self._last_broker_error = 0.0
 
         # Candle builder
         self._current_minute: datetime | None = None
@@ -169,7 +170,14 @@ class MarketScheduler:
 
     # ── Tick ──────────────────────────────────────────
     async def _tick(self):
-        quote = await self.broker.get_index_quote(settings.nifty_symbol)
+        try:
+            quote = await self.broker.get_index_quote(settings.nifty_symbol)
+        except RuntimeError as exc:
+            now_ts = _time.time()
+            if now_ts - self._last_broker_error >= _LOG_INTERVAL:
+                logger.warning("Broker quote unavailable: %s", exc)
+                self._last_broker_error = now_ts
+            return
         spot  = SamcoClient.parse_spot(quote)
 
         if spot is None:

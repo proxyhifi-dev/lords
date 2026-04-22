@@ -49,6 +49,8 @@ class SamcoClient:
         self._QUOTE_TTL = 1
         self._CHAIN_TTL = 5
         self._samco = None
+        self._auth_failed_until = 0.0
+        self._last_auth_error = ""
 
     def _get_bridge(self):
         if self._samco is None:
@@ -62,6 +64,11 @@ class SamcoClient:
     # ── AUTH ──────────────────────────────────────────
     async def login(self) -> dict:
         async with self._lock:
+            now_ts = time.time()
+            if now_ts < self._auth_failed_until:
+                wait = int(self._auth_failed_until - now_ts)
+                raise RuntimeError(f"SAMCO login cooldown active ({wait}s): {self._last_auth_error}")
+
             logger.info("SAMCO login user=%s", settings.samco_user_id)
             body: dict[str, Any] = {
                 "userId":   settings.samco_user_id,
@@ -75,6 +82,10 @@ class SamcoClient:
             resp   = self._parse_response(await asyncio.to_thread(bridge.login, body=body))
 
             if resp.get("status") != "Success":
+                msg = str(resp.get("statusMessage") or resp)
+                self._last_auth_error = msg
+                self._session_live = False
+                self._auth_failed_until = time.time() + max(float(settings.reconnect_base_delay), 30.0)
                 raise RuntimeError(f"SAMCO login failed: {resp}")
 
             token = resp.get("sessionToken")
@@ -83,6 +94,8 @@ class SamcoClient:
 
             await asyncio.to_thread(bridge.set_session_token, sessionToken=token)
             self._session_live = True
+            self._auth_failed_until = 0.0
+            self._last_auth_error = ""
             logger.info("SAMCO login successful")
             return resp
 
