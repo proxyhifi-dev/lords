@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.config_loader import get_settings
@@ -71,7 +71,7 @@ class OrderExecutor:
                 "symbol": symbol,
                 "signal": signal,
                 "entry_price": spot,
-                "entry_time": datetime.now(UTC).isoformat(),
+                "entry_time": datetime.now(timezone.utc).isoformat(),
                 "order": order,
                 "status": "ENTERED",
             }

@@ -13,7 +13,7 @@ Fixes vs old version:
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, time as dtime
+from datetime import datetime, timezone, time as dtime
 from zoneinfo import ZoneInfo
 
 from backend.app.broker.samco_client import SamcoClient
@@ -119,7 +119,7 @@ class TradingEngine:
                     "strike":      strike,
                     "qty":         qty,
                     "entry_price": ltp,
-                    "entry_time":  datetime.now(UTC).isoformat(),
+                    "entry_time":  datetime.now(timezone.utc).isoformat(),
                     "status":      "OPEN",
                     "signal":      signal,
                     "max_price":   ltp,
@@ -251,7 +251,7 @@ class TradingEngine:
             total_pnl = round(trade.get("t1_pnl", 0) + t2_pnl, 2)
             new_daily = round(state.daily_pnl + t2_pnl, 2)
 
-            closed = {**trade, "exit_price": price, "exit_time": datetime.now(UTC).isoformat(),
+            closed = {**trade, "exit_price": price, "exit_time": datetime.now(timezone.utc).isoformat(),
                       "status": "CLOSED", "exit_reason": reason, "pnl": total_pnl, "sell_order_id": sell_id}
             self.trade_store.append_trade(closed, new_daily)
             await self.state_manager.update(active_trade=None, daily_pnl=new_daily, live_pnl=0.0)
@@ -281,7 +281,7 @@ class TradingEngine:
             total_pnl = round(trade.get("t1_pnl", 0) + exit_pnl, 2)
             new_daily = round(state.daily_pnl + exit_pnl, 2)
 
-            closed = {**trade, "exit_price": price, "exit_time": datetime.now(UTC).isoformat(),
+            closed = {**trade, "exit_price": price, "exit_time": datetime.now(timezone.utc).isoformat(),
                       "status": "CLOSED", "exit_reason": reason, "pnl": total_pnl, "sell_order_id": sell_id}
             self.trade_store.append_trade(closed, new_daily)
             await self.state_manager.update(active_trade=None, daily_pnl=new_daily, live_pnl=0.0)
