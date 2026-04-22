@@ -130,6 +130,9 @@ class SamcoClient:
             "get_quote",
         )
         if not isinstance(result, dict): result = {}
+        # Debug: log top-level keys once to help diagnose field name issues
+        if result and logger.isEnabledFor(10):  # DEBUG level
+            logger.debug("get_quote(%s) top-level keys: %s", symbol_name, list(result.keys()))
         self._quote_cache[key] = {"ts": time.time(), "data": result}
         return result
 

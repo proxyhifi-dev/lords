@@ -169,8 +169,10 @@ class OptionChainCollector:
 
     @staticmethod
     def _resolve_expiry_date() -> str:
-        # Samco expects DD-Mon-YYYY; nearest weekly expiry (Thursday).
-        today = datetime.now(timezone.utc).date()
-        days_until_thu = (3 - today.weekday()) % 7
-        expiry = today + timedelta(days=days_until_thu)
-        return expiry.strftime("%d-%b-%Y")
+        """
+        Returns next NIFTY weekly expiry in DD-Mon-YYYY format.
+        NSE rule change (Sep 2 2025): expiry moved from Thursday → Tuesday.
+        """
+        from backend.app.broker.samco_client import get_weekly_expiry
+        expiry = get_weekly_expiry()
+        return expiry.strftime("%d-%b-%Y").upper()

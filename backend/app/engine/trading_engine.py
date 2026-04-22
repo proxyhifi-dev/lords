@@ -9,6 +9,8 @@ Fixes vs old version:
   4. T1 booked flag checked before _exit_trade to avoid double-sell
   5. No risk re-checks here (RiskManager is single source of truth)
   6. Symbol cache cleared on daily reset
+  7. Volume check skipped when min_option_volume == 0 (v3.1 fix)
+  8. Volume parsed from quoteDetails nesting (v3.1 fix)
 """
 from __future__ import annotations
 
@@ -26,6 +28,38 @@ from backend.app.utils.logger import get_logger
 settings = get_settings()
 logger   = get_logger("trading_engine")
 IST = ZoneInfo("Asia/Kolkata")
+
+
+def _parse_volume(quote: dict) -> int:
+    """Extract traded volume from SAMCO quote response (handles all nesting variants)."""
+    def _int(val) -> int:
+        try: return int(float(str(val).replace(",", "").strip()))
+        except (TypeError, ValueError): return 0
+
+    # Flat keys on root
+    for k in ("tradedVolume", "volume", "traded_volume", "totalTradedVolume"):
+        v = _int(quote.get(k))
+        if v > 0: return v
+
+    # Inside quoteDetails
+    inner = quote.get("quoteDetails")
+    if isinstance(inner, list) and inner:
+        inner = inner[0]
+    if isinstance(inner, dict):
+        for k in ("tradedVolume", "volume", "totalTradedVolume"):
+            v = _int(inner.get(k))
+            if v > 0: return v
+
+    # Inside data
+    data = quote.get("data")
+    if isinstance(data, list) and data:
+        data = data[0]
+    if isinstance(data, dict):
+        for k in ("tradedVolume", "volume", "totalTradedVolume"):
+            v = _int(data.get(k))
+            if v > 0: return v
+
+    return 0
 
 
 class TradingEngine:
@@ -83,20 +117,13 @@ class TradingEngine:
                 if ltp < settings.min_entry_premium:
                     logger.warning("Premium ₹%.1f < min ₹%.1f — skip %s", ltp, settings.min_entry_premium, symbol); return
 
-                details = quote.get("quoteDetails") or quote.get("data") or {}
-                if isinstance(details, list):
-                    details = details[0] if details else {}
-                vol = 0
-                try: vol = int(quote.get("volume") or quote.get("tradedVolume") or 0)
-                except (TypeError, ValueError):
-                    vol = 0
-                if vol <= 0:
-                    try:
-                        vol = int(details.get("tradedVolume") or details.get("volume") or 0)
-                    except (TypeError, ValueError):
-                        vol = 0
-                if vol < settings.min_option_volume:
-                    logger.warning("Low volume %d — skip %s", vol, symbol); return
+                # Volume check — skip entirely if min_option_volume == 0
+                if settings.min_option_volume > 0:
+                    vol = _parse_volume(quote)
+                    if vol < settings.min_option_volume:
+                        logger.warning("Low volume %d < %d — skip %s", vol, settings.min_option_volume, symbol)
+                        return
+                    logger.debug("Volume OK: %d >= %d for %s", vol, settings.min_option_volume, symbol)
 
                 qty = self._get_qty(size_label)
 

@@ -14,13 +14,16 @@ def build_dashboard_router(state_manager: StateManager) -> APIRouter:
         state = await state_manager.snapshot()
 
         return {
-            "spot_price": state.spot_price,
-            "orb_high": state.orb_high,
-            "orb_low": state.orb_low,
-            "signal": state.signal,
-            "active_trade": state.active_trade,
-            "daily_pnl": state.daily_pnl,
-            "live_pnl": state.live_pnl
+            "bot_running":     state.bot_running,
+            "trading_enabled": state.trading_enabled,
+            "spot_price":      state.spot_price,
+            "orb_high":        state.orb_high,
+            "orb_low":         state.orb_low,
+            "signal":          state.signal,
+            "active_trade":    state.active_trade,
+            "daily_pnl":       round(state.daily_pnl, 2),
+            "live_pnl":        round(state.live_pnl, 2),
+            "trade_count":     state.trade_count,
         }
 
     return router

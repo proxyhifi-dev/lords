@@ -1,6 +1,10 @@
 from __future__ import annotations
 from functools import lru_cache
+from pathlib import Path
 from pydantic_settings import BaseSettings
+
+# Always resolve .env from project root regardless of CWD
+_ENV_FILE = Path(__file__).resolve().parent.parent.parent.parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -31,7 +35,7 @@ class Settings(BaseSettings):
 
     # Entry filters
     min_entry_premium: float = 30.0
-    min_option_volume: int = 500
+    min_option_volume: int = 0          # 0 = disabled (set in .env to filter illiquid)
     otm_distance: int = 1
 
     # ORB
@@ -71,7 +75,8 @@ class Settings(BaseSettings):
     frontend_dir: str = "frontend"
 
     class Config:
-        env_file = ".env"
+        env_file = str(_ENV_FILE)
+        env_file_encoding = "utf-8"
         extra = "allow"
 
     @property

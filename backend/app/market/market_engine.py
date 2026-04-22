@@ -5,7 +5,8 @@ import asyncio
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.event_bus import EventBus
 from backend.app.utils.logger import get_logger
-from backend.config import settings
+from backend.app.core.config_loader import get_settings
+settings = get_settings()
 
 
 class MarketEngine:

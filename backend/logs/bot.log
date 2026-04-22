@@ -120,3 +120,1875 @@
 2026-04-13 16:30:34,585 | INFO | market_scheduler | NIFTY spot=23842.65
 2026-04-13 16:30:35,648 | INFO | market_scheduler | NIFTY spot=23842.65
 2026-04-13 16:30:35,756 | INFO | market_scheduler | Stopping MarketScheduler
+2026-04-22 11:12:12  INFO      main                        Lords Bot starting — mode=PAPER
+2026-04-22 11:12:12  INFO      market_scheduler            Starting Lords Bot — mode=PAPER
+2026-04-22 11:12:12  INFO      state_manager               State loaded — trade_date=
+2026-04-22 11:12:12  INFO      state_manager               Daily reset:  → 2026-04-22
+2026-04-22 11:12:12  INFO      state_manager               Daily reset complete
+2026-04-22 11:12:12  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:14  ERROR     market_scheduler            SAMCO login failed: SAMCO login failed: {'serverTime': '22/04/26 11:12:13', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'} — running offline
+2026-04-22 11:12:14  INFO      market_scheduler            All tasks started
+2026-04-22 11:12:14  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:14  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:13', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:13', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:15  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:15  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:14', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:14', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:16  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:16  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:16', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:16', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:17  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:17  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:17', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:17', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:18  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:18  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:18', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:18', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:19  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:19  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:19', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:19', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:20  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:20  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:20', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:20', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:21  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:21  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:21', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:21', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:22  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:22  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:22', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:22', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:23  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:23  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:23', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:23', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:24  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:24  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:24', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:24', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:25  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:26  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:25', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:25', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:27  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:27  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:27', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:27', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:28  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:28  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:28', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:28', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:29  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:29  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:29', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:29', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:30  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:30  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:30', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:30', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:31  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:31  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:31', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:31', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:32  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:32  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:32', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:32', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:33  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:33  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:33', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:33', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:34  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:34  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:34', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:34', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:35  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:35  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:35', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:35', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:36  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:36  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:36', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:36', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:37  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:37  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:37', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:37', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:38  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:39  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:38', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:38', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:40  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:40  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:39', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:39', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:41  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:41  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:40', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:40', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:42  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:42  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:41', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:41', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:43  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:43  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:43', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:43', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:44  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:44  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:44', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:44', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:45  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:45  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:45', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:45', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:46  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:46  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:46', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:46', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:47  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:47  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:47', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:47', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:48  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:48  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:48', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:48', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:49  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:50  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:49', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:49', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:51  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:51  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:51', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:51', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:52  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:52  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:52', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:52', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:53  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:53  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:53', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:53', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:54  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:54  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:54', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:54', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:55  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:55  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:55', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:55', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:56  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:56  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:56', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:56', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:57  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:57  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:57', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:57', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:58  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:58  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:58', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:58', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:12:59  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:12:59  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:12:59', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:12:59', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:00  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:00  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:00', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:00', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:01  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:01  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:01', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:01', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:02  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:02  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:02', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:02', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:03  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:04  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:03', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:03', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:05  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:05  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:04', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:04', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:06  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:06  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:05', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:05', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:07  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:07  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:06', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:06', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:08  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:08  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:08', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:08', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:09  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:09  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:09', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:09', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:10  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:10  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:10', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:10', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:11  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:11  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:11', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:11', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:12  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:12  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:12', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:12', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:13  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:13  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:13', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:13', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:14  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:14  WARNING   trading_engine              Healthcheck failed — re-login
+2026-04-22 11:13:14  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:14  ERROR     trading_engine              Health loop: SAMCO login failed: {'serverTime': '22/04/26 11:13:14', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:14  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:14  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:14', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:14', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:15  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:15  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:15', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:15', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:16  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:16  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:16', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:16', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:17  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:17  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:17', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:17', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:18  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:18  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:18', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:18', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:19  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:20  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:19', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:19', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:21  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:21  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:20', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:20', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:22  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:22  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:22', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:22', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:23  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:23  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:23', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:23', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:24  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:24  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:24', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:24', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:25  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:25  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:25', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:25', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:26  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:26  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:26', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:26', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:27  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:27  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:27', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:27', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:28  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:28  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:28', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:28', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:29  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:29  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:29', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:29', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:30  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:30  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:30', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:30', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:31  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:31  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:31', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:31', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:32  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:32  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:32', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:32', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:33  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:33  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:33', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:33', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:34  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:34  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:34', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:34', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:35  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:36  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:35', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:35', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:37  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:37  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:36', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:36', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:38  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:38  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:37', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:37', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:39  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:39  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:38', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:38', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:40  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:40  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:40', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:40', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:41  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:41  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:41', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:41', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:42  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:42  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:42', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:42', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:43  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:43  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:43', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:43', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:44  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:44  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:44', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:44', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:45  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:45  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:45', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:45', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:46  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:46  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:46', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:46', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:47  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:47  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:47', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:47', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:48  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:48  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:48', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:48', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:49  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:49  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:49', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:49', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:50  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:50  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:50', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:50', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:51  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:51  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:51', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:51', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:52  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:52  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:52', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:52', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:53  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:54  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:53', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:53', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:55  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:55  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:54', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:54', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:56  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:56  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:55', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:55', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:57  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:57  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:56', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:56', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:58  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:58  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:58', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:58', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:13:59  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:13:59  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:13:59', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:13:59', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:00  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:00  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:00', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:00', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:01  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:01  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:01', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:01', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:02  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:02  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:02', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:02', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:03  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:03  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:03', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:03', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:04  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:04  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:04', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:04', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:05  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:05  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:05', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:05', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:06  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:06  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:06', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:06', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:07  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:07  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:07', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:07', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:08  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:09  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:08', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:08', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:10  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:10  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:09', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:09', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:11  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:11  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:11', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:11', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:12  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:12  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:12', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:12', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:13  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:13  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:13', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:13', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:14  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:14  WARNING   trading_engine              Healthcheck failed — re-login
+2026-04-22 11:14:14  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:14  ERROR     trading_engine              Health loop: SAMCO login failed: {'serverTime': '22/04/26 11:14:14', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:14  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:14  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:14', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:14', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:15  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:15  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:15', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:15', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:16  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:14:16  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:14:16', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 165, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 172, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 102, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 91, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 78, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:14:16', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:14:17  INFO      main                        Lords Bot shutting down
+2026-04-22 11:14:17  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-22 11:14:17  INFO      market_scheduler            Scheduler stopped
+2026-04-22 11:16:44  INFO      main                        Lords Bot starting — mode=PAPER
+2026-04-22 11:16:44  INFO      market_scheduler            Starting Lords Bot — mode=PAPER
+2026-04-22 11:16:44  INFO      state_manager               State loaded — trade_date=
+2026-04-22 11:16:44  INFO      state_manager               Daily reset:  → 2026-04-22
+2026-04-22 11:16:44  INFO      state_manager               Daily reset complete
+2026-04-22 11:16:44  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:16:46  ERROR     market_scheduler            SAMCO login failed: SAMCO login failed: {'serverTime': '22/04/26 11:16:45', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'} — running offline
+2026-04-22 11:16:46  INFO      market_scheduler            All tasks started
+2026-04-22 11:16:46  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:16:46  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:16:45', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 159, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 166, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 100, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 89, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 76, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:16:45', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:16:47  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:16:47  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:16:46', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 159, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 166, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 100, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 89, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 76, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:16:46', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:16:48  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:16:48  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:16:48', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 159, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 166, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 100, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 89, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 76, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:16:48', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:16:49  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:16:49  ERROR     market_scheduler            Market loop error: SAMCO login failed: {'serverTime': '22/04/26 11:16:49', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 159, in _loop
+    await self._tick()
+  File "C:\Users\bollu\github\lords\backend\app\scheduler\market_scheduler.py", line 166, in _tick
+    quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 100, in get_index_quote
+    await self.ensure_session()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 89, in ensure_session
+    await self.login()
+  File "C:\Users\bollu\github\lords\backend\app\broker\samco_client.py", line 76, in login
+    raise RuntimeError(f"SAMCO login failed: {resp}")
+RuntimeError: SAMCO login failed: {'serverTime': '22/04/26 11:16:49', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'}
+2026-04-22 11:16:49  INFO      main                        Lords Bot shutting down
+2026-04-22 11:16:49  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-22 11:16:49  INFO      market_scheduler            Scheduler stopped
+2026-04-22 11:49:22  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-22 11:49:22  INFO      main                        Lords Bot starting — mode=PAPER
+2026-04-22 11:49:22  INFO      market_scheduler            Starting Lords Bot — mode=PAPER
+2026-04-22 11:49:22  INFO      state_manager               State loaded — trade_date=2026-04-22
+2026-04-22 11:49:22  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:49:23  ERROR     market_scheduler            SAMCO login failed: SAMCO login failed: {'serverTime': '22/04/26 11:49:23', 'status': 'Failure', 'statusMessage': 'Invalid or mismatched access token.'} — running offline
+2026-04-22 11:49:23  INFO      market_scheduler            All tasks started
+2026-04-22 11:49:23  WARNING   market_scheduler            Broker quote unavailable: SAMCO login cooldown active (30s): Invalid or mismatched access token.
+2026-04-22 11:56:14  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-22 11:56:14  INFO      main                        Lords Bot starting — mode=PAPER
+2026-04-22 11:56:14  INFO      market_scheduler            Starting Lords Bot — mode=PAPER
+2026-04-22 11:56:14  WARNING   state_manager               State load failed (Expecting value: line 1 column 1 (char 0)) — fresh state
+2026-04-22 11:56:14  INFO      state_manager               Daily reset:  → 2026-04-22
+2026-04-22 11:56:14  INFO      state_manager               Daily reset complete
+2026-04-22 11:56:14  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 11:56:17  INFO      samco_client                SAMCO login successful
+2026-04-22 11:56:17  INFO      market_scheduler            All tasks started
+2026-04-22 11:56:17  WARNING   market_scheduler            Bot started after ORB window — trading disabled today
+2026-04-22 12:30:01  WARNING   urllib3.connectionpool      Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProtocolError('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))': /quote/indexQuote?indexName=NIFTY+50
+2026-04-22 15:00:02  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-22 15:00:02  INFO      main                        Lords Bot starting — mode=PAPER
+2026-04-22 15:00:02  INFO      market_scheduler            Starting Lords Bot — mode=PAPER
+2026-04-22 15:00:02  INFO      state_manager               State loaded — trade_date=2026-04-22
+2026-04-22 15:00:02  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 15:00:05  INFO      samco_client                SAMCO login successful
+2026-04-22 15:00:05  INFO      market_scheduler            All tasks started
+2026-04-22 15:00:05  WARNING   market_scheduler            Bot started after ORB window — trading disabled today
+2026-04-22 16:01:58  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 16:02:02  INFO      samco_client                SAMCO login successful
+2026-04-22 17:08:35  INFO      option_store                Option collector started (interval=60s)
+2026-04-22 17:08:35  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 17:08:37  INFO      samco_client                SAMCO login successful
+2026-04-22 17:08:38  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:09:39  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:10:40  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:11:41  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:12:42  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:13:44  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:14:45  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:15:46  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:16:47  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:17:48  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:18:50  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:19:51  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:20:52  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:21:53  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:22:54  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:23:55  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:24:57  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:25:58  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:26:59  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:28:00  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:29:01  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:30:02  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:31:04  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:32:05  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
+2026-04-22 17:33:06  WARNING   option_store                No option rows found for NIFTY 50 expiry=23-Apr-2026
