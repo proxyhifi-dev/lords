@@ -17,6 +17,7 @@ import json
 import time
 from datetime import date, timedelta
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from backend.app.core.circuit_breaker import CircuitBreaker
 from backend.app.core.config_loader import get_settings
@@ -26,6 +27,7 @@ settings = get_settings()
 logger   = get_logger("samco_client")
 
 _paper_counter = 0
+IST = ZoneInfo("Asia/Kolkata")
 
 def _next_paper_id() -> str:
     global _paper_counter
@@ -359,8 +361,9 @@ def get_weekly_expiry() -> date:
       - From   Sep 2 2025 → Tuesday  (weekday=1)
     """
     import datetime as _dt
-    today = date.today()
-    now   = _dt.datetime.now().time()
+    now_dt = _dt.datetime.now(IST)
+    today = now_dt.date()
+    now   = now_dt.time()
 
     # Choose target weekday based on NSE rule
     target = 1 if today >= _EXPIRY_CHANGE_DATE else 3   # Tue=1, Thu=3
@@ -375,4 +378,5 @@ def get_weekly_expiry() -> date:
 
 
 def get_expiry_api() -> str:
-    return get_weekly_expiry().isoformat()
+    # SAMCO expiry format: DDMMMYYYY (e.g. 21APR2026)
+    return get_weekly_expiry().strftime("%d%b%Y").upper()

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, time as dtime
+from zoneinfo import ZoneInfo
 
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.config_loader import get_settings
@@ -24,6 +25,7 @@ from backend.app.utils.logger import get_logger
 
 settings = get_settings()
 logger   = get_logger("trading_engine")
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class TradingEngine:
@@ -52,6 +54,7 @@ class TradingEngine:
     async def _enter_trade(self, payload: dict):
         async with self._trade_lock:
             state = await self.state_manager.snapshot()
+            await self.state_manager.update(signal=None, signal_meta=None)
 
             # Guard against race conditions
             if state.active_trade: return
@@ -59,7 +62,7 @@ class TradingEngine:
             if not state.trading_enabled: return
 
             no_h, no_m = map(int, settings.no_entry_after.split(":"))
-            if datetime.now().time() >= dtime(no_h, no_m):
+            if datetime.now(IST).time() >= dtime(no_h, no_m):
                 logger.info("Past no-entry time — skipping")
                 return
 
@@ -80,9 +83,18 @@ class TradingEngine:
                 if ltp < settings.min_entry_premium:
                     logger.warning("Premium ₹%.1f < min ₹%.1f — skip %s", ltp, settings.min_entry_premium, symbol); return
 
+                details = quote.get("quoteDetails") or quote.get("data") or {}
+                if isinstance(details, list):
+                    details = details[0] if details else {}
                 vol = 0
                 try: vol = int(quote.get("volume") or quote.get("tradedVolume") or 0)
-                except: pass
+                except (TypeError, ValueError):
+                    vol = 0
+                if vol <= 0:
+                    try:
+                        vol = int(details.get("tradedVolume") or details.get("volume") or 0)
+                    except (TypeError, ValueError):
+                        vol = 0
                 if vol < settings.min_option_volume:
                     logger.warning("Low volume %d — skip %s", vol, symbol); return
 
@@ -166,7 +178,7 @@ class TradingEngine:
                 trail_sl = round(trade["max_price"] * (1 - settings.trailing_pct), 2)
 
                 sq_h, sq_m = map(int, settings.square_off.split(":"))
-                if datetime.now().time() >= dtime(sq_h, sq_m):
+                if datetime.now(IST).time() >= dtime(sq_h, sq_m):
                     await self._exit_trade(trade, "EOD_SQUAREOFF", ltp); continue
 
                 # Hard SL — always active
@@ -231,6 +243,9 @@ class TradingEngine:
             sell_id   = (sell_resp.get("orderNumber") or sell_resp.get("orderId") or sell_resp.get("order_id"))
             if not sell_id:
                 logger.error("T2 SELL rejected — position open! resp=%s", sell_resp); return
+            filled = await self.broker.confirm_fill(sell_id)
+            if not filled:
+                logger.error("T2 SELL not confirmed filled id=%s", sell_id); return
 
             t2_pnl    = round((price - trade["entry_price"]) * t2_qty, 2)
             total_pnl = round(trade.get("t1_pnl", 0) + t2_pnl, 2)
@@ -257,6 +272,9 @@ class TradingEngine:
             sell_id   = (sell_resp.get("orderNumber") or sell_resp.get("orderId") or sell_resp.get("order_id"))
             if not sell_id:
                 logger.error("SELL rejected — position may be open! resp=%s", sell_resp); return
+            filled = await self.broker.confirm_fill(sell_id)
+            if not filled:
+                logger.error("SELL not confirmed filled id=%s", sell_id); return
 
             # PnL only on qty sold here (no double-count with t1_pnl)
             exit_pnl  = round((price - trade["entry_price"]) * qty, 2)
@@ -284,9 +302,9 @@ class TradingEngine:
     # ── HELPERS ───────────────────────────────────────
     def _get_qty(self, size_label: str) -> int:
         base = settings.order_qty
-        if size_label == "FULL":   return base
-        if size_label == "MEDIUM": return max(int(base * 0.75 / 25) * 25, 25)
-        if size_label == "HALF":   return max(int(base * 0.50 / 25) * 25, 25)
+        if size_label == "FULL":   return max(base, 1)
+        if size_label == "MEDIUM": return max(int(round(base * 0.75)), 1)
+        if size_label == "HALF":   return max(int(round(base * 0.50)), 1)
         return base
 
     async def _resolve_symbol(self, strike: int, signal: str) -> str | None:
