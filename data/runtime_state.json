@@ -1,0 +1,15 @@
+{
+  "spot_price": 24425.1,
+  "orb_high": 24453.65,
+  "orb_low": 24437.75,
+  "signal": null,
+  "signal_meta": null,
+  "active_trade": null,
+  "daily_pnl": 0.0,
+  "live_pnl": 0.0,
+  "trade_count": 0,
+  "trading_enabled": true,
+  "trading_mode": "PAPER",
+  "bot_running": true,
+  "trade_date": "2026-04-22"
+}

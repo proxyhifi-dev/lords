@@ -1,0 +1,114 @@
+2026-04-13 17:49:19  INFO      samco_client                SAMCO login user=DB41588
+2026-04-13 17:49:22  INFO      samco_client                SAMCO login successful
+2026-04-13 17:52:51  INFO      samco_client                SAMCO login user=DB41588
+2026-04-13 17:52:53  INFO      samco_client                SAMCO login successful
+2026-04-13 17:56:03  INFO      samco_client                SAMCO login user=DB41588
+2026-04-13 17:56:05  INFO      samco_client                SAMCO login successful
+2026-04-13 17:58:59  INFO      main                        Lords Bot starting — mode=PAPER
+2026-04-13 17:58:59  INFO      market_scheduler            Starting Lords Bot — mode=PAPER
+2026-04-13 17:58:59  INFO      samco_client                SAMCO login user=DB41588
+2026-04-13 17:59:00  INFO      samco_client                SAMCO login successful
+2026-04-13 17:59:00  INFO      market_scheduler            All tasks started
+2026-04-13 17:59:00  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-13 17:59:04  INFO      main                        Lords Bot shutting down
+2026-04-13 17:59:04  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-13 17:59:04  INFO      market_scheduler            Scheduler stopped
+2026-04-13 19:53:26  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-13 19:53:26  INFO      main                        Lords Bot starting — mode=PAPER
+2026-04-13 19:53:26  INFO      market_scheduler            Starting Lords Bot — mode=PAPER
+2026-04-13 19:53:26  INFO      state_manager               State loaded — trade_date=
+2026-04-13 19:53:26  INFO      state_manager               Daily reset:  → 2026-04-13
+2026-04-13 19:53:26  INFO      state_manager               Daily reset complete
+2026-04-13 19:53:26  INFO      samco_client                SAMCO login user=DB41588
+2026-04-13 19:53:28  INFO      samco_client                SAMCO login successful
+2026-04-13 19:53:28  INFO      market_scheduler            All tasks started
+2026-04-13 19:53:28  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-13 19:53:31  INFO      samco_client                SAMCO login user=DB41588
+2026-04-13 19:53:33  INFO      samco_client                SAMCO login successful
+2026-04-13 19:54:27  INFO      samco_client                SAMCO login user=DB41588
+2026-04-13 19:54:28  INFO      samco_client                SAMCO login successful
+2026-04-13 20:10:33  INFO      samco_client                SAMCO login user=DB41588
+2026-04-13 20:10:34  INFO      samco_client                SAMCO login successful
+2026-04-13 21:03:01  INFO      samco_client                SAMCO login user=DB41588
+2026-04-13 21:03:02  INFO      samco_client                SAMCO login successful
+2026-04-13 21:11:49  INFO      samco_client                SAMCO login user=DB41588
+2026-04-13 21:11:50  INFO      samco_client                SAMCO login successful
+2026-04-15 09:05:50  INFO      samco_client                SAMCO login user=DB41588
+2026-04-15 09:05:51  INFO      samco_client                SAMCO login successful
+2026-04-15 09:08:40  INFO      main                        Lords Bot starting — mode=PAPER
+2026-04-15 09:08:40  INFO      market_scheduler            Starting Lords Bot — mode=PAPER
+2026-04-15 09:08:40  INFO      samco_client                SAMCO login user=DB41588
+2026-04-15 09:08:42  INFO      samco_client                SAMCO login successful
+2026-04-15 09:08:42  INFO      market_scheduler            All tasks started
+2026-04-15 09:14:02  INFO      market_scheduler            === DAILY RESET ===
+2026-04-15 09:14:02  INFO      state_manager               Daily reset:  → 2026-04-15
+2026-04-15 09:14:02  INFO      state_manager               Daily reset complete
+2026-04-15 09:14:02  INFO      trade_store                 TradeStore daily reset
+2026-04-15 09:14:02  INFO      market_scheduler            === DAILY RESET COMPLETE ===
+2026-04-15 09:15:00  INFO      market_scheduler            ORB open captured: 24166.10
+2026-04-15 09:30:01  INFO      market_scheduler            ORB FROZEN high=24263.15 low=24166.10 range=97.05 ATR=17.93
+2026-04-15 09:39:01  INFO      market_scheduler            SIGNAL PUT close=24150.60 trend=-1 size=FULL orb=24263.15/24166.10
+2026-04-15 09:39:01  INFO      risk_manager                RISK_APPROVED signal=PUT size=FULL
+2026-04-15 09:39:01  ERROR     trading_engine              Option chain empty expiry=2026-04-16 strike=24100 type=PE
+2026-04-15 10:24:01  INFO      market_scheduler            SIGNAL CALL close=24269.55 trend=+0 size=FULL orb=24263.15/24166.10
+2026-04-15 10:24:01  INFO      risk_manager                RISK_APPROVED signal=CALL size=FULL
+2026-04-15 10:24:01  ERROR     trading_engine              Option chain empty expiry=2026-04-16 strike=24300 type=CE
+2026-04-15 10:31:00  INFO      market_scheduler            SIGNAL CALL close=24270.50 trend=+0 size=MEDIUM orb=24263.15/24166.10
+2026-04-15 10:31:00  INFO      risk_manager                RISK_APPROVED signal=CALL size=MEDIUM
+2026-04-15 10:31:00  ERROR     trading_engine              Option chain empty expiry=2026-04-16 strike=24300 type=CE
+2026-04-15 11:49:27  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-15 11:49:27  INFO      main                        Lords Bot starting — mode=PAPER
+2026-04-15 11:49:27  INFO      market_scheduler            Starting Lords Bot — mode=PAPER
+2026-04-15 11:49:27  WARNING   state_manager               State load failed (Expecting value: line 1 column 1 (char 0)) — fresh state
+2026-04-15 11:49:27  INFO      state_manager               Daily reset:  → 2026-04-15
+2026-04-15 11:49:27  INFO      state_manager               Daily reset complete
+2026-04-15 11:49:27  INFO      samco_client                SAMCO login user=DB41588
+2026-04-15 11:49:29  INFO      samco_client                SAMCO login successful
+2026-04-15 11:49:29  INFO      market_scheduler            All tasks started
+2026-04-15 11:49:29  WARNING   market_scheduler            Bot started after ORB window — trading disabled today
+2026-04-15 11:54:07  INFO      main                        Lords Bot shutting down
+2026-04-15 11:54:07  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-15 11:54:07  INFO      market_scheduler            Scheduler stopped
+2026-04-22 09:29:00  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-22 09:29:00  INFO      main                        Lords Bot starting — mode=PAPER
+2026-04-22 09:29:00  INFO      market_scheduler            Starting Lords Bot — mode=PAPER
+2026-04-22 09:29:00  INFO      state_manager               State loaded — trade_date=2026-04-15
+2026-04-22 09:29:00  INFO      state_manager               Daily reset: 2026-04-15 → 2026-04-22
+2026-04-22 09:29:00  INFO      state_manager               Daily reset complete
+2026-04-22 09:29:00  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 09:29:11  INFO      samco_client                SAMCO login successful
+2026-04-22 09:29:11  INFO      market_scheduler            All tasks started
+2026-04-22 09:29:11  INFO      market_scheduler            ORB open captured: 24450.00
+2026-04-22 09:30:00  INFO      market_scheduler            ORB FROZEN high=24453.65 low=24437.75 range=15.90 ATR=15.00
+2026-04-22 09:37:01  INFO      market_scheduler            SIGNAL CALL close=24464.75 trend=+1 size=FULL orb=24453.65/24437.75
+2026-04-22 09:37:01  INFO      risk_manager                RISK_APPROVED signal=CALL size=FULL
+2026-04-22 09:37:01  INFO      trading_engine              Resolved 24500 CE → NIFTY26APR24500CE
+2026-04-22 09:37:01  WARNING   trading_engine              Low volume 0 — skip NIFTY26APR24500CE
+2026-04-22 09:42:00  INFO      market_scheduler            SIGNAL PUT close=24430.65 trend=+0 size=FULL orb=24453.65/24437.75
+2026-04-22 09:42:00  INFO      risk_manager                RISK_APPROVED signal=PUT size=FULL
+2026-04-22 09:42:00  INFO      trading_engine              Resolved 24400 PE → NIFTY26APR24400PE
+2026-04-22 09:42:01  WARNING   trading_engine              Low volume 0 — skip NIFTY26APR24400PE
+2026-04-22 09:44:00  INFO      market_scheduler            SIGNAL PUT close=24426.90 trend=-1 size=FULL orb=24453.65/24437.75
+2026-04-22 09:44:00  INFO      risk_manager                RISK_APPROVED signal=PUT size=FULL
+2026-04-22 09:44:00  INFO      trading_engine              Resolved 24350 PE → NIFTY26APR24350PE
+2026-04-22 09:44:00  WARNING   trading_engine              Low volume 0 — skip NIFTY26APR24350PE
+2026-04-22 09:46:00  INFO      market_scheduler            SIGNAL PUT close=24429.00 trend=+0 size=FULL orb=24453.65/24437.75
+2026-04-22 09:46:00  INFO      risk_manager                RISK_APPROVED signal=PUT size=FULL
+2026-04-22 09:46:00  WARNING   trading_engine              Low volume 0 — skip NIFTY26APR24400PE
+2026-04-22 09:47:00  INFO      market_scheduler            SIGNAL PUT close=24414.35 trend=+0 size=FULL orb=24453.65/24437.75
+2026-04-22 09:47:00  INFO      risk_manager                RISK_APPROVED signal=PUT size=FULL
+2026-04-22 09:47:00  WARNING   trading_engine              Low volume 0 — skip NIFTY26APR24350PE
+2026-04-22 09:48:01  INFO      market_scheduler            SIGNAL PUT close=24416.30 trend=+0 size=FULL orb=24453.65/24437.75
+2026-04-22 09:48:01  INFO      risk_manager                RISK_APPROVED signal=PUT size=FULL
+2026-04-22 09:48:01  WARNING   trading_engine              Low volume 0 — skip NIFTY26APR24350PE
+2026-04-22 09:50:01  INFO      market_scheduler            SIGNAL PUT close=24415.90 trend=+0 size=FULL orb=24453.65/24437.75
+2026-04-22 09:50:01  INFO      risk_manager                RISK_APPROVED signal=PUT size=FULL
+2026-04-22 09:50:01  WARNING   trading_engine              Low volume 0 — skip NIFTY26APR24350PE
+2026-04-22 09:53:00  INFO      market_scheduler            SIGNAL PUT close=24421.80 trend=+0 size=FULL orb=24453.65/24437.75
+2026-04-22 09:53:00  INFO      risk_manager                RISK_APPROVED signal=PUT size=FULL
+2026-04-22 09:53:00  WARNING   trading_engine              Low volume 0 — skip NIFTY26APR24350PE
+2026-04-22 09:53:25  INFO      main                        Lords Bot shutting down
+2026-04-22 09:53:25  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-22 09:53:25  INFO      market_scheduler            Scheduler stopped
+2026-04-22 09:53:42  INFO      samco_client                SAMCO login user=DB41588
+2026-04-22 09:53:44  INFO      samco_client                SAMCO login successful

@@ -338,14 +338,41 @@ class SamcoClient:
 
 
 # ── Weekly expiry helpers ─────────────────────────────
+#
+# NSE EXPIRY DAY CHANGE (SEBI Circular, effective Sep 2 2025):
+#   Before Sep 2 2025 : NIFTY weekly expiry = THURSDAY
+#   From   Sep 2 2025 : NIFTY weekly expiry = TUESDAY
+#
+# Bug before fix: get_weekly_expiry() always returned Thursday.
+# On Apr 15 2026 (Wednesday) it returned Apr 16 (Thursday) →
+# SAMCO returned "Option chain empty" because that contract doesn't exist.
+# Correct answer: Apr 21 2026 (Tuesday).
+
+_EXPIRY_CHANGE_DATE = date(2025, 9, 2)   # NSE changed to Tuesday on this date
+
+
 def get_weekly_expiry() -> date:
+    """
+    Returns the next NIFTY weekly expiry date.
+    Accounts for the NSE rule change on Sep 2 2025:
+      - Before Sep 2 2025 → Thursday (weekday=3)
+      - From   Sep 2 2025 → Tuesday  (weekday=1)
+    """
+    import datetime as _dt
     today = date.today()
-    days  = (3 - today.weekday()) % 7
-    if days == 0:
-        import datetime as _dt
-        if _dt.datetime.now().time() >= _dt.time(15, 30):
-            days = 7
+    now   = _dt.datetime.now().time()
+
+    # Choose target weekday based on NSE rule
+    target = 1 if today >= _EXPIRY_CHANGE_DATE else 3   # Tue=1, Thu=3
+
+    days = (target - today.weekday()) % 7
+
+    # If today IS the expiry day but market has closed → next week
+    if days == 0 and now >= _dt.time(15, 30):
+        days = 7
+
     return today + timedelta(days=days)
+
 
 def get_expiry_api() -> str:
     return get_weekly_expiry().isoformat()
