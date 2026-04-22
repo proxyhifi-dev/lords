@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 @dataclass(slots=True)
@@ -16,7 +16,7 @@ class CircuitBreaker:
         if self.state == "CLOSED":
             return True
         if self.state == "OPEN":
-            if self.opened_at and datetime.now(UTC) - self.opened_at >= timedelta(seconds=self.cooldown_seconds):
+            if self.opened_at and datetime.now(timezone.utc) - self.opened_at >= timedelta(seconds=self.cooldown_seconds):
                 self.state = "HALF_OPEN"
                 return True
             return False
@@ -31,4 +31,4 @@ class CircuitBreaker:
         self.failure_count += 1
         if self.failure_count >= self.failure_threshold:
             self.state = "OPEN"
-            self.opened_at = datetime.now(UTC)
+            self.opened_at = datetime.now(timezone.utc)

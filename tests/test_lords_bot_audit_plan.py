@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import asyncio
 import pytest
 
 import sys
@@ -39,16 +40,18 @@ def test_parse_ltp_from_quote_details() -> None:
     assert SamcoClient.parse_ltp(quote) == pytest.approx(123.45)
 
 
-@pytest.mark.asyncio
-async def test_event_bus_publish_subscribe() -> None:
-    bus = EventBus()
-    await bus.start()
-    q = bus.subscribe("PING")
-    await bus.publish("PING", {"x": 1})
-    ev = await q.get()
-    await bus.stop()
-    assert ev.type == "PING"
-    assert ev.payload["x"] == 1
+def test_event_bus_publish_subscribe() -> None:
+    async def _run() -> None:
+        bus = EventBus()
+        await bus.start()
+        q = bus.subscribe("PING")
+        await bus.publish("PING", {"x": 1})
+        ev = await q.get()
+        await bus.stop()
+        assert ev.type == "PING"
+        assert ev.payload["x"] == 1
+
+    asyncio.run(_run())
 
 
 class _DummyState:
@@ -79,30 +82,34 @@ class _CaptureBus:
         self.events.append((event_type, payload))
 
 
-@pytest.mark.asyncio
-async def test_risk_manager_blocks_when_active_trade() -> None:
-    bus = _CaptureBus()
-    sm = _DummyStateManager(_DummyState(active_trade={"symbol": "X"}))
-    rm = RiskManager(bus, sm)
+def test_risk_manager_blocks_when_active_trade() -> None:
+    async def _run() -> None:
+        bus = _CaptureBus()
+        sm = _DummyStateManager(_DummyState(active_trade={"symbol": "X"}))
+        rm = RiskManager(bus, sm)
 
-    class E:
-        payload = {"signal": "CALL", "size_label": "FULL"}
+        class E:
+            payload = {"signal": "CALL", "size_label": "FULL"}
 
-    await rm._evaluate(E())
-    assert bus.events[-1][0] == "RISK_BLOCKED"
+        await rm._evaluate(E())
+        assert bus.events[-1][0] == "RISK_BLOCKED"
+
+    asyncio.run(_run())
 
 
-@pytest.mark.asyncio
-async def test_risk_manager_approves_happy_path() -> None:
-    bus = _CaptureBus()
-    sm = _DummyStateManager(_DummyState())
-    rm = RiskManager(bus, sm)
+def test_risk_manager_approves_happy_path() -> None:
+    async def _run() -> None:
+        bus = _CaptureBus()
+        sm = _DummyStateManager(_DummyState())
+        rm = RiskManager(bus, sm)
 
-    class E:
-        payload = {"signal": "PUT", "size_label": "FULL"}
+        class E:
+            payload = {"signal": "PUT", "size_label": "FULL"}
 
-    await rm._evaluate(E())
-    assert bus.events[-1][0] == "RISK_APPROVED"
+        await rm._evaluate(E())
+        assert bus.events[-1][0] == "RISK_APPROVED"
+
+    asyncio.run(_run())
 
 
 def test_scheduler_candle_completion() -> None:

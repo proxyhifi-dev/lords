@@ -6,7 +6,7 @@ Dashboard: http://localhost:8000
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -71,7 +71,7 @@ async def dashboard():
             "live_pnl":        round(state.live_pnl,  2),
             "trade_count":     state.trade_count,
             "trade_history":   trades[-50:],
-            "timestamp":       datetime.now(UTC).isoformat(),
+            "timestamp":       datetime.now(timezone.utc).isoformat(),
         }
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
@@ -82,7 +82,7 @@ async def status():
     state = await scheduler.state.snapshot()
     return {"bot_running": state.bot_running, "trading_mode": state.trading_mode,
             "trading_enabled": state.trading_enabled, "mode": settings.mode.upper(),
-            "timestamp": datetime.now(UTC).isoformat()}
+            "timestamp": datetime.now(timezone.utc).isoformat()}
 
 @app.get("/api/pnl")
 async def pnl():

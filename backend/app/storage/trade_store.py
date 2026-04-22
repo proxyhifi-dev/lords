@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import csv
 from collections import deque
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +54,7 @@ class TradeStore:
             csv.DictWriter(fh, fieldnames=FIELDS).writeheader()
 
     def append_trade(self, trade: dict[str, Any], daily_pnl: float | None = None) -> None:
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         row = {
             "date":          now.date().isoformat(),
             "time":          now.strftime("%H:%M:%S"),
