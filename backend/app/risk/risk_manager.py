@@ -31,10 +31,9 @@ class RiskManager:
         state   = await self.state_manager.snapshot()
         payload = event.payload
 
-        async def block(reason: str):
+        def block(reason: str):
             logger.info("RISK_BLOCKED: %s", reason)
-            await self.state_manager.update(signal=None, signal_meta=None)
-            await self.event_bus.publish("RISK_BLOCKED", {"reason": reason})
+            return self.event_bus.publish("RISK_BLOCKED", {"reason": reason})
 
         if state.active_trade:
             await block("active_trade_open"); return
@@ -57,5 +56,4 @@ class RiskManager:
                 await block(f"capital_guard equity={equity_pct:.1%}"); return
 
         logger.info("RISK_APPROVED signal=%s size=%s", payload.get("signal"), payload.get("size_label"))
-        await self.state_manager.update(signal=None, signal_meta=None)
         await self.event_bus.publish("RISK_APPROVED", payload)

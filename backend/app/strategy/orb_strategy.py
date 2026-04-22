@@ -1,7 +1,6 @@
 from __future__ import annotations
 from collections import deque
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from backend.app.core.event_bus import EventBus
 
@@ -33,7 +32,6 @@ class OrbStrategy:
 
         self._last_signal_time = 0.0
         self.cooldown = 10                    # seconds between signals
-        self._tz = ZoneInfo("Asia/Kolkata")
 
     async def run(self) -> None:
 
@@ -42,7 +40,7 @@ class OrbStrategy:
         async for event in self.event_bus.iter_events(queue):
 
             tick = event.payload
-            now = datetime.now(self._tz)
+            now = datetime.now()
 
             price = float(tick["price"])
             volume = float(tick.get("volume", 1))
