@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import time as _time
 from datetime import datetime, time
-from zoneinfo import ZoneInfo
 
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.config_loader import get_settings
@@ -32,15 +31,10 @@ logger   = get_logger("market_scheduler")
 _MARKET_OPEN  = time(9, 0)
 _MARKET_CLOSE = time(15, 35)
 _LOG_INTERVAL = 60   # seconds between "market closed" log
-IST = ZoneInfo("Asia/Kolkata")
-
-
-def _now_ist() -> datetime:
-    return datetime.now(IST)
 
 
 def _market_open() -> bool:
-    now = _now_ist()
+    now = datetime.now()
     if now.weekday() >= 5: return False
     return _MARKET_OPEN <= now.time() <= _MARKET_CLOSE
 
@@ -128,7 +122,7 @@ class MarketScheduler:
     # ── Daily reset watcher ───────────────────────────
     async def _daily_watcher(self):
         while self.running:
-            now   = _now_ist()
+            now   = datetime.now()
             today = now.date().isoformat()
 
             if (now.time() >= time(9, 14) and
@@ -157,7 +151,7 @@ class MarketScheduler:
                 if not _market_open():
                     now_ts = _time.time()
                     if now_ts - self._last_closed_log >= _LOG_INTERVAL:
-                        now = _now_ist()
+                        now = datetime.now()
                         reason = "weekend" if now.weekday() >= 5 else "outside market hours"
                         logger.info("Market closed (%s) — polling paused", reason)
                         self._last_closed_log = now_ts
@@ -185,7 +179,7 @@ class MarketScheduler:
         if len(self._recent_spots) > 10: self._recent_spots.pop(0)
 
         state = await self.state.snapshot()
-        now   = _now_ist()
+        now   = datetime.now()
 
         completed_candle = self._update_candle(spot, now)
         if completed_candle:
@@ -270,14 +264,12 @@ class MarketScheduler:
                     signal_type, completed_candle["close"], ts, size,
                     state.orb_high, state.orb_low)
 
-        payload = {
+        await self.event_bus.publish("SIGNAL", {
             "signal":      signal_type,
             "spot_price":  completed_candle["close"],
             "size_label":  size,
             "trend_score": ts,
-        }
-        await self.state.update(signal=signal_type, signal_meta=payload)
-        await self.event_bus.publish("SIGNAL", payload)
+        })
         self._last_signal_time = now_ts
 
     # ── Candle builder ────────────────────────────────
