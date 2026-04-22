@@ -6,6 +6,10 @@ from dataclasses import asdict, dataclass, field
 from time import time
 from typing import Any, AsyncIterator
 
+from backend.app.utils.logger import get_logger
+
+logger = get_logger("event_bus")
+
 
 # ------------------------------------------------
 # EVENT MODEL
@@ -95,8 +99,8 @@ class EventBus:
             # drop oldest event
             try:
                 _ = self._ingress.get_nowait()
-            except:
-                pass
+            except asyncio.QueueEmpty:
+                logger.warning("Ingress queue reported full but empty on drop-oldest")
 
             self._ingress.put_nowait(event)
 
@@ -174,10 +178,10 @@ class EventBus:
 
                         try:
                             queue.get_nowait()
-                        except:
-                            pass
+                        except asyncio.QueueEmpty:
+                            logger.debug("Subscriber queue full check raced with consumer")
 
                     queue.put_nowait(event)
 
                 except Exception:
-                    pass
+                    logger.exception("Failed dispatching event type=%s", event.type)

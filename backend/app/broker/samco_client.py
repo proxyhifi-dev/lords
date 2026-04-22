@@ -17,6 +17,7 @@ import json
 import time
 from datetime import date, timedelta
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from backend.app.core.circuit_breaker import CircuitBreaker
 from backend.app.core.config_loader import get_settings
@@ -26,6 +27,7 @@ settings = get_settings()
 logger   = get_logger("samco_client")
 
 _paper_counter = 0
+IST = ZoneInfo("Asia/Kolkata")
 
 def _next_paper_id() -> str:
     global _paper_counter
@@ -47,6 +49,8 @@ class SamcoClient:
         self._QUOTE_TTL = 1
         self._CHAIN_TTL = 5
         self._samco = None
+        self._auth_failed_until = 0.0
+        self._last_auth_error = ""
 
     def _get_bridge(self):
         if self._samco is None:
@@ -60,6 +64,11 @@ class SamcoClient:
     # ── AUTH ──────────────────────────────────────────
     async def login(self) -> dict:
         async with self._lock:
+            now_ts = time.time()
+            if now_ts < self._auth_failed_until:
+                wait = int(self._auth_failed_until - now_ts)
+                raise RuntimeError(f"SAMCO login cooldown active ({wait}s): {self._last_auth_error}")
+
             logger.info("SAMCO login user=%s", settings.samco_user_id)
             body: dict[str, Any] = {
                 "userId":   settings.samco_user_id,
@@ -73,6 +82,10 @@ class SamcoClient:
             resp   = self._parse_response(await asyncio.to_thread(bridge.login, body=body))
 
             if resp.get("status") != "Success":
+                msg = str(resp.get("statusMessage") or resp)
+                self._last_auth_error = msg
+                self._session_live = False
+                self._auth_failed_until = time.time() + max(float(settings.reconnect_base_delay), 30.0)
                 raise RuntimeError(f"SAMCO login failed: {resp}")
 
             token = resp.get("sessionToken")
@@ -81,6 +94,8 @@ class SamcoClient:
 
             await asyncio.to_thread(bridge.set_session_token, sessionToken=token)
             self._session_live = True
+            self._auth_failed_until = 0.0
+            self._last_auth_error = ""
             logger.info("SAMCO login successful")
             return resp
 
@@ -359,8 +374,9 @@ def get_weekly_expiry() -> date:
       - From   Sep 2 2025 → Tuesday  (weekday=1)
     """
     import datetime as _dt
-    today = date.today()
-    now   = _dt.datetime.now().time()
+    now_dt = _dt.datetime.now(IST)
+    today = now_dt.date()
+    now   = now_dt.time()
 
     # Choose target weekday based on NSE rule
     target = 1 if today >= _EXPIRY_CHANGE_DATE else 3   # Tue=1, Thu=3
@@ -375,4 +391,5 @@ def get_weekly_expiry() -> date:
 
 
 def get_expiry_api() -> str:
-    return get_weekly_expiry().isoformat()
+    # SAMCO expiry format: DDMMMYYYY (e.g. 21APR2026)
+    return get_weekly_expiry().strftime("%d%b%Y").upper()
