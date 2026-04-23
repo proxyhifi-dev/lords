@@ -1,417 +1,438 @@
 /**
- * Lords Bot — Dashboard v3
- * Full live trading dashboard with:
- *   - Real-time spot price with flash animation
- *   - ORB progress bar (fills during 9:15–9:30 build phase)
- *   - Signal levels display (SL / T1 / T2)
- *   - Live PnL meter bar
- *   - Risk meter (daily loss vs limit)
- *   - Alert banner for key events
- *   - Equity curve chart
- *   - Complete trade log
+ * Lords Bot v4.0 — Dashboard JavaScript
+ * Real-time polling, ORB visualiser, analytics panel, trade log.
  */
 
-const POLL_MS = 2000;
-let pnlChart   = null;
-let prevSpot   = null;
-let prevDailyPnl = null;
-let prevActiveTrade = null;
-let alertTimer = null;
+const API = '';
+const POLL_MS = 1500;
 
-// ─────────────────────────────────────────────
-//  INIT
-// ─────────────────────────────────────────────
+let prevSpot      = null;
+let tradingEnabled = true;
+let pollTimer     = null;
+let lastData      = null;
+
+// ── Bootstrap ──────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  initChart();
   poll();
-  setInterval(poll, POLL_MS);
+  loadAnalytics();
+  pollTimer = setInterval(poll, POLL_MS);
 });
 
-// ─────────────────────────────────────────────
-//  POLL
-// ─────────────────────────────────────────────
+// ── Main Poll ──────────────────────────────────────────
 async function poll() {
   try {
-    const res = await fetch('/api/dashboard');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    render(await res.json());
-  } catch (err) {
+    const res = await fetch(`${API}/api/dashboard`);
+    if (!res.ok) throw new Error(res.status);
+    const d = await res.json();
+    lastData = d;
+    render(d);
+  } catch {
     setOffline();
   }
 }
 
-// ─────────────────────────────────────────────
-//  RENDER
-// ─────────────────────────────────────────────
 function render(d) {
-  renderHeader(d);
-  renderPnl(d);
-  renderOrb(d);
-  renderSignal(d);
-  renderActiveTrade(d);
-  renderRiskMeter(d);
-  renderTradeLog(d.trade_history || []);
-  updateChart(d);
+  updateHeader(d);
+  updateKPIs(d);
+  updateTrade(d);
+  updateORBViz(d);
+  updateLog(d.trade_history || []);
   updateFooter(d);
-  detectAlerts(d);
 }
 
-function renderHeader(d) {
-  const pill = document.getElementById('status-pill');
-  const txt  = document.getElementById('status-text');
+// ── Header ────────────────────────────────────────────
+function updateHeader(d) {
+  const spot = d.nifty_spot;
+
+  // Status pill
+  const pill   = document.getElementById('status-pill');
+  const stText = document.getElementById('status-text');
   if (d.bot_running) {
-    pill.className = 'status-pill running';
-    txt.textContent = 'RUNNING';
+    pill.className = 'pill pill--online';
+    stText.textContent = 'LIVE';
   } else {
-    pill.className = 'status-pill stopped';
-    txt.textContent = 'STOPPED';
+    pill.className = 'pill pill--offline';
+    stText.textContent = 'OFFLINE';
   }
 
+  // Mode badge
   const badge = document.getElementById('mode-badge');
-  const mode  = (d.trading_mode || 'PAPER').toUpperCase();
-  badge.textContent = mode;
-  badge.className   = 'mode-badge' + (mode === 'LIVE' ? ' live' : '');
+  badge.textContent = d.trading_mode || 'PAPER';
+  badge.style.color = d.trading_mode === 'LIVE' ? 'var(--red)' : 'var(--yellow)';
 
-  // Spot price with flash + change indicator
-  const spotEl = document.getElementById('nifty-spot');
-  const chgEl  = document.getElementById('spot-change');
-  if (d.nifty_spot != null) {
-    if (prevSpot !== null && d.nifty_spot !== prevSpot) {
-      const up = d.nifty_spot > prevSpot;
-      flash(spotEl, up ? 'flash-up' : 'flash-dn');
-      const diff = (d.nifty_spot - prevSpot).toFixed(1);
-      chgEl.textContent = (up ? '▲' : '▼') + ' ' + Math.abs(diff);
-      chgEl.style.color = up ? 'var(--green)' : 'var(--red)';
+  // NIFTY spot
+  if (spot) {
+    const el    = document.getElementById('nifty-spot');
+    const delta = document.getElementById('spot-change');
+    el.textContent = formatNum(spot);
+
+    if (prevSpot !== null) {
+      const chg = spot - prevSpot;
+      const pct = (chg / prevSpot * 100).toFixed(2);
+      delta.textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)} (${pct}%)`;
+      delta.className = 'spot-delta ' + (chg >= 0 ? 'up' : 'down');
+
+      el.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+      setTimeout(() => { el.style.color = 'var(--accent)'; }, 600);
     }
-    spotEl.textContent = fmt(d.nifty_spot, 2);
-    prevSpot = d.nifty_spot;
+    prevSpot = spot;
   }
 
-  const ts = d.timestamp ? new Date(d.timestamp).toLocaleTimeString('en-IN') : '—';
-  document.getElementById('last-update').textContent = ts;
+  // Timestamp
+  const ts = new Date(d.timestamp || Date.now());
+  document.getElementById('last-update').textContent =
+    ts.toLocaleTimeString('en-IN', { hour12: false });
 }
 
-function renderPnl(d) {
-  const dp     = d.daily_pnl ?? 0;
-  const dpEl   = document.getElementById('daily-pnl');
-  const dpCard = document.getElementById('card-daily-pnl');
-  if (prevDailyPnl !== null && dp !== prevDailyPnl)
-    flash(dpEl, dp > prevDailyPnl ? 'flash-up' : 'flash-dn');
-  dpEl.textContent  = fmtPnl(dp);
-  dpCard.className  = 'card card--pnl ' + pnlCls(dp);
-  prevDailyPnl      = dp;
+// ── KPIs ──────────────────────────────────────────────
+function updateKPIs(d) {
+  // Daily P&L
+  const dpnl  = d.daily_pnl || 0;
+  const dpEl  = document.getElementById('daily-pnl');
+  dpEl.textContent = fmtPnl(dpnl);
+  dpEl.className   = 'kpi-value ' + (dpnl >= 0 ? 'positive' : 'negative');
+
+  // P&L progress bar (vs MAX_DAILY_LOSS ~ 5000)
+  const maxLoss = 5000;
+  const pct = Math.min(Math.abs(dpnl) / maxLoss * 100, 100);
+  const bar = document.getElementById('pnl-bar');
+  bar.style.width = pct + '%';
+  bar.style.background = dpnl >= 0 ? 'var(--green)' : 'var(--red)';
+
   document.getElementById('trade-count').textContent =
-    `${d.trade_count ?? 0} trade${d.trade_count === 1 ? '' : 's'} today`;
+    `${d.trade_count || 0} trade${(d.trade_count || 0) !== 1 ? 's' : ''} today`;
 
-  const lp     = d.live_pnl ?? 0;
-  const lpEl   = document.getElementById('live-pnl');
-  const lpCard = document.getElementById('card-live-pnl');
-  lpEl.textContent  = fmtPnl(lp);
-  lpCard.className  = 'card card--pnl ' + pnlCls(lp);
-  document.getElementById('live-pnl-sub').textContent =
-    d.active_trade ? 'open position' : 'no open position';
+  // Live P&L
+  const lpnl = d.live_pnl || 0;
+  const lpEl = document.getElementById('live-pnl');
+  lpEl.textContent = fmtPnl(lpnl);
+  lpEl.className   = 'kpi-value ' + (lpnl >= 0 ? 'positive' : 'negative');
+
+  const trade = d.active_trade;
+  document.getElementById('live-symbol').textContent =
+    trade ? (trade.symbol || 'open trade') : 'no open trade';
+
+  // ORB
+  const orbRange  = document.getElementById('orb-range');
+  const orbLevels = document.getElementById('orb-levels');
+  if (d.orb_high && d.orb_low) {
+    const range = (d.orb_high - d.orb_low).toFixed(1);
+    orbRange.textContent  = `${range} pts`;
+    orbLevels.textContent = `H: ${d.orb_high.toFixed(0)}  L: ${d.orb_low.toFixed(0)}`;
+  } else {
+    orbRange.textContent  = '—';
+    orbLevels.textContent = 'building…';
+  }
+
+  // Signal
+  const sigEl  = document.getElementById('signal-display');
+  const sigSub = document.getElementById('trading-status');
+  const sig    = d.signal;
+  sigEl.textContent = sig || 'NONE';
+  sigEl.className   = 'kpi-value signal-value' +
+    (sig === 'CALL' ? ' call' : sig === 'PUT' ? ' put' : '');
+
+  tradingEnabled = d.trading_enabled !== false;
+  sigSub.textContent = !d.bot_running ? 'bot offline' :
+    !tradingEnabled ? '⛔ trading paused' :
+    sig ? `signal: ${sig}` : 'scanning…';
+
+  // Sync pause button
+  const btn = document.getElementById('btn-trading');
+  btn.textContent = tradingEnabled ? 'PAUSE' : 'RESUME';
+  btn.className   = tradingEnabled ? 'btn' : 'btn btn--yellow';
 }
 
-function renderOrb(d) {
-  const high = d.orb_high, low = d.orb_low;
-  document.getElementById('orb-high').textContent = high != null ? fmt(high, 2) : '—';
-  document.getElementById('orb-low').textContent  = low  != null ? fmt(low,  2) : '—';
-
-  if (high != null && low != null) {
-    const range = (high - low).toFixed(1);
-    document.getElementById('orb-range-pts').textContent = `Range: ${range} pts`;
-    document.getElementById('orb-progress').style.width = '100%';
-  } else {
-    // Show build progress during 9:15–9:30
-    const now = new Date();
-    const mins = now.getHours() * 60 + now.getMinutes();
-    const start = 9 * 60 + 15, end = 9 * 60 + 30;
-    if (mins >= start && mins < end) {
-      const pct = Math.min(((mins - start) / (end - start)) * 100, 100);
-      document.getElementById('orb-progress').style.width = pct + '%';
-      document.getElementById('orb-range-pts').textContent = 'Building ORB...';
-    } else {
-      document.getElementById('orb-progress').style.width = '0%';
-      document.getElementById('orb-range-pts').textContent = 'Range: —';
-    }
-  }
-}
-
-function renderSignal(d) {
-  const el  = document.getElementById('signal-display');
-  const sub = document.getElementById('signal-sub');
-  const lvl = document.getElementById('signal-levels');
-  const sig = d.signal;
-
-  if (sig === 'CALL') {
-    el.textContent = '▲ CALL'; el.className = 'card-value signal-display signal-call';
-    sub.textContent = 'breakout above ORB high';
-  } else if (sig === 'PUT') {
-    el.textContent = '▼ PUT'; el.className = 'card-value signal-display signal-put';
-    sub.textContent = 'breakdown below ORB low';
-  } else {
-    el.textContent = 'NONE'; el.className = 'card-value signal-display signal-none';
-    sub.textContent = 'waiting for candle close';
-    lvl.classList.add('hidden'); return;
-  }
-
-  // Show SL/T1/T2 from active trade if available
-  const t = d.active_trade;
-  if (t) {
-    lvl.classList.remove('hidden');
-    document.getElementById('sig-sl').textContent = `SL ₹${fmt(t.sl_price, 0)}`;
-    document.getElementById('sig-t1').textContent = `T1 ₹${fmt(t.t1_price, 0)}`;
-    document.getElementById('sig-t2').textContent = `T2 ₹${fmt(t.t2_price, 0)}`;
-  } else {
-    lvl.classList.add('hidden');
-  }
-}
-
-function renderActiveTrade(d) {
-  const trade   = d.active_trade;
-  const badge   = document.getElementById('trade-badge');
-  const noTrade = document.getElementById('no-trade');
-  const details = document.getElementById('trade-details');
-  const flatBtn = document.getElementById('btn-flatten');
-  const meter   = document.getElementById('pnl-meter');
-  const mLabel  = document.getElementById('pnl-meter-label');
-
-  // Detect new trade opened → alert
-  const hasNewTrade = trade && !prevActiveTrade;
-  const tradeJustClosed = !trade && prevActiveTrade;
-  if (hasNewTrade)   showAlert(`ENTRY ${trade.signal} ${trade.symbol} @ ₹${fmt(trade.entry_price,2)}`, 'info');
-  if (tradeJustClosed) {
-    const hist = d.trade_history;
-    const last = hist && hist.length ? hist[hist.length-1] : null;
-    if (last) {
-      const p = parseFloat(last.pnl || 0);
-      showAlert(`EXIT ${last.symbol} ₹${fmtPnl(p)} — ${last.reason}`, p >= 0 ? 'info' : 'danger');
-    }
-  }
-  prevActiveTrade = trade;
+// ── Active Trade Panel ────────────────────────────────
+function updateTrade(d) {
+  const trade  = d.active_trade;
+  const badge  = document.getElementById('trade-status-badge');
+  const content= document.getElementById('trade-content');
 
   if (!trade) {
-    badge.textContent = 'NO POSITION'; badge.className = 'trade-status-badge';
-    noTrade.classList.remove('hidden'); details.classList.add('hidden');
-    flatBtn.classList.add('hidden'); return;
+    badge.textContent = 'NONE';
+    badge.className   = 'badge badge--none';
+    content.innerHTML = '<div class="trade-empty">No active trade</div>';
+    return;
   }
 
-  badge.textContent = '● OPEN'; badge.className = 'trade-status-badge open';
-  noTrade.classList.add('hidden'); details.classList.remove('hidden');
-  flatBtn.classList.remove('hidden');
+  badge.textContent = 'OPEN';
+  badge.className   = 'badge badge--open';
 
-  set('td-symbol', trade.symbol || '—');
-  set('td-entry',  trade.entry_price != null ? `₹${fmt(trade.entry_price,2)}` : '—');
-  set('td-qty',    trade.qty ?? '—');
-  set('td-sl',     trade.sl_price != null ? `₹${fmt(trade.sl_price,2)}` : '—');
-  set('td-t1',     trade.t1_price != null ? `₹${fmt(trade.t1_price,2)}` : '—');
-  set('td-t2',     trade.t2_price != null ? `₹${fmt(trade.t2_price,2)}` : '—');
-  set('td-t1hit',  trade.t1_booked ? '✓ BOOKED' : trade.t1_hit ? '✓ HIT' : 'pending');
+  const ltp   = d.nifty_spot;
+  const entry = trade.entry_price || 0;
+  const sl    = trade.sl_price   || 0;
+  const t1    = trade.t1_price   || 0;
+  const t2    = trade.t2_price   || 0;
+  const livePnl = d.live_pnl || 0;
 
-  // Compute LTP from live_pnl
-  const lp = d.live_pnl ?? 0;
-  const rem = trade.t1_booked ? (trade.t2_qty || trade.qty/2) : trade.qty;
-  const ltp = rem > 0 ? trade.entry_price + lp / rem : trade.entry_price;
-  set('td-ltp', `₹${fmt(ltp, 2)}`);
+  // Price progress bar: SL → Entry → T1 → T2
+  let fillPct = 0, fillColor = 'var(--accent)';
+  if (ltp && entry) {
+    const range = t2 - sl;
+    if (range > 0) {
+      fillPct  = Math.max(0, Math.min((ltp - sl) / range * 100, 100));
+      fillColor = ltp < entry ? 'var(--red)' : ltp < t1 ? 'var(--yellow)' : 'var(--green)';
+    }
+  }
 
-  // PnL meter: center=entry, left=SL, right=T1
-  const sl  = trade.sl_price  || trade.entry_price * 0.75;
-  const t1  = trade.t1_price  || trade.entry_price * 1.40;
-  const range = t1 - sl;
-  const pct   = range > 0 ? ((ltp - sl) / range) * 100 : 50;
-  const clamp = Math.max(0, Math.min(100, pct));
-  meter.style.width      = clamp + '%';
-  meter.style.background = lp >= 0 ? 'var(--green)' : 'var(--red)';
-  mLabel.textContent     = `Live P&L: ${fmtPnl(lp)}`;
-  mLabel.style.color     = lp >= 0 ? 'var(--green)' : 'var(--red)';
+  const entryTime = trade.entry_time
+    ? new Date(trade.entry_time).toLocaleTimeString('en-IN', { hour12: false })
+    : '—';
+
+  content.innerHTML = `
+    <div class="trade-field">
+      <div class="trade-field-label">SYMBOL</div>
+      <div class="trade-field-value">${trade.symbol || '—'}</div>
+    </div>
+    <div class="trade-field">
+      <div class="trade-field-label">SIGNAL / QTY</div>
+      <div class="trade-field-value ${trade.signal === 'CALL' ? 'positive' : 'negative'}">
+        ${trade.signal || '—'} × ${trade.qty || 0}
+      </div>
+    </div>
+    <div class="trade-field">
+      <div class="trade-field-label">ENTRY PRICE</div>
+      <div class="trade-field-value">₹${entry.toFixed(2)}</div>
+    </div>
+    <div class="trade-field">
+      <div class="trade-field-label">ENTRY TIME</div>
+      <div class="trade-field-value">${entryTime}</div>
+    </div>
+    <div class="trade-field">
+      <div class="trade-field-label">LIVE P&L</div>
+      <div class="trade-field-value ${livePnl >= 0 ? 'positive' : 'negative'}">
+        ${fmtPnl(livePnl)}
+      </div>
+    </div>
+    <div class="trade-field">
+      <div class="trade-field-label">T1 STATUS</div>
+      <div class="trade-field-value ${trade.t1_booked ? 'positive' : ''}">
+        ${trade.t1_booked ? '✓ BOOKED' : trade.t1_hit ? '✓ HIT' : 'WAITING'}
+      </div>
+    </div>
+    <div class="trade-progress">
+      <div class="trade-field-label">SL ₹${sl.toFixed(0)} → ENTRY ₹${entry.toFixed(0)} → T1 ₹${t1.toFixed(0)} → T2 ₹${t2.toFixed(0)}</div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width:${fillPct}%;background:${fillColor}"></div>
+      </div>
+      <div class="progress-markers">
+        <span style="color:var(--red)">SL</span>
+        <span>ENTRY</span>
+        <span style="color:var(--yellow)">T1</span>
+        <span style="color:var(--green)">T2</span>
+      </div>
+    </div>
+  `;
 }
 
-function renderRiskMeter(d) {
-  const used  = Math.abs(Math.min(d.daily_pnl ?? 0, 0));
-  // Get max_daily_loss from settings — fallback to 3000
-  const limit = 3000;
-  const pct   = Math.min((used / limit) * 100, 100);
-  const fill  = document.getElementById('risk-fill');
-  fill.style.width = pct + '%';
-  fill.style.background = pct > 80 ? 'var(--red)' : pct > 50 ? 'var(--yellow)' : 'var(--green)';
-  document.getElementById('risk-label').textContent =
-    `₹${fmt(used,0)} used / ₹${fmt(limit,0)} limit`;
-  document.getElementById('footer-risk').textContent = `Risk: ₹${fmt(used,0)} used`;
-  if (pct > 80 && d.bot_running)
-    showAlert(`⚠ Risk alert: ₹${fmt(used,0)} of ₹${fmt(limit,0)} daily limit used`, 'warn');
+// ── ORB Visualiser ────────────────────────────────────
+function updateORBViz(d) {
+  const viz = document.getElementById('orb-viz');
+  const { orb_high, orb_low, nifty_spot } = d;
+
+  if (!orb_high || !orb_low) {
+    viz.innerHTML = '<div class="orb-placeholder">Building ORB range…</div>';
+    return;
+  }
+
+  const range  = orb_high - orb_low;
+  const pad    = range * 0.5;
+  const vizMin = orb_low  - pad;
+  const vizMax = orb_high + pad;
+  const vizRange = vizMax - vizMin;
+
+  const toY = (price) => Math.max(2, Math.min(96,
+    (1 - (price - vizMin) / vizRange) * 100));
+
+  const highPct = toY(orb_high);
+  const lowPct  = toY(orb_low);
+  const midPct  = toY((orb_high + orb_low) / 2);
+  const zonePct = lowPct - highPct;
+
+  let spotLine = '';
+  if (nifty_spot) {
+    const spotPct = toY(nifty_spot);
+    const spotColor = nifty_spot > orb_high ? 'var(--green)' :
+                      nifty_spot < orb_low  ? 'var(--red)' : 'var(--accent)';
+    spotLine = `
+      <div class="orb-spot-line" style="top:${spotPct}%;background:${spotColor}"></div>
+      <div class="orb-label spot" style="top:${spotPct - 3}%">
+        SPOT ${nifty_spot.toFixed(0)}
+      </div>`;
+  }
+
+  // Breakout buffer lines (5pts)
+  const buPct = toY(orb_high + 5);
+  const bdPct = toY(orb_low  - 5);
+
+  viz.innerHTML = `
+    <div class="orb-chart">
+      <div class="orb-zone" style="top:${highPct}%;height:${zonePct}%"></div>
+      <div class="orb-high-line" style="top:${highPct}%"></div>
+      <div class="orb-low-line"  style="top:${lowPct}%"></div>
+      <div style="position:absolute;left:0;right:0;height:1px;top:${buPct}%;
+                  background:var(--green);opacity:0.3;border-top:1px dashed var(--green)"></div>
+      <div style="position:absolute;left:0;right:0;height:1px;top:${bdPct}%;
+                  background:var(--red);opacity:0.3;border-top:1px dashed var(--red)"></div>
+      <div class="orb-label high" style="top:${highPct - 4}%">H ${orb_high.toFixed(0)}</div>
+      <div class="orb-label low"  style="top:${lowPct + 1}%">L ${orb_low.toFixed(0)}</div>
+      ${spotLine}
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:9px;color:var(--text-muted)">
+      <span style="color:var(--green)">▬ ORB HIGH</span>
+      <span style="color:var(--accent)">RANGE: ${range.toFixed(1)} pts</span>
+      <span style="color:var(--red)">▬ ORB LOW</span>
+    </div>`;
+
+  document.getElementById('orb-meta').textContent = `9:15 – 9:30 IST · Range: ${range.toFixed(1)}pts`;
 }
 
-function renderTradeLog(trades) {
-  const tbody = document.getElementById('trade-tbody');
-  document.getElementById('log-count').textContent = `${trades.length} trade${trades.length===1?'':'s'}`;
+// ── Trade Log ─────────────────────────────────────────
+function updateLog(trades) {
+  const body  = document.getElementById('log-body');
+  const count = document.getElementById('log-count');
+
+  count.textContent = `${trades.length} trade${trades.length !== 1 ? 's' : ''}`;
+
   if (!trades.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">No trades today</td></tr>'; return;
+    body.innerHTML = '<tr><td colspan="7" class="log-empty">No trades yet</td></tr>';
+    return;
   }
-  tbody.innerHTML = [...trades].reverse().map(t => {
-    const pnl    = parseFloat(t.pnl ?? 0);
-    const pnlCls = pnl > 0 ? 'pnl-pos' : pnl < 0 ? 'pnl-neg' : '';
-    const sigCls = (t.signal||'').toUpperCase() === 'CALL' ? 'sig-call' : 'sig-put';
+
+  const rows = [...trades].reverse().map(t => {
+    const pnl    = parseFloat(t.pnl || 0);
+    const reason = (t.exit_reason || t.reason || '—').toUpperCase();
+    const sig    = (t.signal || '').toUpperCase();
+    const time   = t.time || t.entry_time || '—';
+
+    const reasonClass = reason.includes('SL') ? 'sl' :
+      reason.includes('T2') || reason.includes('TARGET') ? 't2' :
+      reason.includes('T1') || reason.includes('TRAIL')  ? 't1' : 'eod';
+
     return `<tr>
-      <td>${t.time||'—'}</td>
-      <td class="${sigCls}">${(t.signal||'').toUpperCase()}</td>
-      <td style="font-size:.7rem">${t.symbol||'—'}</td>
-      <td>${t.entry!=null?`₹${fmt(parseFloat(t.entry),0)}`:'—'}</td>
-      <td>${t.exit_price!=null?`₹${fmt(parseFloat(t.exit_price),0)}`:'—'}</td>
-      <td>${t.qty||'—'}</td>
-      <td class="${pnlCls}">${fmtPnl(pnl)}</td>
-      <td style="font-size:.65rem">${t.reason||'—'}</td>
+      <td>${String(time).substring(11, 19) || time}</td>
+      <td class="td-signal ${sig.toLowerCase()}">${sig}</td>
+      <td>${t.symbol || '—'}</td>
+      <td>₹${parseFloat(t.entry || t.entry_price || 0).toFixed(2)}</td>
+      <td>₹${parseFloat(t.exit_price || t.sell_price || 0).toFixed(2)}</td>
+      <td class="td-reason ${reasonClass}">${reason}</td>
+      <td class="td-pnl ${pnl >= 0 ? 'positive' : 'negative'}">${fmtPnl(pnl)}</td>
     </tr>`;
   }).join('');
+
+  body.innerHTML = rows;
 }
 
-// ─────────────────────────────────────────────
-//  CHART
-// ─────────────────────────────────────────────
-function initChart() {
-  const ctx = document.getElementById('pnl-chart').getContext('2d');
-  pnlChart  = new Chart(ctx, {
-    type: 'line',
-    data: { labels: [], datasets: [{
-      label: 'Equity', data: [],
-      borderColor: '#00d97e', backgroundColor: 'rgba(0,217,126,.07)',
-      borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#00d97e',
-      fill: true, tension: 0.35,
-    }]},
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      animation: { duration: 250 },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#0d1117', borderColor: '#253044', borderWidth: 1,
-          titleColor: '#5a7090', bodyColor: '#e2e8f0',
-          callbacks: { label: c => `  ${fmtPnl(c.parsed.y)}` }
-        }
-      },
-      scales: {
-        x: { grid: { color: '#1a2233' }, ticks: { color: '#5a7090', font: { family: 'JetBrains Mono', size: 10 }}},
-        y: { grid: { color: '#1a2233' }, ticks: { color: '#5a7090', font: { family: 'JetBrains Mono', size: 10 },
-          callback: v => `₹${v}` }}
-      }
+// ── Analytics Panel ───────────────────────────────────
+async function loadAnalytics() {
+  const grid = document.getElementById('analytics-grid');
+  grid.innerHTML = '<div class="analytics-placeholder">Loading…</div>';
+
+  try {
+    const res = await fetch(`${API}/api/analytics`);
+    const a   = await res.json();
+
+    if (a.status === 'error' || !a.total_trades) {
+      grid.innerHTML = '<div class="analytics-placeholder">No trades yet — analytics available after first trade</div>';
+      return;
     }
-  });
+
+    const items = [
+      { label: 'WIN RATE',       value: `${a.win_rate}%`,    cls: a.win_rate >= 55 ? 'positive' : a.win_rate >= 45 ? 'neutral' : 'negative' },
+      { label: 'NET P&L',        value: fmtPnl(a.net_pnl),   cls: a.net_pnl >= 0 ? 'positive' : 'negative' },
+      { label: 'PROFIT FACTOR',  value: `${a.profit_factor}x`, cls: a.profit_factor >= 1.5 ? 'positive' : a.profit_factor >= 1.0 ? 'neutral' : 'negative' },
+      { label: 'SHARPE RATIO',   value: a.sharpe,             cls: a.sharpe >= 1.5 ? 'positive' : a.sharpe >= 0.5 ? 'neutral' : 'negative' },
+      { label: 'SORTINO RATIO',  value: a.sortino,            cls: a.sortino >= 2 ? 'positive' : a.sortino >= 1 ? 'neutral' : 'negative' },
+      { label: 'MAX DRAWDOWN',   value: fmtPnl(a.max_drawdown), cls: 'negative' },
+      { label: 'REWARD / RISK',  value: `${a.reward_risk}x`, cls: a.reward_risk >= 1.5 ? 'positive' : 'neutral' },
+      { label: 'KELLY FRACTION', value: `${a.half_kelly_pct}%`, cls: 'neutral' },
+      { label: 'EV / TRADE',     value: fmtPnl(a.ev_per_trade), cls: a.ev_per_trade >= 0 ? 'positive' : 'negative' },
+      { label: 'CALMAR RATIO',   value: a.calmar_ratio,       cls: a.calmar_ratio >= 1 ? 'positive' : 'neutral' },
+      { label: 'CAPITAL MIN',    value: `₹${(a.capital_min/1000).toFixed(0)}K`, cls: 'neutral' },
+      { label: 'CAPITAL REC.',   value: `₹${(a.capital_recommended/1000).toFixed(0)}K`, cls: 'neutral' },
+    ];
+
+    grid.innerHTML = items.map(item => `
+      <div class="analytics-item">
+        <div class="analytics-label">${item.label}</div>
+        <div class="analytics-value ${item.cls}">${item.value}</div>
+      </div>`
+    ).join('');
+
+  } catch {
+    grid.innerHTML = '<div class="analytics-placeholder">Error loading analytics</div>';
+  }
 }
 
-function updateChart(d) {
-  const trades = d.trade_history || [];
-  let cum = 0;
-  const labels = [], vals = [];
-  trades.forEach(t => {
-    const p = parseFloat(t.pnl ?? 0);
-    if (p !== 0) { cum += p; labels.push(t.time||''); vals.push(parseFloat(cum.toFixed(2))); }
-  });
-  if (!vals.length) return;
-  document.getElementById('chart-empty').style.display = 'none';
-  const col = cum >= 0 ? '#00d97e' : '#ff4560';
-  pnlChart.data.labels                           = labels;
-  pnlChart.data.datasets[0].data                 = vals;
-  pnlChart.data.datasets[0].borderColor          = col;
-  pnlChart.data.datasets[0].backgroundColor      = col + '12';
-  pnlChart.data.datasets[0].pointBackgroundColor = col;
-  pnlChart.update('none');
+// ── Controls ──────────────────────────────────────────
+async function startBot() {
+  await apiPost('/api/start');
+  showAlert('Bot started', 'success');
+  setTimeout(poll, 500);
 }
 
-// ─────────────────────────────────────────────
-//  ALERTS
-// ─────────────────────────────────────────────
-function detectAlerts(d) {
-  if (!d.trading_enabled && d.bot_running)
-    showAlert('⚠ Trading DISABLED — daily loss limit or capital guard triggered', 'danger');
+async function stopBot() {
+  await apiPost('/api/stop');
+  showAlert('Bot stopped', 'info');
+  setTimeout(poll, 500);
+}
+
+async function setMode(mode) {
+  await apiPost('/api/trading-mode', { mode });
+  document.getElementById('btn-paper').className = mode === 'PAPER' ? 'btn btn--active' : 'btn';
+  document.getElementById('btn-live').className  = mode === 'LIVE'  ? 'btn btn--active' : 'btn';
+  showAlert(`Mode set to ${mode}`, mode === 'LIVE' ? 'error' : 'info');
+}
+
+async function toggleTrading() {
+  const enabled = !tradingEnabled;
+  await apiPost('/api/trading-enabled', { enabled });
+  showAlert(enabled ? 'Trading resumed' : 'Trading paused', 'info');
+  setTimeout(poll, 300);
+}
+
+async function flattenPosition() {
+  if (!confirm('Flatten all open positions now?')) return;
+  const res = await apiPost('/api/trade/flatten');
+  showAlert(res.status === 'flattened' ? `Flattened ${res.symbol}` : res.status, 'info');
+  setTimeout(poll, 500);
+}
+
+// ── Helpers ───────────────────────────────────────────
+function setOffline() {
+  document.getElementById('status-pill').className = 'pill pill--offline';
+  document.getElementById('status-text').textContent = 'OFFLINE';
+}
+
+function updateFooter(d) {
+  document.getElementById('footer-mode').textContent =
+    `MODE: ${d.trading_mode || 'PAPER'} · BOT: ${d.bot_running ? 'RUNNING' : 'STOPPED'}`;
+}
+
+async function apiPost(endpoint, body = {}) {
+  try {
+    const res = await fetch(`${API}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  } catch { return {}; }
 }
 
 function showAlert(msg, type = 'info') {
   const el = document.getElementById('alert-banner');
   el.textContent = msg;
-  el.className   = `alert-banner ${type}`;
-  if (alertTimer) clearTimeout(alertTimer);
-  alertTimer = setTimeout(() => el.classList.add('hidden'), 6000);
+  el.className = `alert-banner ${type}`;
+  setTimeout(() => { el.className = 'alert-banner hidden'; }, 3000);
 }
 
-// ─────────────────────────────────────────────
-//  API ACTIONS
-// ─────────────────────────────────────────────
-async function startBot() {
-  const r = await post('/api/start');
-  if (r) showAlert('Bot started ✓', 'info');
-}
-
-async function stopBot() {
-  const r = await post('/api/stop');
-  if (r) showAlert('Bot stopped', 'warn');
-}
-
-async function flattenPosition() {
-  if (!confirm('⚡ Flatten open position NOW? This places a market SELL order.')) return;
-  const r = await post('/api/trade/flatten');
-  if (r?.status === 'flattened')
-    showAlert(`Flattened ${r.symbol} qty=${r.qty}`, 'info');
-  else
-    showAlert(`Flatten result: ${JSON.stringify(r)}`, 'warn');
-}
-
-async function setMode(mode) {
-  if (mode === 'LIVE' && !confirm('⚠ Switch to LIVE mode? Real orders will be placed!')) return;
-  await post('/api/trading-mode', { mode });
-  document.getElementById('btn-paper').classList.toggle('active', mode === 'PAPER');
-  document.getElementById('btn-live').classList.toggle('active',  mode === 'LIVE');
-  showAlert(`Mode set to ${mode}`, mode === 'LIVE' ? 'danger' : 'info');
-}
-
-async function setTrading(enabled) {
-  await post('/api/trading-enabled', { enabled });
-  document.getElementById('btn-enable').classList.toggle('active',  enabled);
-  document.getElementById('btn-disable').classList.toggle('active', !enabled);
-  showAlert(`Trading ${enabled ? 'ENABLED' : 'DISABLED'}`, enabled ? 'info' : 'warn');
-}
-
-async function post(url, body = {}) {
-  try {
-    const r = await fetch(url, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    return await r.json();
-  } catch { return null; }
-}
-
-// ─────────────────────────────────────────────
-//  HELPERS
-// ─────────────────────────────────────────────
-function setOffline() {
-  const pill = document.getElementById('status-pill');
-  pill.className = 'status-pill stopped';
-  document.getElementById('status-text').textContent = 'OFFLINE';
-}
-
-function updateFooter(d) {
-  document.getElementById('mode-display').textContent = (d.trading_mode||'PAPER').toUpperCase();
-}
-
-function set(id, val) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = val;
-}
-
-function fmt(n, dec = 2) {
-  if (n == null || isNaN(n)) return '—';
-  return Number(n).toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+function formatNum(n) {
+  return Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function fmtPnl(n) {
-  if (n == null || isNaN(n)) return '₹0';
-  return (n >= 0 ? '+' : '') + '₹' + fmt(Math.abs(n), 2);
-}
-
-function pnlCls(n) { return n > 0 ? 'positive' : n < 0 ? 'negative' : ''; }
-
-function flash(el, cls) {
-  el.classList.remove('flash-up', 'flash-dn');
-  void el.offsetWidth;
-  el.classList.add(cls);
-  setTimeout(() => el.classList.remove(cls), 700);
+  const v = parseFloat(n) || 0;
+  return (v >= 0 ? '+' : '') + '₹' + Math.abs(v).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
