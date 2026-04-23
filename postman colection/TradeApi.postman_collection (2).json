@@ -1,0 +1,1763 @@
+{
+  "info": {
+    "_postman_id": "0125150e-049c-4983-abeb-44eb7dcc8e30",
+    "name": "Samco Trade API Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "29344609"
+  },
+  "item": [
+    {
+      "name": "User Login",
+      "item": [
+        {
+          "name": "Generate Otp",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"uid\" : \"XX1111\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/otp/generateOtp",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "otp",
+                "generateOtp"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Secret API Key",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"uid\":\"XX1111\",\n    \"otp\" :\"XXXX\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/otp/secretKeyGenerator",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "otp",
+                "secretKeyGenerator"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Access Token",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"uid\" : \"XX1111\",\n    \"secretApiKey\" : \"XXXX122QWE111XXX\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/accessToken/token",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "accessToken",
+                "token"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  " responseBody = pm.response.json();",
+                  " sessionToken = responseBody.sessionToken;",
+                  "pm.globals.set(\"sessionToken\", sessionToken);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disabledSystemHeaders": {}
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"userId\":\"XX1111\",\n    \"password\":\"xxxxxxx\",\n    \"accessToken\" : \"XXXXXXXXX\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/login",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Personal Index",
+      "item": [
+        {
+          "name": "Index Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/indexData",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "indexData"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Market Depth",
+      "item": [
+        {
+          "name": "Market Depth",
+          "protocolProfileBehavior": {
+            "disabledSystemHeaders": {}
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \n    \"exchange\":\"NSE\",\n    \"symbolName\":\"NESTLEIND-EQ\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/marketDepth",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "marketDepth"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Search Equity & Derivatives",
+      "item": [
+        {
+          "name": "Search Equity Scripts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/eqDervSearch/search?exchange=NSE&searchSymbolName=TCS",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "eqDervSearch",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "exchange",
+                  "value": "NSE"
+                },
+                {
+                  "key": "searchSymbolName",
+                  "value": "TCS"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Span Margin",
+      "item": [
+        {
+          "name": "Span Margin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"request\":[\n        {\n            \"exchange\":\"NFO\",\n            \"tradingSymbol\":\"TECHM24FEB1220CE\",\n            \"qty\":\"600\"\n        },\n        {\n            \"exchange\":\"NFO\",\n            \"tradingSymbol\":\"TECHM23DECFUT\",\n            \"qty\":\"175\"\n        }\n    ]\n}"
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/spanMargin",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "spanMargin"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "GTTOCO",
+      "item": [
+        {
+          "name": "Add Gtt",
+          "protocolProfileBehavior": {
+            "disabledSystemHeaders": {}
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"exchange\": \"NSE\",\n   \"symbolName\": \"IDEA\",\n    \"transactionType\": \"BUY\",\n    \"quantity\": \"1\",\n    \"productType\": \"CNC\",\n    \"orderType\": \"L\",\n    \"triggerPrice\": \"14\",\n   \"limitPrice\": \"14\",\n    \"marketProtection\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/gttoco/addGtt",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "gttoco",
+                "addGtt"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Modify Gtt",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"exchange\": \"NSE\",\n   \"symbolName\": \"IDEA\",\n    \"transactionType\": \"BUY\",\n    \"quantity\": \"5\",\n    \"productType\": \"CNC\",\n    \"orderType\": \"L\",\n    \"triggerPrice\": \"13.8\",\n   \"limitPrice\": \"13.8\",\n    \"marketProtection\": \"\",\n    \"gttSummaryId\" : 548994\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/gttoco/modifyGtt",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "gttoco",
+                "modifyGtt"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Gtt",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"gttSummaryId\" : 553629\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/gttoco/deleteGtt",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "gttoco",
+                "deleteGtt"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Oco",
+          "protocolProfileBehavior": {
+            "disabledSystemHeaders": {}
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"exchange\": \"NSE\",\n    \"symbolName\": \"IDEA\",\n    \"transactionType\": \"SELL\",\n    \"quantity\": \"1\",\n    \"productType\": \"CNC\",\n    \"orderType\": \"L\",\n    \"targetTriggerPrice\": \"17\",\n    \"targetLimitPrice\": \"17\",\n    \"stoplossTriggerPrice\": \"13\",\n    \"stoplossLimitPrice\": \"13\",\n    \"marketProtection\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/gttoco/addOco",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "gttoco",
+                "addOco"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Modify Oco",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"exchange\": \"NSE\",\n    \"symbolName\": \"IDEA\",\n    \"transactionType\": \"SELL\",\n    \"quantity\": \"5\",\n    \"productType\": \"CNC\",\n    \"orderType\": \"L\",\n    \"targetTriggerPrice\": \"18.5\",\n    \"targetLimitPrice\": \"18.5\",\n    \"stoplossTriggerPrice\": \"13.5\",\n    \"stoplossLimitPrice\": \"13.5\",\n    \"marketProtection\": \"\",\n    \"gttSummaryId\" : 553674\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/gttoco/modifyOco",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "gttoco",
+                "modifyOco"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Oco",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"gttSummaryId\" : 553929\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/gttoco/deleteOco",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "gttoco",
+                "deleteOco"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "ListGttOco",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/gttoco/listGttOco",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "gttoco",
+                "listGttOco"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Quote",
+      "item": [
+        {
+          "name": "Get Quote",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/quote/getQuote?exchange=NSE&symbolName=TCS",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "quote",
+                "getQuote"
+              ],
+              "query": [
+                {
+                  "key": "exchange",
+                  "value": "NSE"
+                },
+                {
+                  "key": "symbolName",
+                  "value": "TCS"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Index Quote",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/quote/indexQuote?indexName=Sensex",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "quote",
+                "indexQuote"
+              ],
+              "query": [
+                {
+                  "key": "indexName",
+                  "value": "Sensex"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Multi Quote",
+          "protocolProfileBehavior": {
+            "disabledSystemHeaders": {
+              "accept": true
+            }
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"INDEX\":[\"NIFTY 50\"],\n    \"BSE\":[\"ICICINIINAV\"],\n    \"NSE\":[\"TCS\"]\n   \n}\n//USDINR23DEC76.25PE\n\n\n\n\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/quote/multiQuote",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "quote",
+                "multiQuote"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Option",
+      "item": [
+        {
+          "name": "Option Chain",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/option/optionChain?searchSymbolName=GUJGASLTD&strikePrice=360",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "option",
+                "optionChain"
+              ],
+              "query": [
+                {
+                  "key": "exchange",
+                  "value": "CDS",
+                  "disabled": true
+                },
+                {
+                  "key": "searchSymbolName",
+                  "value": "GUJGASLTD",
+                  "description": "GUJGASLTD24FEB360CE"
+                },
+                {
+                  "key": "strikePrice",
+                  "value": "360",
+                  "description": "HNGSNGINAV"
+                },
+                {
+                  "key": "optionType",
+                  "value": "CE",
+                  "disabled": true
+                },
+                {
+                  "key": "expiryDate",
+                  "value": "2024-01-25",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Future",
+      "item": [
+        {
+          "name": "Future Chain",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/future/futureChain?searchSymbolName=GUJGASLTD&exchange=NFO",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "future",
+                "futureChain"
+              ],
+              "query": [
+                {
+                  "key": "searchSymbolName",
+                  "value": "GUJGASLTD"
+                },
+                {
+                  "key": "exchange",
+                  "value": "NFO"
+                },
+                {
+                  "key": "expiryDate",
+                  "value": null,
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Limits",
+      "item": [
+        {
+          "name": "User Limits",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/limit/getLimits",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "limit",
+                "getLimits"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Place Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \n\"symbolName\":\"ANUPAM\",\n\"exchange\":\"BSE\",\n\"transactionType\":\"BUY\",\n\"orderType\":\"MKT\",\n\"quantity\": \"400\",\n\"disclosedQuantity\":\"1\",\n \"orderValidity\":\"DAY\",\n \"productType\":\"NRML\",\n\"afterMarketOrderFlag\":\"\",\n\"marketProtection\":\"2\"\n//\"price\":\"1\"\n//\"triggerPrice\":\"0\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/order/placeOrder",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "order",
+                "placeOrder"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Place BO Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": " { \r\n    \"symbolName\": \"IDEA\",\r\n  \"exchange\": \"NSE\",\r\n  \"transactionType\": \"BUY\",\r\n  \"orderType\": \"L\",\r\n  \"quantity\": \"1\",\r\n  //\"disclosedQuantity\": \"456\",\r\n    \"price\": \"14.20\",\r\n  \"priceType\": \"LTP\",\r\n  \"orderValidity\": \"DAY\",\r\n  \"productType\": \"BO\",\r\n  \"squareOffValue\": \"16\",\r\n  \"stopLossValue\": \"13\",\r\n  \"valueType\": \"Ticks\",\r\n  \"trailingStopLoss\": \"123\",\r\n  \"triggerPrice\":\"234\"\r\n \r\n }"
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/order/placeOrderBO",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "order",
+                "placeOrderBO"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Place CO Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": " { \r\n    \"symbolName\": \"IDEA\",\r\n  \"exchange\": \"BSE\",\r\n  \"transactionType\": \"BUY\",\r\n  \"orderType\": \"L\",\r\n  \"quantity\": \"1\",\r\n  //\"disclosedQuantity\": \"456\",\r\n    \"price\": \"14.40\",\r\n  \"priceType\": \"LTP\",\r\n  \"orderValidity\": \"DAY\",\r\n  \"productType\": \"CO\",\r\n  \"squareOffValue\": \"16\",\r\n  \"stopLossValue\": \"13\",\r\n  \"valueType\": \"Ticks\",\r\n  \"trailingStopLoss\": \"1234567898\",\r\n  \"triggerPrice\":\"12\"\r\n \r\n }"
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/order/placeOrderCO",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "order",
+                "placeOrderCO"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Order Status",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/order/getOrderStatus?orderNumber=240207000133590",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "order",
+                "getOrderStatus"
+              ],
+              "query": [
+                {
+                  "key": "orderNumber",
+                  "value": "240207000133590"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Order Book",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/order/orderBook",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "order",
+                "orderBook"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Trigger Order",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/order/getTriggerOrders?orderNumber=240206000133469",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "order",
+                "getTriggerOrders"
+              ],
+              "query": [
+                {
+                  "key": "orderNumber",
+                  "value": "240206000133469"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Modify Order",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderType\": \"L\",\n  \"quantity\": \"3\",\n  \"disclosedQuantity\": \"1\",\n  \"orderValidity\": \"DAY\",\n  \"price\": \"1240.00\",\n  \"triggerPrice\": \"1070.00\",\n  \"parentOrderId\": \"190707000000004\",\n  \"marketProtection\": \"5\"\n}"
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/order/modifyOrder/orderNumber=240206000133469",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "order",
+                "modifyOrder",
+                "orderNumber=240206000133469"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel BO Order",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/order/exitBO?orderNumber=190707000000004",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "order",
+                "exitBO"
+              ],
+              "query": [
+                {
+                  "key": "orderNumber",
+                  "value": "190707000000004"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel CO Order",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/order/exitCO?orderNumber=190707000000004",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "order",
+                "exitCO"
+              ],
+              "query": [
+                {
+                  "key": "orderNumber",
+                  "value": "190707000000004"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/order/cancelOrder?OrderNUmber=240207000150704",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "order",
+                "cancelOrder"
+              ],
+              "query": [
+                {
+                  "key": "OrderNUmber",
+                  "value": "240207000150704"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tradebook",
+      "item": [
+        {
+          "name": "Trade Book",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/trade/tradeBook",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "trade",
+                "tradeBook"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Positions",
+      "item": [
+        {
+          "name": "User Positions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/position/getPositions?positionType=NET",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "position",
+                "getPositions"
+              ],
+              "query": [
+                {
+                  "key": "positionType",
+                  "value": "NET"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Position Conversion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \n  \"symbolName\":\"IDEA\",\n  \"exchange\":\"NSE\",\n  \"transactionType\":\"BUY\",\n  \"positionType\":\"DAY\",\n  \"netQuantity\":\"1\",\n  \"quantityToConvert\": \"1\",\n  \"fromProductType\":\"MIS\",\n  \"toProductType\":\"CNC\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/position/convertPosition",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "position",
+                "convertPosition"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Position Square Off",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n\n  \"positionSquareOffRequestList\": [\n    {\n      \"exchange\": \"NSE\",\n      \"symbolName\": \"TCS\",\n      \"productType\": \"MIS\",\n      \"netQuantity\": \"250\",\n      \"transactionType\": \"BUY\"\n    },\n    {\n      \"exchange\": \"BSE\",\n      \"symbolName\": \"INFY\",\n      \"productType\": \"MIS\",\n      \"netQuantity\": \"25\",\n      \"transactionType\": \"SELL\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/position/squareOff",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "position",
+                "squareOff"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Holdings",
+      "item": [
+        {
+          "name": "User Holdings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/holding/getHoldings",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "holding",
+                "getHoldings"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Intraday Candle Data",
+      "item": [
+        {
+          "name": "Stocks Candle Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/intraday/candleData?exchange=NFO&symbolName=NIFTY23SEPFUT&fromDate=2023-10-02 09:00:00",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "intraday",
+                "candleData"
+              ],
+              "query": [
+                {
+                  "key": "exchange",
+                  "value": "NFO"
+                },
+                {
+                  "key": "symbolName",
+                  "value": "NIFTY23SEPFUT"
+                },
+                {
+                  "key": "fromDate",
+                  "value": "2023-10-02 09:00:00"
+                },
+                {
+                  "key": "interval",
+                  "value": "30",
+                  "description": "false",
+                  "disabled": true
+                },
+                {
+                  "key": "toDate",
+                  "value": "2020-02-13 08:22:00",
+                  "description": "false",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Index Candle Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/intraday/indexCandleData?indexName=SENSEX&fromDate=2024-01-11 10:00:00",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "intraday",
+                "indexCandleData"
+              ],
+              "query": [
+                {
+                  "key": "indexName",
+                  "value": "SENSEX",
+                  "description": "True"
+                },
+                {
+                  "key": "fromDate",
+                  "value": "2024-01-11 10:00:00",
+                  "description": "True"
+                },
+                {
+                  "key": "toDate",
+                  "value": "2024-01-21 10:00:00",
+                  "description": "false",
+                  "disabled": true
+                },
+                {
+                  "key": "interval",
+                  "value": null,
+                  "description": "false",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Historical Candle Data",
+      "item": [
+        {
+          "name": "Stock Candle Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/history/candleData?exchange=CDS&symbolName=EURINR24MAR92CE&fromDate=2023-02-16",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "history",
+                "candleData"
+              ],
+              "query": [
+                {
+                  "key": "exchange",
+                  "value": "CDS"
+                },
+                {
+                  "key": "symbolName",
+                  "value": "EURINR24MAR92CE",
+                  "description": "EURINR24MAR92CE,cds"
+                },
+                {
+                  "key": "fromDate",
+                  "value": "2023-02-16"
+                },
+                {
+                  "key": "toDate",
+                  "value": "2028-03-11",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Index Candle Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/history/indexCandleData?indexName=Nifty 200&fromDate=2019-01-05&toDate=2023-01-30",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "history",
+                "indexCandleData"
+              ],
+              "query": [
+                {
+                  "key": "indexName",
+                  "value": "Nifty 200"
+                },
+                {
+                  "key": "fromDate",
+                  "value": "2019-01-05"
+                },
+                {
+                  "key": "toDate",
+                  "value": "2023-01-30"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User Logout",
+      "item": [
+        {
+          "name": "User Logout",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-seesion-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "https://tradeapi.samco.in/logout",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "logout"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Samco Publisher",
+      "item": [
+        {
+          "name": "Create App",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-session-token",
+                "value": "{{sessionToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"appName\":\"Testing\",\n    \"redirectURL\":\"http://localhost\",\n    \"description\":\"Create new app\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/publisher/createApp",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "publisher",
+                "createApp"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Static IP",
+      "item": [
+        {
+          "name": "IP Register",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"clientId\" : \"XX1111\",\n    \"primaryIp\" : \"XXX.XX.XX.XXX\",\n    \"secondaryIp\" : \"XXX.XX.XX.XXX\",\n    \"password\" : \"xxxxxxx\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/ip/ipRegistration",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "ip",
+                "ipRegistration"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "IP Update",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"clientId\" : \"XX1111\",\n    \"primaryIp\" : \"XXX.XX.XX.XXX\",\n    \"secondaryIp\" : \"XXX.XX.XX.XXX\",\n    \"password\" : \"xxxxxxx\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://tradeapi.samco.in/ip/ipUpdate",
+              "protocol": "https",
+              "host": [
+                "tradeapi",
+                "samco",
+                "in"
+              ],
+              "path": [
+                "ip",
+                "ipUpdate"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
