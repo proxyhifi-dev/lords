@@ -64,6 +64,10 @@ try:
     ORDER_QTY = getattr(s, "order_qty",            65)
     MAX_LOSS  = getattr(s, "max_daily_loss",       5000.0)
     CAPITAL   = getattr(s, "capital",              50000.0)
+    # Slippage model (v5.0)
+    SLIP_ENTRY  = getattr(s, "slippage_entry",    2.0)   # ₹ extra above ask on entry
+    SLIP_EXIT   = getattr(s, "slippage_exit",     1.5)   # ₹ extra below bid on exit
+    SLIP_SL_GAP = getattr(s, "slippage_sl_gap",   5.0)   # ₹ extra on SL gap fills
     NO_ENTRY  = time(*map(int, getattr(s, "no_entry_after", "13:30").split(":")))
     SQ_OFF    = time(*map(int, getattr(s, "square_off",     "15:10").split(":")))
     CFG_SOURCE = "✅ Loaded from config_loader.py"
@@ -72,6 +76,7 @@ except Exception as e:
     MIN_PREM=30.0; OTM_DIST=1; ATR_MULT=1.0; BUF=5.0
     MIN_ORB=50.0; MAX_ORB=150.0; TREND_ON=True; SKIP_1ST=True
     ORDER_QTY=65; MAX_LOSS=5000.0; CAPITAL=50000.0
+    SLIP_ENTRY=2.0; SLIP_EXIT=1.5; SLIP_SL_GAP=5.0
     NO_ENTRY=time(13,30); SQ_OFF=time(15,10)
     CFG_SOURCE = f"⚠️  Using defaults ({e})"
     full_analytics = None
@@ -100,8 +105,12 @@ def bsm(S,K,T,opt="CE",r=0.065,iv=0.14) -> float:
     if opt=="CE": return max(S*norm.cdf(d1)-K*exp(-r*T)*norm.cdf(d2),0.05)
     return max(K*exp(-r*T)*norm.cdf(-d2)-S*norm.cdf(-d1),0.05)
 
-def bsm_ask(S,K,T,opt,dte): return round(bsm(S,K,T,opt,iv=get_iv(dte))+SPREAD,2)
-def bsm_bid(S,K,T,opt,dte): return round(max(bsm(S,K,T,opt,iv=get_iv(dte))-SPREAD,0.05),2)
+def bsm_ask(S,K,T,opt,dte,extra_slip=0.0):
+    """Entry: BSM mid + ₹2 spread + slippage (market order execution)"""
+    return round(bsm(S,K,T,opt,iv=get_iv(dte))+SPREAD+extra_slip, 2)
+def bsm_bid(S,K,T,opt,dte,extra_slip=0.0):
+    """Exit: BSM mid - ₹2 spread - slippage"""
+    return round(max(bsm(S,K,T,opt,iv=get_iv(dte))-SPREAD-extra_slip, 0.05), 2)
 
 
 # ── SECTION 2: EXPIRY / SYMBOL HELPERS ──────────────────────────────────────
@@ -161,7 +170,9 @@ def _simulate_trade(ddf, sig, ets, esp, strike, ot, expiry, dte, ep, day):
         if t >= SQ_OFF:
             xp,xr,xts,exit_spot=curr,"EOD",row["datetime"],row["close"]; break
         if curr <= sl:
-            xp,xr,xts,exit_spot=sl,"STOPLOSS",row["datetime"],row["close"]; break
+            # SL gap: fill at sl MINUS extra gap slippage
+            sl_fill = max(sl - SLIP_SL_GAP, 0.05)
+            xp,xr,xts,exit_spot=sl_fill,"STOPLOSS",row["datetime"],row["close"]; break
         if not t1b and curr >= t1:
             t1b=True; t1e=t1; t1_spot=row["close"]
         if t1b:
@@ -271,7 +282,7 @@ def run_backtest_offline(df, start_date=None, end_date=None, use_trend=None, ski
         strike = calc_strike(esp,sig)
         expiry = next_expiry(ets)
         dte    = max((expiry.date()-day).days,1)
-        ep     = bsm_ask(esp,strike,dte/365,ot,dte)
+        ep     = bsm_ask(esp,strike,dte/365,ot,dte, extra_slip=SLIP_ENTRY)
         if ep < MIN_PREM: skipped.append((day,f"Premium ₹{ep:.0f}<min")); continue
 
         trade = _simulate_trade(ddf,sig,ets,esp,strike,ot,expiry,dte,ep,day)

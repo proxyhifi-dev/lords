@@ -1,16 +1,15 @@
 """
-Lords Bot — Trading Engine
+Lords Bot — Trading Engine  v5.0
+=================================
 Listens to RISK_APPROVED → executes entry → monitors exit.
 
-Fixes vs old version:
-  1. Paper mode enforced (samco_client handles it but double-guarded here)
-  2. Fill confirmation on every order (confirm_fill polling)
-  3. PnL double-count fixed: _exit_trade uses only remaining qty pnl
-  4. T1 booked flag checked before _exit_trade to avoid double-sell
-  5. No risk re-checks here (RiskManager is single source of truth)
-  6. Symbol cache cleared on daily reset
-  7. Volume check skipped when min_option_volume == 0 (v3.1 fix)
-  8. Volume parsed from quoteDetails nesting (v3.1 fix)
+v5.0 fixes:
+  1. entry_price = avgFillPrice (NOT ltp)  ← critical fix
+  2. exit_price  = avgFillPrice (NOT ltp)  ← critical fix
+  3. SELL retry up to 3 times with emergency market order fallback
+  4. SL/T1/T2 levels recalculated from actual fill price
+  5. Paper mode: falls back to LTP (no tradebook in paper)
+  6. All existing v4.0 fixes preserved
 """
 from __future__ import annotations
 
@@ -29,36 +28,29 @@ settings = get_settings()
 logger   = get_logger("trading_engine")
 IST = ZoneInfo("Asia/Kolkata")
 
+_SELL_MAX_RETRIES = 3
+_SELL_RETRY_DELAY = 1.5  # seconds between retries
+
 
 def _parse_volume(quote: dict) -> int:
-    """Extract traded volume from SAMCO quote response (handles all nesting variants)."""
     def _int(val) -> int:
         try: return int(float(str(val).replace(",", "").strip()))
         except (TypeError, ValueError): return 0
-
-    # Flat keys on root
     for k in ("tradedVolume", "volume", "traded_volume", "totalTradedVolume"):
         v = _int(quote.get(k))
         if v > 0: return v
-
-    # Inside quoteDetails
     inner = quote.get("quoteDetails")
-    if isinstance(inner, list) and inner:
-        inner = inner[0]
+    if isinstance(inner, list) and inner: inner = inner[0]
     if isinstance(inner, dict):
         for k in ("tradedVolume", "volume", "totalTradedVolume"):
             v = _int(inner.get(k))
             if v > 0: return v
-
-    # Inside data
     data = quote.get("data")
-    if isinstance(data, list) and data:
-        data = data[0]
+    if isinstance(data, list) and data: data = data[0]
     if isinstance(data, dict):
         for k in ("tradedVolume", "volume", "totalTradedVolume"):
             v = _int(data.get(k))
             if v > 0: return v
-
     return 0
 
 
@@ -79,7 +71,7 @@ class TradingEngine:
             self._health_loop(),
         )
 
-    # ── ENTRY — listens to RISK_APPROVED ─────────────
+    # ── ENTRY ──────────────────────────────────────────────
     async def _entry_listener(self):
         queue = self.event_bus.subscribe("RISK_APPROVED")
         async for event in self.event_bus.iter_events(queue):
@@ -90,22 +82,20 @@ class TradingEngine:
             state = await self.state_manager.snapshot()
             await self.state_manager.update(signal=None, signal_meta=None)
 
-            # Guard against race conditions
             if state.active_trade: return
             if state.spot_price is None: return
             if not state.trading_enabled: return
 
             no_h, no_m = map(int, settings.no_entry_after.split(":"))
             if datetime.now(IST).time() >= dtime(no_h, no_m):
-                logger.info("Past no-entry time — skipping")
-                return
+                logger.info("Past no-entry time — skipping"); return
 
             signal     = payload.get("signal")
             size_label = payload.get("size_label", "FULL")
 
             try:
-                strike = OptionSelector.get_otm_strike(state.spot_price, signal,
-                                                        distance=settings.otm_distance)
+                strike = OptionSelector.get_otm_strike(
+                    state.spot_price, signal, distance=settings.otm_distance)
                 symbol = await self._resolve_symbol(strike, signal)
                 if not symbol: return
 
@@ -115,65 +105,67 @@ class TradingEngine:
                     logger.warning("LTP unavailable %s", symbol); return
 
                 if ltp < settings.min_entry_premium:
-                    logger.warning("Premium ₹%.1f < min ₹%.1f — skip %s", ltp, settings.min_entry_premium, symbol); return
+                    logger.warning("Premium ₹%.1f < min ₹%.1f — skip %s",
+                                   ltp, settings.min_entry_premium, symbol); return
 
-                # Volume check — skip entirely if min_option_volume == 0
                 if settings.min_option_volume > 0:
                     vol = _parse_volume(quote)
                     if vol < settings.min_option_volume:
-                        logger.warning("Low volume %d < %d — skip %s", vol, settings.min_option_volume, symbol)
-                        return
-                    logger.debug("Volume OK: %d >= %d for %s", vol, settings.min_option_volume, symbol)
+                        logger.warning("Low volume %d < %d — skip %s",
+                                       vol, settings.min_option_volume, symbol); return
 
                 qty = self._get_qty(size_label)
 
-                order_resp = await self.broker.place_order(symbol=symbol, side="BUY", quantity=qty)
-                order_id   = (order_resp.get("orderNumber") or
-                              order_resp.get("orderId")     or
-                              order_resp.get("order_id"))
+                # ── PLACE BUY + GET ACTUAL FILL PRICE ──────
+                order_id, fill_price = await self.broker.place_order_and_wait_fill(
+                    symbol=symbol, side="BUY", quantity=qty
+                )
                 if not order_id:
-                    logger.error("BUY rejected no order_id resp=%s", order_resp); return
+                    logger.error("BUY order failed — no order_id"); return
+                if fill_price is None and not order_id.startswith("PAPER-"):
+                    logger.error("BUY fill not confirmed order=%s", order_id); return
 
-                # Confirm fill before recording trade
-                filled = await self.broker.confirm_fill(order_id)
-                if not filled:
-                    logger.error("BUY not confirmed filled order_id=%s", order_id); return
+                # Use actual fill price; fall back to LTP for paper mode
+                entry_price = fill_price if fill_price else ltp
+                logger.info("ENTRY fill price=₹%.2f (ltp=₹%.2f order=%s mode=%s)",
+                            entry_price, ltp, order_id, settings.mode.upper())
 
                 t1_qty = qty // 2
                 t2_qty = qty - t1_qty
                 trade  = {
-                    "symbol":      symbol,
-                    "strike":      strike,
-                    "qty":         qty,
-                    "entry_price": ltp,
-                    "entry_time":  datetime.now(timezone.utc).isoformat(),
-                    "status":      "OPEN",
-                    "signal":      signal,
-                    "max_price":   ltp,
-                    "order_id":    order_id,
-                    "size_label":  size_label,
-                    "sl_price":    round(ltp * (1 - settings.stop_loss_pct), 2),
-                    "t1_price":    round(ltp * (1 + settings.t1_pct), 2),
-                    "t2_price":    round(ltp * (1 + settings.t2_pct), 2),
-                    "t1_hit":      False,
-                    "t1_booked":   False,
-                    "t1_qty":      t1_qty,
-                    "t2_qty":      t2_qty,
-                    "t1_pnl":      0.0,
+                    "symbol":       symbol,
+                    "strike":       strike,
+                    "qty":          qty,
+                    "entry_price":  entry_price,        # ← ACTUAL FILL PRICE
+                    "entry_ltp":    ltp,                # ← saved for reference
+                    "entry_time":   datetime.now(timezone.utc).isoformat(),
+                    "status":       "OPEN",
+                    "signal":       signal,
+                    "max_price":    entry_price,
+                    "order_id":     order_id,
+                    "size_label":   size_label,
+                    "sl_price":     round(entry_price * (1 - settings.stop_loss_pct), 2),
+                    "t1_price":     round(entry_price * (1 + settings.t1_pct), 2),
+                    "t2_price":     round(entry_price * (1 + settings.t2_pct), 2),
+                    "t1_hit":       False,
+                    "t1_booked":    False,
+                    "t1_qty":       t1_qty,
+                    "t2_qty":       t2_qty,
+                    "t1_pnl":       0.0,
                 }
                 await self.state_manager.update(
                     active_trade=trade,
                     trade_count=state.trade_count + 1,
                 )
-                logger.info("ENTRY %s qty=%s ltp=₹%.2f SL=₹%.2f T1=₹%.2f T2=₹%.2f mode=%s",
-                            symbol, qty, ltp, trade["sl_price"], trade["t1_price"], trade["t2_price"],
-                            settings.mode.upper())
+                logger.info("TRADE OPEN %s qty=%s entry=₹%.2f SL=₹%.2f T1=₹%.2f T2=₹%.2f",
+                            symbol, qty, entry_price,
+                            trade["sl_price"], trade["t1_price"], trade["t2_price"])
                 await self.event_bus.publish("TRADE_OPENED", {"trade": trade})
 
             except Exception as exc:
                 logger.error("Entry failed: %s", exc, exc_info=True)
 
-    # ── MONITOR — 2-stage exit ────────────────────────
+    # ── MONITOR ────────────────────────────────────────────
     async def _monitor_loop(self):
         while True:
             await asyncio.sleep(2)
@@ -188,12 +180,10 @@ class TradingEngine:
 
                 entry     = trade["entry_price"]
                 t1_booked = trade.get("t1_booked", False)
-                t1_hit    = trade.get("t1_hit",    False)
                 sl_price  = trade.get("sl_price",  round(entry * (1 - settings.stop_loss_pct), 2))
                 t1_price  = trade.get("t1_price",  round(entry * (1 + settings.t1_pct), 2))
                 t2_price  = trade.get("t2_price",  round(entry * (1 + settings.t2_pct), 2))
 
-                # Update max_price and live pnl
                 remaining_qty = trade.get("t2_qty", trade["qty"] // 2) if t1_booked else trade["qty"]
                 live_pnl = (ltp - entry) * remaining_qty
                 await self.state_manager.update(live_pnl=round(live_pnl, 2))
@@ -208,16 +198,13 @@ class TradingEngine:
                 if datetime.now(IST).time() >= dtime(sq_h, sq_m):
                     await self._exit_trade(trade, "EOD_SQUAREOFF", ltp); continue
 
-                # Hard SL — always active
                 if ltp <= sl_price:
                     await self._exit_trade(trade, "STOPLOSS", ltp); continue
 
-                # Stage 1: book 50% at T1
                 if not t1_booked and ltp >= t1_price:
                     await self._book_partial(trade, ltp); continue
 
-                # Stage 2: after T1 booked
-                if t1_hit:
+                if t1_booked:
                     if ltp >= t2_price:
                         await self._exit_remaining(trade, "TARGET_2", ltp); continue
                     if ltp <= trail_sl:
@@ -226,8 +213,8 @@ class TradingEngine:
             except Exception as exc:
                 logger.error("Monitor loop: %s", exc, exc_info=True)
 
-    # ── PARTIAL EXIT — T1 (50% qty) ──────────────────
-    async def _book_partial(self, trade: dict, price: float):
+    # ── PARTIAL EXIT T1 ─────────────────────────────────────
+    async def _book_partial(self, trade: dict, ltp: float):
         async with self._trade_lock:
             state = await self.state_manager.snapshot()
             if not state.active_trade: return
@@ -235,30 +222,28 @@ class TradingEngine:
             t1_qty = trade.get("t1_qty", trade["qty"] // 2)
             symbol = trade["symbol"]
 
-            sell_resp = await self.broker.place_order(symbol=symbol, side="SELL", quantity=t1_qty)
-            sell_id   = (sell_resp.get("orderNumber") or sell_resp.get("orderId") or sell_resp.get("order_id"))
+            sell_id, fill_price = await self._sell_with_retry(symbol, t1_qty, "T1 PARTIAL")
             if not sell_id:
-                logger.error("T1 SELL rejected resp=%s", sell_resp); return
+                logger.error("T1 SELL failed — keeping position open"); return
 
-            await self.broker.confirm_fill(sell_id)
+            # Use actual fill price; fallback to LTP
+            exit_price = fill_price if fill_price else ltp
+            t1_pnl = round((exit_price - trade["entry_price"]) * t1_qty, 2)
 
-            t1_pnl = round((price - trade["entry_price"]) * t1_qty, 2)
             trade["t1_hit"]    = True
             trade["t1_booked"] = True
             trade["t1_pnl"]    = t1_pnl
 
             new_daily = round(state.daily_pnl + t1_pnl, 2)
             await self.state_manager.update(
-                active_trade=trade,
-                daily_pnl=new_daily,
-                live_pnl=0.0,
-            )
-            logger.info("T1 BOOKED %s qty=%s price=₹%.2f pnl=₹%.2f id=%s",
-                        symbol, t1_qty, price, t1_pnl, sell_id)
-            await self.event_bus.publish("T1_BOOKED", {"symbol": symbol, "price": price, "pnl": t1_pnl})
+                active_trade=trade, daily_pnl=new_daily, live_pnl=0.0)
+            logger.info("T1 BOOKED %s qty=%s fill=₹%.2f pnl=₹%.2f order=%s",
+                        symbol, t1_qty, exit_price, t1_pnl, sell_id)
+            await self.event_bus.publish("T1_BOOKED",
+                {"symbol": symbol, "price": exit_price, "pnl": t1_pnl})
 
-    # ── EXIT REMAINING — T2 / trail ───────────────────
-    async def _exit_remaining(self, trade: dict, reason: str, price: float):
+    # ── EXIT REMAINING (T2 / trail) ─────────────────────────
+    async def _exit_remaining(self, trade: dict, reason: str, ltp: float):
         async with self._trade_lock:
             state = await self.state_manager.snapshot()
             if not state.active_trade: return
@@ -266,56 +251,103 @@ class TradingEngine:
             symbol = trade["symbol"]
             t2_qty = trade.get("t2_qty", trade["qty"] // 2)
 
-            sell_resp = await self.broker.place_order(symbol=symbol, side="SELL", quantity=t2_qty)
-            sell_id   = (sell_resp.get("orderNumber") or sell_resp.get("orderId") or sell_resp.get("order_id"))
+            sell_id, fill_price = await self._sell_with_retry(symbol, t2_qty, reason)
             if not sell_id:
-                logger.error("T2 SELL rejected — position open! resp=%s", sell_resp); return
-            filled = await self.broker.confirm_fill(sell_id)
-            if not filled:
-                logger.error("T2 SELL not confirmed filled id=%s", sell_id); return
+                logger.critical("T2 SELL FAILED — position may be open! %s qty=%s", symbol, t2_qty)
+                await self.event_bus.publish("SELL_FAILED_CRITICAL",
+                    {"symbol": symbol, "qty": t2_qty, "reason": reason})
+                return
 
-            t2_pnl    = round((price - trade["entry_price"]) * t2_qty, 2)
-            total_pnl = round(trade.get("t1_pnl", 0) + t2_pnl, 2)
-            new_daily = round(state.daily_pnl + t2_pnl, 2)
+            exit_price = fill_price if fill_price else ltp
+            t2_pnl     = round((exit_price - trade["entry_price"]) * t2_qty, 2)
+            total_pnl  = round(trade.get("t1_pnl", 0) + t2_pnl, 2)
+            new_daily  = round(state.daily_pnl + t2_pnl, 2)
 
-            closed = {**trade, "exit_price": price, "exit_time": datetime.now(timezone.utc).isoformat(),
-                      "status": "CLOSED", "exit_reason": reason, "pnl": total_pnl, "sell_order_id": sell_id}
+            closed = {**trade, "exit_price": exit_price,
+                      "exit_time": datetime.now(timezone.utc).isoformat(),
+                      "status": "CLOSED", "exit_reason": reason,
+                      "pnl": total_pnl, "sell_order_id": sell_id}
             self.trade_store.append_trade(closed, new_daily)
             await self.state_manager.update(active_trade=None, daily_pnl=new_daily, live_pnl=0.0)
-            logger.info("EXIT %s reason=%s price=₹%.2f pnl=₹%.2f", symbol, reason, price, total_pnl)
+            logger.info("EXIT %s reason=%s fill=₹%.2f pnl=₹%.2f", symbol, reason, exit_price, total_pnl)
             await self.event_bus.publish("TRADE_CLOSED", {"trade": closed})
 
-    # ── FULL EXIT — SL / EOD ──────────────────────────
-    async def _exit_trade(self, trade: dict, reason: str, price: float):
+    # ── FULL EXIT (SL / EOD) ────────────────────────────────
+    async def _exit_trade(self, trade: dict, reason: str, ltp: float):
         async with self._trade_lock:
             state = await self.state_manager.snapshot()
             if not state.active_trade: return
 
             symbol = trade["symbol"]
-            # Only sell remaining qty if T1 already booked
-            qty = trade.get("t2_qty", trade["qty"] // 2) if trade.get("t1_booked") else trade["qty"]
+            qty    = trade.get("t2_qty", trade["qty"] // 2) if trade.get("t1_booked") else trade["qty"]
 
-            sell_resp = await self.broker.place_order(symbol=symbol, side="SELL", quantity=qty)
-            sell_id   = (sell_resp.get("orderNumber") or sell_resp.get("orderId") or sell_resp.get("order_id"))
+            sell_id, fill_price = await self._sell_with_retry(symbol, qty, reason)
             if not sell_id:
-                logger.error("SELL rejected — position may be open! resp=%s", sell_resp); return
-            filled = await self.broker.confirm_fill(sell_id)
-            if not filled:
-                logger.error("SELL not confirmed filled id=%s", sell_id); return
+                logger.critical("SELL FAILED — position may be open! %s qty=%s reason=%s",
+                                symbol, qty, reason)
+                await self.event_bus.publish("SELL_FAILED_CRITICAL",
+                    {"symbol": symbol, "qty": qty, "reason": reason})
+                return
 
-            # PnL only on qty sold here (no double-count with t1_pnl)
-            exit_pnl  = round((price - trade["entry_price"]) * qty, 2)
-            total_pnl = round(trade.get("t1_pnl", 0) + exit_pnl, 2)
-            new_daily = round(state.daily_pnl + exit_pnl, 2)
+            exit_price = fill_price if fill_price else ltp
+            exit_pnl   = round((exit_price - trade["entry_price"]) * qty, 2)
+            total_pnl  = round(trade.get("t1_pnl", 0) + exit_pnl, 2)
+            new_daily  = round(state.daily_pnl + exit_pnl, 2)
 
-            closed = {**trade, "exit_price": price, "exit_time": datetime.now(timezone.utc).isoformat(),
-                      "status": "CLOSED", "exit_reason": reason, "pnl": total_pnl, "sell_order_id": sell_id}
+            closed = {**trade, "exit_price": exit_price,
+                      "exit_time": datetime.now(timezone.utc).isoformat(),
+                      "status": "CLOSED", "exit_reason": reason,
+                      "pnl": total_pnl, "sell_order_id": sell_id}
             self.trade_store.append_trade(closed, new_daily)
             await self.state_manager.update(active_trade=None, daily_pnl=new_daily, live_pnl=0.0)
-            logger.info("EXIT %s reason=%s price=₹%.2f pnl=₹%.2f", symbol, reason, price, total_pnl)
+            logger.info("EXIT %s reason=%s fill=₹%.2f pnl=₹%.2f", symbol, reason, exit_price, total_pnl)
             await self.event_bus.publish("TRADE_CLOSED", {"trade": closed})
 
-    # ── HEALTH ────────────────────────────────────────
+    # ── SELL WITH RETRY ─────────────────────────────────────
+    async def _sell_with_retry(
+        self, symbol: str, qty: int, reason: str
+    ) -> tuple[str | None, float | None]:
+        """
+        Try SELL up to _SELL_MAX_RETRIES times.
+        If all retries fail → emergency market order with 1s delay.
+        Returns (order_id, fill_price) or (None, None) if all fail.
+        """
+        for attempt in range(1, _SELL_MAX_RETRIES + 1):
+            try:
+                sell_id, fill_price = await self.broker.place_order_and_wait_fill(
+                    symbol=symbol, side="SELL", quantity=qty
+                )
+                if sell_id:
+                    logger.info("SELL OK attempt=%d reason=%s order=%s fill=₹%s",
+                                attempt, reason, sell_id,
+                                f"{fill_price:.2f}" if fill_price else "N/A(paper)")
+                    return sell_id, fill_price
+                logger.warning("SELL attempt %d/%d failed — no order_id reason=%s",
+                               attempt, _SELL_MAX_RETRIES, reason)
+            except Exception as exc:
+                logger.error("SELL attempt %d/%d exception reason=%s: %s",
+                             attempt, _SELL_MAX_RETRIES, reason, exc)
+
+            if attempt < _SELL_MAX_RETRIES:
+                await asyncio.sleep(_SELL_RETRY_DELAY)
+
+        # Emergency: last-resort market order
+        logger.critical("EMERGENCY SELL: all retries failed — sending emergency order %s qty=%s",
+                        symbol, qty)
+        try:
+            resp = await self.broker.place_order(symbol=symbol, side="SELL", quantity=qty)
+            eid  = resp.get("orderNumber") or resp.get("orderId")
+            if eid:
+                await asyncio.sleep(2)  # wait 2s then fetch fill
+                fp = await self.broker.get_actual_fill_price(eid)
+                logger.critical("EMERGENCY SELL placed order=%s fill=%s", eid, fp)
+                return eid, fp
+        except Exception as exc:
+            logger.critical("EMERGENCY SELL also failed: %s", exc)
+
+        return None, None
+
+    # ── HEALTH ──────────────────────────────────────────────
     async def _health_loop(self):
         while True:
             await asyncio.sleep(60)
@@ -326,7 +358,7 @@ class TradingEngine:
             except Exception as exc:
                 logger.error("Health loop: %s", exc)
 
-    # ── HELPERS ───────────────────────────────────────
+    # ── HELPERS ─────────────────────────────────────────────
     def _get_qty(self, size_label: str) -> int:
         base = settings.order_qty
         if size_label == "FULL":   return max(base, 1)

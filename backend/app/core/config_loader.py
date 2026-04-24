@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     trend_filter_enabled: bool = True
     skip_first_candle: bool = True
     gap_threshold: float = 5.0
+    # Slippage model (v5.0)
+    slippage_entry: float = 2.0     # ₹ extra above ask on entry market orders
+    slippage_exit: float = 1.5      # ₹ extra below bid on exit market orders
+    slippage_sl_gap: float = 5.0    # ₹ extra on SL gap fills (fast market)
     no_entry_after: str = "13:30"
     square_off: str = "15:10"
     poll_seconds: int = 1

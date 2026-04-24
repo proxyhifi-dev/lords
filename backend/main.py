@@ -153,12 +153,26 @@ async def stop():
 
 @app.post("/api/trading-mode")
 async def set_mode(body: dict):
+    """
+    MODE is controlled exclusively by .env MODE= setting.
+    This endpoint can only set PAPER mode for safety.
+    To enable LIVE mode: change MODE=live in .env and restart.
+    """
     from backend.app.scheduler.market_scheduler import scheduler
-    mode = body.get("mode", "PAPER").upper()
-    if mode not in ("PAPER", "LIVE"):
-        return {"status": "error", "message": "mode must be PAPER or LIVE"}
-    await scheduler.state.update(trading_mode=mode)
-    return {"status": "ok", "mode": mode}
+    requested = body.get("mode", "PAPER").upper()
+    if requested == "LIVE":
+        # Live mode ONLY via .env — never via API
+        return {
+            "status": "error",
+            "message": (
+                "LIVE mode cannot be enabled via API for safety. "
+                "Set MODE=live in .env and restart the bot."
+            )
+        }
+    # Only PAPER is allowed via API
+    await scheduler.state.update(trading_mode="PAPER")
+    return {"status": "ok", "mode": "PAPER",
+            "note": "To enable LIVE mode, set MODE=live in .env and restart"}
 
 
 @app.post("/api/trading-enabled")

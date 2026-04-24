@@ -24,6 +24,7 @@ from backend.app.engine.trading_engine import TradingEngine
 from backend.app.risk.risk_manager import RiskManager
 from backend.app.storage.trade_store import TradeStore
 from backend.app.utils.logger import get_logger
+from backend.app.engine.reconciliation import ReconciliationEngine
 
 settings = get_settings()
 logger   = get_logger("market_scheduler")
@@ -79,6 +80,7 @@ class MarketScheduler:
         self._prev_day_close: float | None = None
         self._recent_spots:   list         = []
         self._day_candles:    list         = []
+        self._reconciler = ReconciliationEngine(broker=self.broker, state_manager=self.state, event_bus=self.event_bus)
 
     # ── Lifecycle ──────────────────────────────────────
     async def start(self):
@@ -92,6 +94,8 @@ class MarketScheduler:
             logger.error("SAMCO login failed: %s — running offline", exc)
         self.running = True
         await self.state.update(bot_running=True)
+        if settings.is_live:
+            asyncio.create_task(self._reconciler.run_once())
         self._tasks = [
             asyncio.create_task(self._loop(),          name="market-loop"),
             asyncio.create_task(self.risk.run(),       name="risk-manager"),
@@ -261,7 +265,7 @@ class MarketScheduler:
 
         # ── Skip first candle after ORB freeze ───────
         if settings.skip_first_candle and self._orb_frozen_time is not None:
-            if now.timestamp() - self._orb_frozen_time < 120:
+            if now.timestamp() - self._orb_frozen_time < 65:  # skip exactly 1 candle (65s buffer)
                 return
 
         bu = state.orb_high + settings.breakout_buffer
