@@ -1,0 +1,19 @@
+{
+  "spot_price": null,
+  "orb_high": null,
+  "orb_low": null,
+  "signal": null,
+  "signal_meta": null,
+  "active_trade": null,
+  "daily_pnl": 0.0,
+  "live_pnl": 0.0,
+  "unrealized_pnl": 0.0,
+  "trade_count": 0,
+  "trading_enabled": true,
+  "trading_mode": "PAPER",
+  "bot_running": true,
+  "cooldown_active": false,
+  "cooldown_until": null,
+  "last_order_failed": false,
+  "trade_date": "2026-04-27"
+}

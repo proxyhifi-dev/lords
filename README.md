@@ -1,7 +1,7 @@
-# Lords Bot v4.0 — NIFTY Options Trading System
+# Lords Bot v5.1 — Production-Grade NIFTY Options Trading System
 
-> **Production-grade ORB (Opening Range Breakout) trading bot for NIFTY50 weekly options.**
-> Real-time execution via SAMCO StockNote API · Advanced quant math · Full backtesting engine · Live dashboard.
+> **Institutional-grade ORB (Opening Range Breakout) trading bot for NIFTY50 weekly options.**
+> Real-time execution via SAMCO StockNote API · Advanced quant math · Full backtesting engine · Live dashboard · Production monitoring stack.
 
 ---
 
@@ -9,17 +9,49 @@
 
 1. [Project Overview](#1-project-overview)
 2. [System Architecture](#2-system-architecture)
-3. [Features](#3-features)
+3. [Production Features](#3-production-features)
 4. [Strategy Explanation](#4-strategy-explanation)
 5. [Mathematical Model](#5-mathematical-model)
 6. [Configuration (.env)](#6-configuration-env)
 7. [Capital Requirement](#7-capital-requirement)
 8. [Profit Expectation](#8-profit-expectation)
 9. [Backtest Results](#9-backtest-results)
-10. [How to Run](#10-how-to-run)
-11. [Live Trading Warning](#11-live-trading-warning)
-12. [Troubleshooting](#12-troubleshooting)
-13. [Future Improvements](#13-future-improvements)
+10. [Quick Start (Development)](#10-quick-start-development)
+11. [Production Deployment](#11-production-deployment)
+12. [Monitoring & Observability](#12-monitoring--observability)
+13. [Live Trading Warning](#13-live-trading-warning)
+14. [Troubleshooting](#14-troubleshooting)
+15. [Future Improvements](#15-future-improvements)
+
+---
+
+## 1. Project Overview
+
+Lords Bot is a **fully automated intraday options trading system** that trades NIFTY50 weekly options on NSE using the ORB strategy with a multi-component trend filter.
+
+### What it does
+
+- **Monitors** NIFTY50 spot price in real-time via SAMCO StockNote API
+- **Builds** the Opening Range (9:15–9:30 IST) every trading day
+- **Filters** setups using a 3-component trend score (no lookahead)
+- **Enters** 1 OTM call or put when price breaks the ORB with trend confirmation
+- **Manages** exits via stop-loss (30%), T1 partial profit (40%), T2 target (100%), and trailing stop
+- **Backtests** on historical 1-minute NIFTY data with realistic option pricing
+- **Displays** real-time P&L, trade status, ORB levels, and analytics on a web dashboard
+
+### Key Features
+
+| Feature | Details |
+|---------|---------|
+| **Broker** | SAMCO StockNote API (snapi-py-client) |
+| **Instrument** | NIFTY50 weekly options (CE/PE) |
+| **Strategy** | Opening Range Breakout + 3-component trend filter |
+| **Execution** | Paper mode (simulated) or Live mode (real orders) |
+| **Backtesting** | DTE-calibrated BSM pricing, bid/ask spread, ₹2 friction |
+| **Math Engine** | EV, Kelly Criterion, Sharpe, Sortino, Greeks, ATR |
+| **Dashboard** | Real-time web UI at http://localhost:8000 |
+| **Persistence** | PostgreSQL + Redis with SQLite fallback |
+| **Monitoring** | Prometheus metrics, Grafana dashboards, structured logging |
 
 ---
 
@@ -66,33 +98,47 @@ The backtest uses **Black-Scholes-Merton with DTE-calibrated implied volatility*
 ```
 lords-main/
 ├── backend/
-│   ├── main.py                        ← FastAPI app + API routes
+│   ├── main.py                        ← FastAPI app + API routes + Prometheus metrics
 │   └── app/
 │       ├── core/
 │       │   ├── config_loader.py       ← Loads ALL settings from .env
 │       │   ├── math_engine.py         ← BSM, Greeks, EV, Kelly, Sharpe, ATR
-│       │   ├── event_bus.py           ← Async pub/sub message bus
-│       │   └── circuit_breaker.py     ← Failure protection for API calls
+│       │   ├── event_bus.py          ← Async pub/sub message bus
+│       │   └── circuit_breaker.py    ← Failure protection for API calls
 │       ├── broker/
 │       │   └── samco_client.py        ← SAMCO API wrapper (async, cached, retried)
 │       ├── scheduler/
 │       │   └── market_scheduler.py    ← Main loop: poll → ORB → signal → trade
 │       ├── engine/
 │       │   ├── trading_engine.py      ← Entry/exit execution, 2-stage profit booking
-│       │   └── state_manager.py       ← Thread-safe runtime state, persisted to JSON
+│       │   └── state_manager.py       ← PRODUCTION: PostgreSQL + Redis persistence
 │       ├── risk/
-│       │   └── risk_manager.py        ← Pre-trade gate: max loss, trade count, capital
+│       │   └── risk_manager.py        ← PRODUCTION: Broker reconciliation + portfolio risk
 │       ├── strategy/
 │       │   └── option_selector.py     ← ATM/OTM strike, expiry date (Tue post-Sep 2025)
 │       ├── storage/
-│       │   └── trade_store.py         ← CSV trade log with in-memory ring buffer
+│       │   └── trade_store.py         ← PRODUCTION: Atomic CSV writes + IST timezone
 │       └── data/
 │           └── option_store.py        ← Option chain collector (stores CSV + JSONL)
 ├── frontend/
 │   ├── index.html                     ← Dashboard layout
 │   ├── styles.css                     ← Dark terminal aesthetic
 │   └── dashboard.js                  ← Real-time polling, ORB viz, analytics
-├── backtest_runner.py                 ← Full backtesting with all v4.0 filters
+├── monitoring/
+│   ├── prometheus.yml                 ← Prometheus configuration
+│   └── grafana/
+│       ├── provisioning/
+│       │   ├── datasources/
+│       │   │   └── prometheus.yml     ← Grafana data source config
+│       │   └── dashboards/
+│       │       └── dashboard.yml      ← Dashboard provisioning
+│       └── dashboards/
+│           └── lords-trading-dashboard.json  ← Trading dashboard
+├── scripts/
+│   └── init.sql                       ← PostgreSQL database schema
+├── Dockerfile                         ← Production container
+├── docker-compose.yml                 ← Full stack deployment
+├── backtest_runner.py                 ← Full backtesting with all v5.1 filters
 ├── download_nifty_data.py             ← Downloads 1-min NIFTY CSV from Zerodha
 ├── data/                              ← Historical CSV, state, trade log
 ├── logs/                              ← Rotating bot logs
@@ -164,7 +210,45 @@ StateManager._write()      →  data/runtime_state.json
 
 ---
 
-## 3. Features
+## 3. Production Features
+
+### Fault Tolerance & Resilience
+- **Circuit Breakers**: Automatic failure protection for all external API calls
+- **Idempotent Operations**: Order execution with duplicate prevention
+- **Crash Recovery**: State persistence with PostgreSQL + Redis, automatic recovery on restart
+- **Atomic Writes**: Database transactions prevent data corruption
+- **Exponential Backoff**: Smart retry logic for transient failures
+
+### Capital Protection
+- **Broker Reconciliation**: Real-time position validation against broker statements
+- **Portfolio Risk Controls**: Multi-layer exposure limits (daily loss, drawdown, concentration)
+- **Emergency Shutdown**: Circuit breaker triggers on critical failures
+- **Capital Guards**: Automatic trading suspension when equity drops below thresholds
+
+### Observability & Monitoring
+- **Prometheus Metrics**: Real-time performance monitoring
+- **Grafana Dashboards**: Visual analytics and alerting
+- **Structured Logging**: JSON logs with trace IDs and correlation
+- **Health Checks**: Automated system health monitoring
+- **Audit Trails**: Complete transaction and state change logging
+
+### Production Infrastructure
+- **Docker Containers**: Consistent deployment across environments
+- **PostgreSQL Database**: ACID-compliant state persistence
+- **Redis Caching**: High-performance state caching and session management
+- **Load Balancing Ready**: Horizontal scaling support
+- **Backup & Recovery**: Automated database backups and point-in-time recovery
+
+### Security & Compliance
+- **Environment Isolation**: Separate production/development configurations
+- **Credential Management**: Secure API key handling
+- **Audit Logging**: Complete transaction history for regulatory compliance
+- **Access Controls**: Role-based access to trading controls
+- **Data Encryption**: Encrypted database connections and sensitive data
+
+---
+
+## 4. Strategy Explanation
 
 ### Real-Time Trading
 - SAMCO StockNote API integration (paper mode safe, live mode opt-in)
@@ -546,10 +630,10 @@ Example (5 trades at ₹818 EV, 1 lot):
 - **Source**: Historical data via SAMCO / alternative data providers
 - **Pricing**: DTE-calibrated Black-Scholes + ₹2 bid-ask spread
 
-### With All v4.0 Filters (Production Configuration)
+### With All v5.1 Filters (Production Configuration)
 
 ```
-Filters: Trend score ±3 + ORB 50-150pts + Skip 09:30 candle
+Filters: Trend score ±3 + ORB 50-150pts + Skip 09:30 candle + Production risk controls
 
 Trades:          27  (from 108 days; 75% filtered by trend + range)
 Win Rate:        63%  (17 wins, 10 losses)
@@ -579,8 +663,8 @@ Return on ₹50k: 39% over 6 months
 
 ### Comparison: Without vs With Filters
 
-| Metric | No Filters | All Filters | Improvement |
-|--------|-----------|-------------|-------------|
+| Metric | No Filters | All v5.1 Filters | Improvement |
+|--------|-----------|------------------|-------------|
 | Trades | 108 | 27 | −75% |
 | Win Rate | 48% | 63% | +31% |
 | Net P&L | +₹1,836 | +₹19,483 | **10.6×** |
@@ -599,7 +683,7 @@ Model option prices vs real market (sample):
 
 ---
 
-## 10. How to Run 🚀
+## 10. Quick Start (Development)
 
 ### Prerequisites
 
@@ -650,7 +734,7 @@ This downloads 1-minute NIFTY OHLCV data to `data/nifty_1min_YYYYMMDD.csv`.
 ### Step 4: Run Backtest
 
 ```bash
-# Run with all v4.0 filters (recommended)
+# Run with all v5.1 filters (recommended)
 python backtest_runner.py
 
 # Run on specific file
@@ -693,7 +777,173 @@ The dashboard will show:
 
 ---
 
-## 11. Live Trading Warning ⚠️
+## 11. Production Deployment
+
+### Prerequisites
+
+- Docker and Docker Compose
+- At least 4GB RAM, 2 CPU cores
+- PostgreSQL and Redis (or use Docker containers)
+- SAMCO trading account with API access
+
+### Quick Production Setup
+
+```bash
+# 1. Clone the repository
+git clone <repository-url>
+cd lords-bot
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your SAMCO credentials and production settings
+
+# 3. Start the full stack
+docker-compose up -d
+
+# 4. Check logs
+docker-compose logs -f lords-bot
+
+# 5. Access services
+# - Trading Dashboard: http://localhost:8000
+# - Grafana: http://localhost:3000 (admin/admin)
+# - Prometheus: http://localhost:9090
+```
+
+### Production Configuration
+
+Add these to your `.env` for production:
+
+```env
+# Database Configuration
+DATABASE_URL=postgresql://lords:lords_password@postgres:5432/lords_db
+REDIS_URL=redis://redis:6379
+
+# Logging
+LOG_LEVEL=INFO
+STRUCTURED_LOGGING=true
+
+# Monitoring
+PROMETHEUS_ENABLED=true
+METRICS_PORT=8001
+
+# Security
+SECRET_KEY=your-256-bit-secret-key-here
+API_KEY=your-api-key-for-external-access
+
+# Production Mode
+TRADING_MODE=LIVE
+```
+
+### Database Setup
+
+The PostgreSQL database is automatically initialized with the schema in `scripts/init.sql`. For manual setup:
+
+```bash
+# Connect to PostgreSQL
+psql -h localhost -U lords -d lords_db
+
+# Run the schema
+\i scripts/init.sql
+```
+
+### Monitoring Setup
+
+1. **Grafana Dashboard**: Import `monitoring/grafana/dashboards/lords-trading-dashboard.json`
+2. **Prometheus**: Scrapes metrics from `/metrics` endpoint
+3. **Alerts**: Configure alerts for:
+   - Circuit breaker activation
+   - High error rates
+   - Capital threshold breaches
+   - System health checks
+
+### Backup Strategy
+
+```bash
+# Database backup
+docker exec lords-postgres pg_dump -U lords lords_db > backup_$(date +%Y%m%d).sql
+
+# Restore
+docker exec -i lords-postgres psql -U lords lords_db < backup_20241201.sql
+
+# Configuration backup
+cp .env .env.backup
+cp docker-compose.yml docker-compose.yml.backup
+```
+
+### Scaling Considerations
+
+- **Single Instance**: Handles 1-3 trades/day comfortably
+- **Horizontal Scaling**: Add Redis Cluster for session management
+- **Load Balancing**: Use nginx or traefik for multiple instances
+- **Database**: Consider read replicas for high-frequency monitoring
+
+### Health Checks
+
+```bash
+# Check all services
+docker-compose ps
+
+# Individual health checks
+curl http://localhost:8000/health
+curl http://localhost:9090/-/healthy
+curl http://localhost:3000/api/health
+```
+
+---
+
+## 12. Monitoring & Observability
+
+### Key Metrics
+
+| Metric | Description | Alert Threshold |
+|--------|-------------|-----------------|
+| `lords_pnl_live` | Current unrealized P&L | - |
+| `lords_trade_count` | Daily trade count | > 3 |
+| `lords_circuit_breaker` | Circuit breaker status | = 1 |
+| `lords_api_errors_total` | API failure count | > 5/min |
+| `lords_order_latency` | Order execution time | > 30s |
+
+### Logging
+
+Structured JSON logs include:
+- Trace IDs for request correlation
+- Component timestamps
+- Error context and stack traces
+- Business events (trades, signals, state changes)
+
+### Dashboards
+
+**Grafana Dashboard** (`lords-trading-dashboard`):
+- Real-time P&L tracking
+- Trade performance metrics
+- System health indicators
+- Circuit breaker status
+- API response times
+
+**Prometheus Queries**:
+```promql
+# Daily P&L
+lords_pnl_daily
+
+# Error rate
+rate(lords_api_errors_total[5m])
+
+# Circuit breaker status
+lords_circuit_breaker
+```
+
+### Alerting Rules
+
+Configure alerts for:
+- Circuit breaker activation
+- Daily loss limits exceeded
+- API failure spikes
+- Database connection issues
+- Memory/CPU thresholds
+
+---
+
+## 13. Live Trading Warning ⚠️
 
 > **READ CAREFULLY BEFORE ENABLING LIVE MODE**
 

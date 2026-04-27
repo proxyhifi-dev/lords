@@ -1,4 +1,4 @@
-# Lords Bot v4.0 — Python Dependencies
+# Lords Bot v5.1 — Production Dependencies
 # Install: pip install -r requirements.txt
 
 # Web framework
@@ -12,6 +12,15 @@ pydantic-settings>=2.2.0
 pandas>=2.2.0
 numpy>=1.26.0
 scipy>=1.13.0
+
+# Database & Caching (PRODUCTION)
+redis>=5.0.0
+psycopg2-binary>=2.9.0
+sqlite3  # Built-in, no install needed
+
+# Monitoring & Observability (PRODUCTION)
+prometheus-client>=0.20.0
+structlog>=24.1.0
 
 # SAMCO broker SDK (install separately from SAMCO)
 # snapi-py-client  — see README for installation

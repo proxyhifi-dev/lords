@@ -3000,3 +3000,912 @@ urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='tradeapi.samco.in', 
 2026-04-27 15:57:51  INFO      samco_client                SAMCO login successful
 2026-04-27 16:06:29  INFO      samco_client                SAMCO login user=DB41588
 2026-04-27 16:06:30  INFO      samco_client                SAMCO login successful
+2026-04-27 16:19:12  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 16:19:12  INFO      samco_client                SAMCO login successful
+2026-04-27 16:19:29  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 16:19:29  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 16:19:29  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 16:19:30  INFO      samco_client                SAMCO login successful
+2026-04-27 16:19:30  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 16:19:30  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:19:30  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 16:20:20  INFO      main                        Lords Bot shutting down
+2026-04-27 16:20:20  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 16:20:20  INFO      market_scheduler            Scheduler stopped
+2026-04-27 16:24:29  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 16:24:29  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 16:24:29  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 16:24:29  INFO      state_manager               State loaded — trade_date=
+2026-04-27 16:24:29  INFO      state_manager               Daily reset:  → 2026-04-27
+2026-04-27 16:24:29  INFO      state_manager               Daily reset complete
+2026-04-27 16:24:29  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 16:24:30  INFO      samco_client                SAMCO login successful
+2026-04-27 16:24:30  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 16:24:30  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:24:30  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 16:25:30  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:26:30  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:27:30  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:27:46  INFO      main                        Lords Bot shutting down
+2026-04-27 16:27:46  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 16:27:46  INFO      market_scheduler            Scheduler stopped
+2026-04-27 16:27:47  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 16:27:47  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 16:27:47  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 16:27:47  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 16:27:47  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 16:27:49  INFO      samco_client                SAMCO login successful
+2026-04-27 16:27:49  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 16:27:49  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:27:49  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 16:28:49  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:29:49  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:30:49  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:31:49  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:31:49  INFO      main                        Lords Bot shutting down
+2026-04-27 16:31:49  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 16:31:49  INFO      market_scheduler            Scheduler stopped
+2026-04-27 16:31:50  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 16:31:50  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 16:31:50  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 16:31:50  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 16:31:50  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 16:31:51  INFO      samco_client                SAMCO login successful
+2026-04-27 16:31:51  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 16:31:51  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:31:51  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 16:32:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:33:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:34:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:35:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:36:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:37:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:38:53  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:39:53  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:40:53  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:41:50  INFO      main                        Lords Bot shutting down
+2026-04-27 16:41:50  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 16:41:50  INFO      market_scheduler            Scheduler stopped
+2026-04-27 16:41:51  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 16:41:51  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 16:41:51  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 16:41:51  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 16:41:51  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 16:41:52  INFO      samco_client                SAMCO login successful
+2026-04-27 16:41:52  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 16:41:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:41:52  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 16:42:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:43:48  INFO      main                        Lords Bot shutting down
+2026-04-27 16:43:48  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 16:43:48  INFO      market_scheduler            Scheduler stopped
+2026-04-27 16:43:49  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 16:43:49  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 16:43:49  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 16:43:49  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 16:43:49  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 16:43:50  INFO      samco_client                SAMCO login successful
+2026-04-27 16:43:50  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 16:43:50  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:43:50  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 16:44:50  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:45:50  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:46:50  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:47:50  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:47:51  INFO      main                        Lords Bot shutting down
+2026-04-27 16:47:51  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 16:47:51  INFO      market_scheduler            Scheduler stopped
+2026-04-27 16:47:52  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 16:47:52  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 16:47:52  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 16:47:52  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 16:47:52  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 16:47:53  INFO      samco_client                SAMCO login successful
+2026-04-27 16:47:53  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 16:47:53  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:47:53  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 16:48:53  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:49:53  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:50:54  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:51:54  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 16:52:37  INFO      main                        Lords Bot shutting down
+2026-04-27 16:52:37  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 16:52:37  INFO      market_scheduler            Scheduler stopped
+2026-04-27 16:52:38  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 16:52:38  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 16:52:38  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 16:52:39  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 16:52:40  INFO      samco_client                SAMCO login successful
+2026-04-27 16:52:40  INFO      state_manager               Daily reset:  → 2026-04-27
+2026-04-27 16:52:40  INFO      state_manager               Daily reset complete
+2026-04-27 16:52:40  INFO      market_scheduler            Daily reset done
+2026-04-27 16:52:49  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:52:50  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:52:51  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:52:52  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:52:53  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:52:54  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:52:55  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:52:56  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:52:57  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:52:58  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:52:59  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:00  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:01  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:02  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:03  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:04  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:05  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:06  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:07  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:08  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:09  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:10  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:11  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:12  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:13  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:14  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:15  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:16  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:17  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:18  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:19  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:20  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:21  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:22  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:23  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:24  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:25  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:26  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:27  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:28  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:29  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:30  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:31  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:32  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:33  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:34  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:35  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:36  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:37  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:38  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:39  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:40  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:41  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:42  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:43  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:44  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:45  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:46  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:47  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:48  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:49  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:50  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:51  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:52  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:53  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:54  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:55  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:56  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:57  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:58  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:53:59  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:00  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:01  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:02  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:03  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:04  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:05  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:06  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:07  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:08  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:09  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:10  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:11  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:12  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:13  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:14  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:15  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:16  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:17  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:18  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:19  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:20  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:21  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:22  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:23  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:24  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:25  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:26  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:27  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:28  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:29  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:30  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:31  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:32  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:33  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:34  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:35  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:36  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:37  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:38  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:39  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:40  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:41  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:42  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:43  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:44  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:45  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:46  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:47  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:48  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:49  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:50  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:51  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:52  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:53  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:54  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:55  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:56  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:57  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:58  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:54:59  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:00  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:01  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:02  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:03  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:04  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:05  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:06  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:07  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:08  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:09  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:10  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:11  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:12  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:13  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:14  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:15  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:16  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:17  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:18  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:19  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:20  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:21  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:22  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:23  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:24  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:25  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:26  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:27  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:28  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:29  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:30  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:31  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:32  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:33  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:34  ERROR     market_scheduler            Scheduler stalled!
+2026-04-27 16:55:35  INFO      main                        Lords Bot shutting down
+2026-04-27 16:55:36  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 16:55:36  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 16:55:36  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 16:55:36  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 16:55:37  INFO      samco_client                SAMCO login successful
+2026-04-27 16:55:37  INFO      state_manager               Daily reset:  → 2026-04-27
+2026-04-27 16:55:37  INFO      state_manager               Daily reset complete
+2026-04-27 16:55:37  INFO      market_scheduler            Daily reset done
+2026-04-27 16:55:37  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:04:58  INFO      main                        Lords Bot shutting down
+2026-04-27 17:06:32  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 17:06:32  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 17:06:32  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:06:32  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 17:06:32  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 17:06:33  INFO      samco_client                SAMCO login successful
+2026-04-27 17:06:33  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:06:33  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:06:33  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:06:51  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 17:06:51  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 17:06:51  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:06:51  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 17:06:51  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 17:06:52  INFO      samco_client                SAMCO login successful
+2026-04-27 17:06:52  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:06:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:06:52  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:07:33  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:07:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:08:34  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:08:34  INFO      main                        Lords Bot shutting down
+2026-04-27 17:08:34  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 17:08:34  INFO      market_scheduler            Scheduler stopped
+2026-04-27 17:08:35  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 17:08:35  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 17:08:35  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:08:35  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 17:08:35  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 17:08:36  INFO      samco_client                SAMCO login successful
+2026-04-27 17:08:36  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:08:36  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:08:36  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:08:53  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:08:53  INFO      main                        Lords Bot shutting down
+2026-04-27 17:08:53  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 17:08:53  INFO      market_scheduler            Scheduler stopped
+2026-04-27 17:08:54  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 17:08:54  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 17:08:54  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:08:54  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 17:08:54  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 17:08:55  INFO      samco_client                SAMCO login successful
+2026-04-27 17:08:55  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:08:55  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:08:55  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:09:36  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:09:56  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:10:36  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:10:56  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:11:37  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:11:56  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:12:37  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:12:56  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:13:37  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:13:56  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:14:37  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:14:56  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:15:37  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:15:57  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:16:37  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:16:57  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:17:38  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:17:57  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:18:38  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:18:57  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:19:38  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:19:57  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:20:38  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:20:57  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:21:38  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:21:58  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:22:39  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:22:58  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:23:39  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:23:58  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:24:39  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:24:58  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:25:39  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:25:58  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:26:39  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:26:58  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:27:39  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:27:58  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:28:40  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:39:48  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:39:48  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:39:50  WARNING   urllib3.connectionpool      Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProtocolError('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))': /quote/indexQuote?indexName=NIFTY+50
+2026-04-27 17:39:50  WARNING   urllib3.connectionpool      Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProtocolError('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))': /quote/indexQuote?indexName=NIFTY+50
+2026-04-27 17:40:48  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:40:48  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:41:48  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:41:48  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:42:48  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:42:49  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:43:49  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:43:49  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:44:49  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:44:49  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:44:49  INFO      main                        Lords Bot shutting down
+2026-04-27 17:44:49  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 17:44:49  INFO      market_scheduler            Scheduler stopped
+2026-04-27 17:44:49  INFO      main                        Lords Bot shutting down
+2026-04-27 17:44:49  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 17:44:49  INFO      market_scheduler            Scheduler stopped
+2026-04-27 17:44:50  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 17:44:50  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 17:44:50  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:44:50  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:44:50  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 17:44:50  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 17:44:52  INFO      samco_client                SAMCO login successful
+2026-04-27 17:44:52  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:44:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:44:52  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:44:52  INFO      samco_client                SAMCO login successful
+2026-04-27 17:44:52  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:44:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:44:52  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:45:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:45:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:46:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:46:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:47:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:47:53  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:47:53  INFO      main                        Lords Bot shutting down
+2026-04-27 17:47:53  INFO      main                        Lords Bot shutting down
+2026-04-27 17:47:53  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 17:47:53  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 17:47:53  ERROR     asyncio                     Task exception was never retrieved
+future: <Task finished name='trading-engine' coro=<TradingEngine.run() done, defined at C:\Users\bollu\github\lords\backend\app\engine\trading_engine.py:94> exception=AttributeError("'TradingEngine' object has no attribute '_monitor_loop'")>
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\engine\trading_engine.py", line 97, in run
+    self._monitor_loop(),
+    ^^^^^^^^^^^^^^^^^^
+AttributeError: 'TradingEngine' object has no attribute '_monitor_loop'
+2026-04-27 17:47:53  INFO      market_scheduler            Scheduler stopped
+2026-04-27 17:47:53  INFO      market_scheduler            Scheduler stopped
+2026-04-27 17:47:54  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 17:47:54  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 17:47:54  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:47:54  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 17:47:54  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 17:47:54  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 17:47:54  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 17:47:54  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:47:54  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 17:47:54  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 17:47:56  INFO      samco_client                SAMCO login successful
+2026-04-27 17:47:56  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:47:56  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:47:56  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:47:56  INFO      samco_client                SAMCO login successful
+2026-04-27 17:47:56  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:47:56  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:47:56  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:48:56  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:48:56  INFO      main                        Lords Bot shutting down
+2026-04-27 17:48:56  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:48:56  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 17:48:56  ERROR     asyncio                     Task exception was never retrieved
+future: <Task finished name='trading-engine' coro=<TradingEngine.run() done, defined at C:\Users\bollu\github\lords\backend\app\engine\trading_engine.py:94> exception=AttributeError("'TradingEngine' object has no attribute '_monitor_loop'")>
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\engine\trading_engine.py", line 97, in run
+    self._monitor_loop(),
+    ^^^^^^^^^^^^^^^^^^
+AttributeError: 'TradingEngine' object has no attribute '_monitor_loop'
+2026-04-27 17:48:56  INFO      market_scheduler            Scheduler stopped
+2026-04-27 17:48:57  INFO      main                        Lords Bot shutting down
+2026-04-27 17:48:57  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 17:48:57  ERROR     asyncio                     Task exception was never retrieved
+future: <Task finished name='trading-engine' coro=<TradingEngine.run() done, defined at C:\Users\bollu\github\lords\backend\app\engine\trading_engine.py:94> exception=AttributeError("'TradingEngine' object has no attribute '_monitor_loop'")>
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\engine\trading_engine.py", line 97, in run
+    self._monitor_loop(),
+    ^^^^^^^^^^^^^^^^^^
+AttributeError: 'TradingEngine' object has no attribute '_monitor_loop'
+2026-04-27 17:48:57  INFO      market_scheduler            Scheduler stopped
+2026-04-27 17:48:58  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 17:48:58  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 17:48:58  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:48:58  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 17:48:58  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 17:48:58  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 17:48:58  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 17:48:58  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:48:58  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 17:48:58  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 17:49:00  INFO      samco_client                SAMCO login successful
+2026-04-27 17:49:00  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:49:00  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:49:00  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:49:00  INFO      samco_client                SAMCO login successful
+2026-04-27 17:49:00  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:49:00  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:49:00  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:50:00  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:50:00  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:51:00  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:51:00  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:51:00  INFO      main                        Lords Bot shutting down
+2026-04-27 17:51:00  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 17:51:00  ERROR     asyncio                     Task exception was never retrieved
+future: <Task finished name='trading-engine' coro=<TradingEngine.run() done, defined at C:\Users\bollu\github\lords\backend\app\engine\trading_engine.py:94> exception=AttributeError("'TradingEngine' object has no attribute '_monitor_loop'")>
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\engine\trading_engine.py", line 97, in run
+    self._monitor_loop(),
+    ^^^^^^^^^^^^^^^^^^
+AttributeError: 'TradingEngine' object has no attribute '_monitor_loop'
+2026-04-27 17:51:00  INFO      market_scheduler            Scheduler stopped
+2026-04-27 17:51:00  INFO      main                        Lords Bot shutting down
+2026-04-27 17:51:00  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 17:51:00  ERROR     asyncio                     Task exception was never retrieved
+future: <Task finished name='trading-engine' coro=<TradingEngine.run() done, defined at C:\Users\bollu\github\lords\backend\app\engine\trading_engine.py:94> exception=AttributeError("'TradingEngine' object has no attribute '_monitor_loop'")>
+Traceback (most recent call last):
+  File "C:\Users\bollu\github\lords\backend\app\engine\trading_engine.py", line 97, in run
+    self._monitor_loop(),
+    ^^^^^^^^^^^^^^^^^^
+AttributeError: 'TradingEngine' object has no attribute '_monitor_loop'
+2026-04-27 17:51:00  INFO      market_scheduler            Scheduler stopped
+2026-04-27 17:51:02  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 17:51:02  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 17:51:02  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:51:02  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 17:51:02  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 17:51:02  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 17:51:02  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 17:51:02  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 17:51:02  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 17:51:02  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 17:51:03  INFO      samco_client                SAMCO login successful
+2026-04-27 17:51:03  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:51:03  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:51:03  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:51:03  INFO      samco_client                SAMCO login successful
+2026-04-27 17:51:03  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 17:51:03  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:51:03  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 17:52:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:52:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:53:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:54:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:54:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:55:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:55:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:56:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:57:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:57:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:58:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:58:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:59:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 17:59:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:00:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:00:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:01:01  INFO      main                        Lords Bot shutting down
+2026-04-27 18:01:01  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:01:01  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:01:01  INFO      main                        Lords Bot shutting down
+2026-04-27 18:01:01  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:01:01  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:01:02  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 18:01:02  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:01:02  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 18:01:02  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:01:02  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:01:02  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:01:02  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:01:02  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:01:02  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:01:02  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:01:04  INFO      samco_client                SAMCO login successful
+2026-04-27 18:01:04  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:01:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:01:04  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:01:04  INFO      samco_client                SAMCO login successful
+2026-04-27 18:01:04  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:01:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:01:04  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:02:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:02:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:03:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:03:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:04:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:04:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:05:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:05:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:06:01  INFO      main                        Lords Bot shutting down
+2026-04-27 18:06:01  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:06:01  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:06:01  INFO      main                        Lords Bot shutting down
+2026-04-27 18:06:01  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:06:01  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:06:03  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 18:06:03  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:06:03  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:06:03  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:06:03  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:06:03  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 18:06:03  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:06:03  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:06:03  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:06:03  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:06:04  INFO      samco_client                SAMCO login successful
+2026-04-27 18:06:04  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:06:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:06:04  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:06:04  INFO      samco_client                SAMCO login successful
+2026-04-27 18:06:04  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:06:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:06:04  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:07:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:08:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:08:05  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:08:05  INFO      main                        Lords Bot shutting down
+2026-04-27 18:08:05  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:08:05  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:08:05  INFO      main                        Lords Bot shutting down
+2026-04-27 18:08:05  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:08:05  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:08:07  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 18:08:07  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:08:07  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:08:07  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:08:07  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:08:07  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 18:08:07  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:08:07  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:08:07  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:08:07  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:08:08  INFO      samco_client                SAMCO login successful
+2026-04-27 18:08:08  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:08:08  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:08:08  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:08:08  INFO      samco_client                SAMCO login successful
+2026-04-27 18:08:08  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:08:08  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:08:08  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:09:09  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:09:09  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:10:09  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:10:09  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:11:09  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:11:09  INFO      main                        Lords Bot shutting down
+2026-04-27 18:11:09  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:11:09  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:11:09  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:11:09  INFO      main                        Lords Bot shutting down
+2026-04-27 18:11:09  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:11:09  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:11:11  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 18:11:11  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:11:11  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:11:11  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:11:11  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:11:11  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 18:11:11  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:11:11  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:11:11  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:11:11  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:11:12  INFO      samco_client                SAMCO login successful
+2026-04-27 18:11:12  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:11:12  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:11:12  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:11:12  INFO      samco_client                SAMCO login successful
+2026-04-27 18:11:12  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:11:12  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:11:12  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:11:13  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 18:11:13  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:11:13  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:11:13  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:11:13  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:11:14  INFO      samco_client                SAMCO login successful
+2026-04-27 18:11:14  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:11:14  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:11:14  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:12:12  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:12:14  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:13:12  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:13:15  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:14:12  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:14:15  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:15:13  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:15:15  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:16:10  INFO      main                        Lords Bot shutting down
+2026-04-27 18:16:10  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:16:10  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:16:11  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:16:11  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:16:11  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:16:11  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:16:11  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:16:12  INFO      main                        Lords Bot shutting down
+2026-04-27 18:16:12  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:16:12  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:16:12  INFO      samco_client                SAMCO login successful
+2026-04-27 18:16:12  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:16:12  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:16:12  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:16:14  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:16:14  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:16:14  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:16:14  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:16:14  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:16:15  INFO      samco_client                SAMCO login successful
+2026-04-27 18:16:15  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:16:15  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:16:15  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:16:16  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:16:16  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:16:16  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:16:16  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:16:16  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:16:18  INFO      samco_client                SAMCO login successful
+2026-04-27 18:16:18  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:16:18  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:16:18  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 18:16:42  INFO      main                        Lords Bot shutting down
+2026-04-27 18:16:42  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:16:42  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:16:43  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:16:43  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:16:43  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:16:43  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:16:43  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:16:44  INFO      samco_client                SAMCO login successful
+2026-04-27 18:16:44  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:16:44  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:16:46  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:16:46  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:16:46  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:16:46  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:16:46  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:16:47  INFO      samco_client                SAMCO login successful
+2026-04-27 18:16:47  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:16:47  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:16:47  INFO      main                        Lords Bot shutting down
+2026-04-27 18:16:47  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:16:47  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:16:48  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:16:48  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:16:48  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:16:48  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:16:48  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:16:50  INFO      samco_client                SAMCO login successful
+2026-04-27 18:16:50  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:16:50  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:16:51  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:16:51  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:16:51  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:16:51  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:16:51  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:16:52  INFO      samco_client                SAMCO login successful
+2026-04-27 18:16:52  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:16:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:17:47  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:17:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:18:47  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:18:47  INFO      main                        Lords Bot shutting down
+2026-04-27 18:18:47  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:18:47  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:18:49  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:18:49  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:18:49  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:18:49  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:18:49  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:18:51  INFO      samco_client                SAMCO login successful
+2026-04-27 18:18:51  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:18:51  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:18:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:18:52  INFO      main                        Lords Bot shutting down
+2026-04-27 18:18:52  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:18:52  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:18:54  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:18:54  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:18:54  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:18:54  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:18:54  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:18:56  INFO      samco_client                SAMCO login successful
+2026-04-27 18:18:56  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:18:56  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:19:20  INFO      main                        Lords Bot shutting down
+2026-04-27 18:19:20  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:19:20  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:19:22  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:19:22  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:19:22  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:19:22  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:19:22  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:19:24  INFO      samco_client                SAMCO login successful
+2026-04-27 18:19:24  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:19:24  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:19:25  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:19:25  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:19:25  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:19:25  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:19:25  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:19:25  INFO      main                        Lords Bot shutting down
+2026-04-27 18:19:25  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:19:25  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:19:26  INFO      samco_client                SAMCO login successful
+2026-04-27 18:19:26  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:19:26  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:19:27  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:19:27  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:19:27  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:19:27  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:19:27  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:19:29  INFO      samco_client                SAMCO login successful
+2026-04-27 18:19:29  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:19:29  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:20:27  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:20:27  INFO      main                        Lords Bot shutting down
+2026-04-27 18:20:27  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:20:27  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:20:28  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:20:28  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:20:28  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:20:28  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:20:28  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:20:29  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:20:29  INFO      main                        Lords Bot shutting down
+2026-04-27 18:20:29  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:20:29  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:20:30  INFO      samco_client                SAMCO login successful
+2026-04-27 18:20:30  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:20:30  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:20:30  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:20:30  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:20:30  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:20:30  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:20:30  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:20:32  INFO      samco_client                SAMCO login successful
+2026-04-27 18:20:32  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:20:32  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:20:59  INFO      main                        Lords Bot shutting down
+2026-04-27 18:20:59  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:20:59  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:21:00  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:21:00  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:21:00  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:21:00  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:21:00  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:21:01  INFO      main                        Lords Bot shutting down
+2026-04-27 18:21:01  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:21:01  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:21:02  INFO      samco_client                SAMCO login successful
+2026-04-27 18:21:02  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:21:02  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:21:03  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:21:03  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:21:03  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:21:03  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:21:03  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:21:04  INFO      samco_client                SAMCO login successful
+2026-04-27 18:21:04  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:21:04  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:21:31  INFO      main                        Lords Bot shutting down
+2026-04-27 18:21:31  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:21:31  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:21:33  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:21:33  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:21:33  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:21:33  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:21:33  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:21:33  INFO      main                        Lords Bot shutting down
+2026-04-27 18:21:33  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:21:33  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:21:40  INFO      samco_client                SAMCO login successful
+2026-04-27 18:21:40  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:21:40  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:21:40  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:21:40  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 18:21:40  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:21:40  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 18:21:40  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:21:41  INFO      samco_client                SAMCO login successful
+2026-04-27 18:21:41  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:21:41  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:22:40  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:22:41  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:23:41  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:23:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:24:41  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:24:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:25:41  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:25:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:26:41  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:26:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:27:41  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:27:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:28:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:28:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:29:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:29:43  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:30:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:30:43  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:31:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:31:43  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:32:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:32:43  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:33:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:33:43  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:34:43  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:34:43  INFO      main                        Lords Bot shutting down
+2026-04-27 18:34:43  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:34:43  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:34:43  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:34:44  INFO      main                        Lords Bot shutting down
+2026-04-27 18:34:44  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:34:44  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:34:51  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:34:51  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
