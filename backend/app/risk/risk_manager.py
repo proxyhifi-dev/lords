@@ -1,11 +1,7 @@
-"""
-Lords Bot — Risk Manager
-Standalone pre-trade gate. Listens to SIGNAL,
-runs all risk checks, publishes RISK_APPROVED or RISK_BLOCKED.
-This is the ONLY place risk is evaluated — TradingEngine
-trusts RISK_APPROVED and does NOT double-check.
-"""
+# backend/app/engine/risk_manager.py
+
 from __future__ import annotations
+from datetime import datetime
 
 from backend.app.core.config_loader import get_settings
 from backend.app.core.event_bus import EventBus
@@ -28,34 +24,108 @@ class RiskManager:
             await self._evaluate(event)
 
     async def _evaluate(self, event) -> None:
-        state   = await self.state_manager.snapshot()
-        payload = event.payload
 
         async def block(reason: str):
-            logger.info("RISK_BLOCKED: %s", reason)
+            logger.warning(f"RISK_BLOCKED: {reason}")
             await self.state_manager.update(signal=None, signal_meta=None)
             await self.event_bus.publish("RISK_BLOCKED", {"reason": reason})
 
-        if state.active_trade:
-            await block("active_trade_open"); return
+        async with self.state_manager.lock:
 
-        if state.trade_count >= settings.max_trades:
-            await block(f"max_trades={settings.max_trades}"); return
+            state   = await self.state_manager.snapshot()
+            payload = event.payload or {}
 
-        if state.daily_pnl <= -abs(settings.max_daily_loss):
-            await self.state_manager.update(trading_enabled=False)
-            await block(f"max_daily_loss=₹{settings.max_daily_loss}"); return
+            # ─────────────────────────────────────────
+            # 1. Active trade guard
+            # ─────────────────────────────────────────
+            if state.active_trade:
+                await block("active_trade_open")
+                return
 
-        if not state.trading_enabled:
-            await block("trading_disabled"); return
+            # ─────────────────────────────────────────
+            # 2. Max trades per day
+            # ─────────────────────────────────────────
+            if state.trade_count >= settings.max_trades:
+                await block(f"max_trades={settings.max_trades}")
+                return
 
-        # Capital guard: stop if equity < 70% of starting capital
-        if settings.capital > 0:
-            equity_pct = (settings.capital + state.daily_pnl) / settings.capital
-            if equity_pct < 0.70:
+            # ─────────────────────────────────────────
+            # 3. Daily loss limit
+            # ─────────────────────────────────────────
+            if state.daily_pnl <= -abs(settings.max_daily_loss):
                 await self.state_manager.update(trading_enabled=False)
-                await block(f"capital_guard equity={equity_pct:.1%}"); return
+                await block(f"max_daily_loss=₹{settings.max_daily_loss}")
+                return
 
-        logger.info("RISK_APPROVED signal=%s size=%s", payload.get("signal"), payload.get("size_label"))
-        await self.state_manager.update(signal=None, signal_meta=None)
-        await self.event_bus.publish("RISK_APPROVED", payload)
+            # ─────────────────────────────────────────
+            # 4. Global trading switch
+            # ─────────────────────────────────────────
+            if not state.trading_enabled:
+                await block("trading_disabled")
+                return
+
+            # ─────────────────────────────────────────
+            # 5. REAL equity check (includes unrealized PnL)
+            # ─────────────────────────────────────────
+            unrealized = getattr(state, "unrealized_pnl", 0.0)
+            current_equity = settings.capital + state.daily_pnl + unrealized
+
+            if settings.capital > 0:
+                equity_pct = current_equity / settings.capital
+                if equity_pct < 0.70:
+                    await self.state_manager.update(trading_enabled=False)
+                    await block(f"capital_guard equity={equity_pct:.1%}")
+                    return
+
+            # ─────────────────────────────────────────
+            # 6. Position size control
+            # ─────────────────────────────────────────
+            qty = payload.get("qty", settings.order_qty)
+            max_qty = getattr(settings, "max_qty", settings.order_qty * 5)
+
+            if qty > max_qty:
+                await block(f"position_size_exceeded qty={qty} max={max_qty}")
+                return
+
+            # ─────────────────────────────────────────
+            # 7. Time filter (no late entries)
+            # ─────────────────────────────────────────
+            now = datetime.now().time()
+            if now > settings.no_entry_after:
+                await block(f"late_entry_after_{settings.no_entry_after}")
+                return
+
+            # ─────────────────────────────────────────
+            # 8. Price validation
+            # ─────────────────────────────────────────
+            if payload.get("price") is None or payload.get("price") <= 0:
+                await block("invalid_price")
+                return
+
+            # ─────────────────────────────────────────
+            # 9. Cooldown after loss
+            # ─────────────────────────────────────────
+            if getattr(state, "cooldown_active", False):
+                await block("cooldown_active")
+                return
+
+            # ─────────────────────────────────────────
+            # 10. Volatility filter (optional)
+            # ─────────────────────────────────────────
+            min_atr = getattr(settings, "min_atr", 0)
+            if min_atr > 0 and payload.get("atr", 0) < min_atr:
+                await block("low_volatility")
+                return
+
+            # ─────────────────────────────────────────
+            # ✅ PASS — APPROVED
+            # ─────────────────────────────────────────
+            logger.info(
+                "RISK_APPROVED signal=%s qty=%s equity=₹%.0f",
+                payload.get("signal"),
+                qty,
+                current_equity
+            )
+
+            await self.state_manager.update(signal=None, signal_meta=None)
+            await self.event_bus.publish("RISK_APPROVED", payload)
