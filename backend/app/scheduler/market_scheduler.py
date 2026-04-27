@@ -35,8 +35,8 @@ from backend.app.utils.logger import get_logger
 settings = get_settings()
 logger   = get_logger("market_scheduler")
 
-_MARKET_OPEN  = time(9, 0)
-_MARKET_CLOSE = time(15, 35)
+_MARKET_OPEN  = time(9, 15)
+_MARKET_CLOSE = time(15, 30)
 _LOG_INTERVAL = 60
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -81,6 +81,7 @@ class MarketScheduler:
         self._last_signal_time  = 0.0
         self._last_closed_log   = 0.0
         self._daily_reset_date  = ""
+        self._last_tick_time = _time.time()
         self._last_broker_error = 0.0
 
         # Candle builder
@@ -196,10 +197,17 @@ class MarketScheduler:
             await asyncio.sleep(10)
 
     # ── Main poll loop ───────────────────────────────────────
-
     async def _loop(self) -> None:
         while self.running:
             try:
+                # ✅ WATCHDOG FIX
+                if _market_open():
+                    delay = _time.time() - self._last_tick_time
+                    if delay > 10:
+                        logger.error("Scheduler stalled! delay=%.2fs", delay)
+                else:
+                    self._last_tick_time = _time.time()
+
                 if not _market_open():
                     now_ts = _time.time()
                     if now_ts - self._last_closed_log >= _LOG_INTERVAL:
@@ -210,9 +218,13 @@ class MarketScheduler:
                         self._last_closed_log = now_ts
                 else:
                     await self._tick()
+
             except Exception as exc:
                 logger.error("Market loop error: %s", exc, exc_info=True)
+
             await asyncio.sleep(settings.poll_seconds)
+
+   
 
     # ── Tick ─────────────────────────────────────────────────
 
