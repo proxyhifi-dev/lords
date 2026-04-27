@@ -1,6 +1,9 @@
+# backend/app/core/event_bus.py
+
 from __future__ import annotations
 
 import asyncio
+import uuid
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
 from time import time
@@ -17,7 +20,8 @@ logger = get_logger("event_bus")
 
 @dataclass(slots=True)
 class Event:
-    type: str
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    type: str = ""
     payload: dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time)
 
@@ -31,8 +35,10 @@ class Event:
 
 class EventBus:
     """
-    High-performance async event bus.
-    Safe for long-running trading bots.
+    Production-grade async event bus
+    - deduplication
+    - bounded queues
+    - safe dispatch
     """
 
     def __init__(self, maxsize: int = 10_000) -> None:
@@ -40,12 +46,13 @@ class EventBus:
         self._ingress: asyncio.Queue[Event] = asyncio.Queue(maxsize=maxsize)
 
         self._subscribers: dict[str, list[asyncio.Queue[Event]]] = defaultdict(list)
-
         self._all_subscribers: list[asyncio.Queue[Event]] = []
 
         self._dispatcher_task: asyncio.Task | None = None
-
         self._running = asyncio.Event()
+
+        # ✅ deduplication store
+        self._seen_ids: set[str] = set()
 
     # ------------------------------------------------
     # START
@@ -72,7 +79,6 @@ class EventBus:
         self._running.clear()
 
         if self._dispatcher_task:
-
             self._dispatcher_task.cancel()
 
             try:
@@ -96,11 +102,12 @@ class EventBus:
             self._ingress.put_nowait(event)
 
         except asyncio.QueueFull:
-            # drop oldest event
+            logger.warning("Ingress queue full — dropping oldest event")
+
             try:
                 _ = self._ingress.get_nowait()
             except asyncio.QueueEmpty:
-                logger.warning("Ingress queue reported full but empty on drop-oldest")
+                pass
 
             self._ingress.put_nowait(event)
 
@@ -130,7 +137,6 @@ class EventBus:
     def unsubscribe(self, queue: asyncio.Queue[Event]) -> None:
 
         for event_type in list(self._subscribers.keys()):
-
             if queue in self._subscribers[event_type]:
                 self._subscribers[event_type].remove(queue)
 
@@ -147,12 +153,10 @@ class EventBus:
     ) -> AsyncIterator[Event]:
 
         try:
-
             while True:
                 yield await queue.get()
 
         finally:
-
             self.unsubscribe(queue)
 
     # ------------------------------------------------
@@ -163,10 +167,23 @@ class EventBus:
 
         while self._running.is_set():
 
-            event = await self._ingress.get()
+            try:
+                event = await asyncio.wait_for(self._ingress.get(), timeout=1)
+
+            except asyncio.TimeoutError:
+                continue
+
+            # ✅ deduplication
+            if event.id in self._seen_ids:
+                continue
+
+            self._seen_ids.add(event.id)
+
+            # prevent memory growth
+            if len(self._seen_ids) > 50_000:
+                self._seen_ids = set(list(self._seen_ids)[-10_000:])
 
             targets = []
-
             targets.extend(self._subscribers.get(event.type, []))
             targets.extend(self._all_subscribers)
 
@@ -175,11 +192,11 @@ class EventBus:
                 try:
 
                     if queue.full():
-
                         try:
                             queue.get_nowait()
+                            logger.debug("Dropped oldest subscriber event")
                         except asyncio.QueueEmpty:
-                            logger.debug("Subscriber queue full check raced with consumer")
+                            pass
 
                     queue.put_nowait(event)
 
