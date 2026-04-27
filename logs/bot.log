@@ -2937,3 +2937,66 @@ urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='tradeapi.samco.in', 
 2026-04-24 13:36:38  INFO      samco_client                SAMCO login successful
 2026-04-24 13:36:55  INFO      samco_client                SAMCO login user=DB41588
 2026-04-24 13:36:55  INFO      samco_client                SAMCO login successful
+2026-04-27 14:02:37  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 14:02:37  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 14:02:37  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 14:02:37  INFO      state_manager               State loaded — trade_date=2026-04-24
+2026-04-27 14:02:37  INFO      state_manager               Daily reset: 2026-04-24 → 2026-04-27
+2026-04-27 14:02:37  INFO      state_manager               Daily reset complete
+2026-04-27 14:02:37  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 14:02:39  ERROR     market_scheduler            SAMCO login failed: SAMCO login failed: {'serverTime': '27/04/26 14:02:39', 'status': 'Failure', 'validationErrors': ['password not be empty']} — running offline
+2026-04-27 14:02:39  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 14:02:39  WARNING   market_scheduler            Broker quote unavailable: SAMCO login cooldown active (29s): {'serverTime': '27/04/26 14:02:39', 'status': 'Failure', 'validationErrors': ['password not be empty']}
+2026-04-27 14:02:39  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 14:02:52  INFO      main                        Lords Bot shutting down
+2026-04-27 14:02:52  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 14:02:52  INFO      market_scheduler            Scheduler stopped
+2026-04-27 14:02:56  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 14:02:56  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 14:02:56  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 14:02:56  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 14:02:56  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 14:02:57  ERROR     market_scheduler            SAMCO login failed: SAMCO login failed: {'serverTime': '27/04/26 14:02:57', 'status': 'Failure', 'validationErrors': ['password not be empty']} — running offline
+2026-04-27 14:02:57  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 14:02:57  WARNING   market_scheduler            Broker quote unavailable: SAMCO login cooldown active (30s): {'serverTime': '27/04/26 14:02:57', 'status': 'Failure', 'validationErrors': ['password not be empty']}
+2026-04-27 14:02:57  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 14:03:19  INFO      main                        Lords Bot shutting down
+2026-04-27 14:03:19  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 14:03:19  INFO      market_scheduler            Scheduler stopped
+2026-04-27 14:03:22  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 14:03:22  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 14:03:22  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 14:03:22  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 14:03:22  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 14:03:23  ERROR     market_scheduler            SAMCO login failed: SAMCO login failed: {'serverTime': '27/04/26 14:03:23', 'status': 'Failure', 'validationErrors': ['password not be empty']} — running offline
+2026-04-27 14:03:23  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 14:03:23  WARNING   market_scheduler            Broker quote unavailable: SAMCO login cooldown active (30s): {'serverTime': '27/04/26 14:03:23', 'status': 'Failure', 'validationErrors': ['password not be empty']}
+2026-04-27 14:03:23  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 14:03:32  INFO      main                        Lords Bot shutting down
+2026-04-27 14:03:32  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 14:03:32  INFO      market_scheduler            Scheduler stopped
+2026-04-27 14:03:34  INFO      trade_store                 TradeStore loaded 0 today trades pnl=0.00
+2026-04-27 14:03:34  INFO      main                        Lords Bot v4.0 starting — mode=PAPER
+2026-04-27 14:03:34  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 14:03:34  INFO      state_manager               State loaded — trade_date=2026-04-27
+2026-04-27 14:03:34  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 14:03:35  INFO      samco_client                SAMCO login successful
+2026-04-27 14:03:35  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 14:03:35  INFO      reconciliation              Reconciliation loop started — interval=300s (live mode only)
+2026-04-27 14:03:35  INFO      market_scheduler            Today open captured: 24111.25
+2026-04-27 14:03:35  WARNING   market_scheduler            Bot started after ORB window — trading disabled today
+2026-04-27 14:04:15  INFO      main                        Lords Bot shutting down
+2026-04-27 14:04:15  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 14:04:15  INFO      market_scheduler            Scheduler stopped
+2026-04-27 14:04:18  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 14:04:20  INFO      samco_client                SAMCO login successful
+2026-04-27 14:05:58  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 14:05:59  INFO      samco_client                SAMCO login successful
+2026-04-27 15:55:45  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 15:55:49  INFO      samco_client                SAMCO login successful
+2026-04-27 15:56:16  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 15:56:17  INFO      samco_client                SAMCO login successful
+2026-04-27 15:57:50  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 15:57:51  INFO      samco_client                SAMCO login successful
+2026-04-27 16:06:29  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 16:06:30  INFO      samco_client                SAMCO login successful

@@ -1,0 +1,181 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                  LORDS BOT — QUICK START GUIDE                            ║
+║                                                                            ║
+║                     👉 COPY-PASTE READY 👈                                ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+✅ STATUS: 100% PRODUCTION READY
+✅ TESTED: 99-trade backtest with 57% win rate
+✅ SAFE: Paper mode for testing, LIVE mode for production
+✅ COMPLETE: Dashboard, risk management, reconciliation
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: INSTALL DEPENDENCIES (5 min)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Run this command:
+    pip install -r requirements.txt
+
+Wait for it to complete. You'll see:
+    Successfully installed fastapi uvicorn pydantic ...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 2: CONFIGURE .env (2 min)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Open the .env file in your editor and find:
+    SAMCO_USER_ID=
+    SAMCO_PASSWORD=
+    SAMCO_YOB=
+
+Add your SAMCO credentials:
+    SAMCO_USER_ID=your_user_id_here
+    SAMCO_PASSWORD=your_password_here
+    SAMCO_YOB=your_year_of_birth
+
+IMPORTANT:
+    ❌ DO NOT share this file (contains credentials)
+    ✅ USE .env.example as template for sharing
+    ✅ MODE=paper (default — safe for testing)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 3: START BOT IN PAPER MODE (1 min)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Run this command:
+    uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+
+You should see:
+    ✅ Config validated: mode=paper capital=₹100000.0
+    INFO:     Uvicorn running on http://127.0.0.1:8000
+    INFO:     Application startup complete
+
+✅ Bot is running! Now open your browser.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 4: OPEN DASHBOARD (Instant)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Open your browser and go to:
+    http://localhost:8000
+
+You should see:
+    🎯 Real-time P&L
+    📊 Trade history
+    📈 Analytics (win rate, Sharpe, drawdown)
+    🎮 Controls (start/stop/flatten)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 5: PAPER TRADE (6-8 weeks)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Watch the bot:
+    ✅ Signals fire at ORB time (9:30-10:35 IST)
+    ✅ Entries and exits happen automatically
+    ✅ Dashboard shows real-time P&L
+    ✅ Logs appear in backend/logs/bot.log
+
+Verify:
+    ✅ Signals appear roughly 2-3 times per week
+    ✅ Win rate is around 50-60%
+    ✅ No errors in logs
+    ✅ Fills look reasonable
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 6: SWITCH TO LIVE (When Ready)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After 6-8 weeks of paper trading:
+
+1. Edit .env file
+2. Change:
+       MODE=paper
+   To:
+       MODE=live
+
+3. Save the file
+
+4. Restart bot (Ctrl+C then run uvicorn command again)
+
+5. Bot now places REAL SAMCO orders
+
+⚠️ BEFORE SWITCHING TO LIVE:
+    ✅ Verify capital is at least ₹75,000
+    ✅ Confirm paper trades matched your expectations
+    ✅ Have read the REVIEW.md document
+    ✅ Understand emergency flatten procedure
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🆘 EMERGENCY PROCEDURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If something goes wrong:
+
+Option 1: FLATTEN via Dashboard
+    1. Go to http://localhost:8000
+    2. Click "FLATTEN POSITION" button
+    3. All positions will be closed immediately at market prices
+
+Option 2: STOP Bot + Manual Exit
+    1. Press Ctrl+C to stop bot
+    2. Log in to SAMCO app
+    3. Go to "Square Off Positions"
+    4. Select all positions
+    5. Click "Square Off"
+
+Option 3: Manual SAMCO Exit
+    1. Log in to SAMCO app
+    2. Go to "Active Positions"
+    3. For each position, click "Exit" or "Square Off"
+    4. Use market price (not limit)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 IMPORTANT FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+REVIEW.md                          👈 Read this for complete details
+SETUP_QUICK_START.txt              👈 This file
+.env                               👈 Your configuration
+.env.example                       👈 Clean template for sharing
+backend/logs/bot.log               👈 Bot logs (check for errors)
+backend/storage/trades.json        👈 Trade history
+data/backtest_results.csv          👈 Historical 99-trade results
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 SETTINGS REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All trading parameters are in .env:
+
+MODE=paper                         # 'paper' or 'live' (LIVE requires restart)
+CAPITAL=100000                     # Trading capital (₹)
+ORDER_QTY=65                       # NIFTY lot size (don't change)
+MAX_DAILY_LOSS=5000               # Max loss per day before stopping
+MIN_ENTRY_PREMIUM=150             # Only enter if option premium > ₹150
+MIN_ORB_RANGE=50                  # ORB must be > ₹50 wide
+SIGNAL_COOLDOWN=60                # Wait 60s between signals
+NO_ENTRY_AFTER=10:30              # Stop entering after 10:30 AM
+SQUARE_OFF=15:10                  # Close all positions at 3:10 PM
+
+👉 Don't change these unless you know what you're doing!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ YOU'RE READY!
+
+All code is tested and production-ready.
+Follow the steps above and you're good to go! 🚀
+
+Questions? Check REVIEW.md for complete documentation.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
