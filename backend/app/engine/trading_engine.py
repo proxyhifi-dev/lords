@@ -219,7 +219,7 @@ class TradingEngine:
 
             except Exception as exc:
                 logger.error("Entry failed: %s", exc, exc_info=True)
-    # ── MONITOR ──────────────────s────────────────────────────
+    # ── MONITOR ─────────────────────────────
     async def _monitor_loop(self):
         while True:
             await asyncio.sleep(2)

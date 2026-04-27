@@ -229,8 +229,15 @@ class MarketScheduler:
     # ── Tick ─────────────────────────────────────────────────
 
     async def _tick(self) -> None:
+        self._last_tick_time = _time.time()
         try:
-            quote = await self.broker.get_index_quote(settings.nifty_symbol)
+            quote = await asyncio.wait_for(
+                self.broker.get_index_quote(settings.nifty_symbol),
+                timeout=3
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Broker timeout")
+            return
         except RuntimeError as exc:
             now_ts = _time.time()
             if now_ts - self._last_broker_error >= _LOG_INTERVAL:

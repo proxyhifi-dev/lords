@@ -159,47 +159,53 @@ class ReconciliationEngine:
         return result
 
     async def run_loop(self, interval_seconds: int = 300) -> None:
-        """
-        Periodic reconciliation loop.
-        Runs every `interval_seconds` (default 5 minutes) during market hours.
-        Called as a background task from market_scheduler.start().
-        """
-        logger.info(
-            "Reconciliation loop started — interval=%ds (live mode only)",
-            interval_seconds)
         while True:
-            await asyncio.sleep(interval_seconds)
-            now = datetime.now(IST)
-            # Only run on weekdays during market hours
-            if now.weekday() < 5 and 9 <= now.hour < 16:
-                try:
+            try:
+                await asyncio.sleep(interval_seconds)
+
+                if not settings.is_live:
+                    continue
+
+                now = datetime.now(IST)
+                if now.weekday() < 5 and 9 <= now.hour < 16:
                     await self.run_once()
-                except Exception as exc:
-                    logger.error("Reconciliation loop error: %s", exc)
+
+            except Exception as exc:
+                logger.error("Reconciliation loop error: %s", exc)
 
     # ── Private helpers ──────────────────────────────────────
 
     async def _emergency_exit(self, symbol: str, qty: int) -> None:
-        """Place emergency market SELL for a phantom position."""
         if qty <= 0:
-            logger.warning(
-                "Emergency exit skipped — qty=%d for %s", qty, symbol)
             return
-        logger.critical(
-            "EMERGENCY EXIT: selling phantom position %s qty=%d", symbol, qty)
-        try:
-            resp = await self.broker.place_order(
-                symbol=symbol, side="SELL", quantity=qty)
-            oid = resp.get("orderNumber") or resp.get("orderId")
-            logger.critical(
-                "Emergency exit order placed order=%s resp=%s", oid, resp)
-            if self.event_bus:
-                await self.event_bus.publish("RECONCILE_EMERGENCY_EXIT", {
-                    "symbol": symbol, "qty": qty, "order_id": oid,
-                })
-        except Exception as exc:
-            logger.critical(
-                "Emergency exit failed for %s qty=%d: %s", symbol, qty, exc)
+
+        for attempt in range(3):
+            try:
+                resp = await self.broker.place_order(
+                    symbol=symbol,
+                    side="SELL",
+                    quantity=qty
+                )
+
+                logger.critical("EMERGENCY EXIT: %s qty=%d", symbol, qty)
+
+                await self.state_manager.update(
+                    active_trade=None,
+                    live_pnl=0.0
+                )
+
+                if self.event_bus:
+                    await self.event_bus.publish("RECONCILE_EMERGENCY_EXIT", {
+                        "symbol": symbol,
+                        "qty": qty
+                    })
+
+                return
+
+            except Exception as exc:
+                if attempt == 2:
+                    logger.critical("Emergency exit FAILED: %s", exc)
+                await asyncio.sleep(1)
 
     @staticmethod
     def _net_qty(position: dict) -> int:
