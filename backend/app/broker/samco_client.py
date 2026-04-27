@@ -232,6 +232,50 @@ class SamcoClient:
         logger.error("confirm_fill timeout order=%s", order_id)
         return False
 
+    async def get_positions(self) -> list[dict]:
+        """Get current positions. NOTE: This may not be available in all SAMCO SDK versions."""
+        try:
+            await self.ensure_session()
+            # Try to get positions - this method may not exist in all SDK versions
+            bridge = self._get_bridge()
+            result = await self._call_sdk(
+                lambda: bridge.get_positions_data(position_type=bridge.POSITION_TYPE_NET),
+                "get_positions_data",
+            )
+            return result if isinstance(result, list) else []
+        except Exception as exc:
+            logger.warning(f"get_positions_data not available or failed: {exc}")
+            # Return empty list - positions will be handled via trade book
+            return []
+
+    async def get_trade_book(self) -> list[dict]:
+        """Get trade book for the day."""
+        try:
+            await self.ensure_session()
+            result = await self._call_sdk(
+                lambda: self._get_bridge().get_trade_book(),
+                "get_trade_book",
+            )
+            return result if isinstance(result, list) else []
+        except Exception as exc:
+            logger.warning(f"get_trade_book failed: {exc}")
+            return []
+
+    async def get_orders(self) -> list[dict]:
+        """Get current orders. NOTE: This may not be available in all SAMCO SDK versions."""
+        try:
+            await self.ensure_session()
+            # Try to get orders - this method may not exist in all SDK versions
+            result = await self._call_sdk(
+                lambda: self._get_bridge().get_order_book(),
+                "get_order_book",
+            )
+            return result if isinstance(result, list) else []
+        except Exception as exc:
+            logger.warning(f"get_order_book not available or failed: {exc}")
+            # Return empty list - orders will be tracked internally
+            return []
+
     # ── PARSE SPOT ────────────────────────────────────
     @staticmethod
     def parse_spot(quote: dict | None) -> float | None:

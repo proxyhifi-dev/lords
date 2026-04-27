@@ -24,15 +24,39 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from backend.app.core.startup_manager import startup_manager
     from backend.app.scheduler.market_scheduler import scheduler
-    logger.info("Lords Bot v4.0 starting — mode=%s", settings.mode.upper())
+
+    logger.info("Lords Bot v5.1 starting — mode=%s", settings.mode.upper())
+
+    # CRITICAL: Perform safe startup synchronization
+    logger.info("🔄 Performing safe startup synchronization...")
+    startup_success = await startup_manager.perform_safe_startup()
+
+    if not startup_success:
+        logger.error("❌ Safe startup failed — refusing to start trading system")
+        # In production, you might want to exit here
+        # For development, we'll continue but log the failure
+        if settings.is_live:
+            logger.critical("🚨 LIVE MODE: Startup failed — system will not trade")
+            # Could raise an exception here to prevent startup
+
+    # Start scheduler regardless (for development), but mark trading as disabled if startup failed
     await scheduler.start()
+
+    # If startup failed, disable trading
+    if not startup_success:
+        from backend.app.engine.state_manager import state_manager
+        await state_manager.update(trading_enabled=False)
+        logger.warning("⚠️ Trading disabled due to startup synchronization failure")
+
     yield
+
     logger.info("Lords Bot shutting down")
     await scheduler.stop()
 
 
-app = FastAPI(title="Lords Bot", version="4.0.0", lifespan=lifespan)
+app = FastAPI(title="Lords Bot", version="5.1.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
@@ -49,9 +73,19 @@ async def root():
 
 @app.get("/health")
 async def health():
+    from backend.app.core.startup_manager import startup_manager
     from backend.app.scheduler.market_scheduler import scheduler
-    return {"status": "ok", "version": "4.0.0",
-            "scheduler_running": scheduler.running, "mode": settings.mode.upper()}
+
+    startup_status = "synced" if startup_manager.sync_successful else "failed"
+
+    return {
+        "status": "ok",
+        "version": "5.1.0",
+        "startup_sync": startup_status,
+        "scheduler_running": scheduler.running,
+        "mode": settings.mode.upper(),
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 
 @app.get("/api/dashboard")
@@ -77,6 +111,34 @@ async def dashboard():
         }
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
+
+
+@app.get("/api/startup-status")
+async def startup_status():
+    """Get detailed startup synchronization status."""
+    from backend.app.core.startup_manager import startup_manager
+
+    return {
+        "sync_successful": startup_manager.sync_successful,
+        "broker_positions_count": len(startup_manager.broker_positions),
+        "broker_orders_count": len(startup_manager.broker_orders),
+        "positions": [
+            {
+                "symbol": pos.symbol,
+                "quantity": pos.quantity,
+                "pnl": pos.pnl
+            } for pos in startup_manager.broker_positions
+        ],
+        "open_orders": [
+            {
+                "symbol": order.symbol,
+                "side": order.side,
+                "quantity": order.quantity,
+                "status": order.status
+            } for order in startup_manager.broker_orders
+        ],
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 
 @app.get("/api/analytics")

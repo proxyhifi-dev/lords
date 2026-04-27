@@ -59,7 +59,7 @@ class MarketScheduler:
         self.trade_store = TradeStore()
         self.broker      = SamcoClient()
         self.event_bus   = EventBus()
-        self.risk        = RiskManager(self.event_bus, self.state)
+        self.risk        = RiskManager(self.event_bus, self.state, self.broker)
         self.engine      = TradingEngine(
             event_bus=self.event_bus,
             state_manager=self.state,

@@ -184,6 +184,12 @@ class StateManager:
             
             return state
     
+    async def load(self) -> None:
+        """Load state from database (for backward compatibility)."""
+        async with self._lock:
+            self._state = self._load_state()
+            logger.info("State loaded from database")
+    
     def _load_state(self) -> RuntimeState:
         """Load state from database."""
         try:

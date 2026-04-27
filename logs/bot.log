@@ -3909,3 +3909,1104 @@ AttributeError: 'TradingEngine' object has no attribute '_monitor_loop'
 2026-04-27 18:34:44  INFO      market_scheduler            Scheduler stopped
 2026-04-27 18:34:51  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
 2026-04-27 18:34:51  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:08  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:26  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:26  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:34  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:34  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:34  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:34  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:41  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:41  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:41  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:41  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:48  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:48  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:48  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:48  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:50  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:50  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:50  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:45:50  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:03  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:03  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:03  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:03  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:08  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:08  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:08  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:08  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:10  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:10  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:10  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:10  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:12  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:12  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:12  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:12  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:14  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:14  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:14  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:14  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:17  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:17  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:17  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:17  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:18  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:18  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:18  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:18  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:29  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:29  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:29  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:29  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:45  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:45  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:46  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:46:46  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:47:50  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:47:50  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:47:50  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:47:50  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:47:50  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:47:50  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:47:50  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:47:50  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:47:50  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:47:50  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:47:52  INFO      samco_client                SAMCO login successful
+2026-04-27 18:47:52  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:47:52  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:47:52  ERROR     startup_manager             ❌ Failed to fetch broker positions: 'SamcoClient' object has no attribute 'get_positions'
+2026-04-27 18:47:52  ERROR     startup_manager             ❌ Failed to fetch broker positions
+2026-04-27 18:47:52  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:47:52  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:47:52  INFO      samco_client                SAMCO login successful
+2026-04-27 18:47:52  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:47:52  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:47:52  ERROR     startup_manager             ❌ Failed to fetch broker positions: 'SamcoClient' object has no attribute 'get_positions'
+2026-04-27 18:47:52  ERROR     startup_manager             ❌ Failed to fetch broker positions
+2026-04-27 18:47:52  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:47:52  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:48:06  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:48:06  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:48:06  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:48:06  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:48:06  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:48:06  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:48:06  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:48:06  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:48:06  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:48:06  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:48:06  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:48:06  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:48:06  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:48:06  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:48:08  INFO      samco_client                SAMCO login successful
+2026-04-27 18:48:08  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:48:08  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:48:08  ERROR     startup_manager             ❌ Failed to fetch broker positions: 'SamcoClient' object has no attribute 'get_positions'
+2026-04-27 18:48:08  ERROR     startup_manager             ❌ Failed to fetch broker positions
+2026-04-27 18:48:08  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:48:08  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:48:08  INFO      samco_client                SAMCO login successful
+2026-04-27 18:48:08  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:48:08  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:48:08  ERROR     startup_manager             ❌ Failed to fetch broker positions: 'SamcoClient' object has no attribute 'get_positions'
+2026-04-27 18:48:08  ERROR     startup_manager             ❌ Failed to fetch broker positions
+2026-04-27 18:48:08  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:48:08  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:48:16  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:48:32  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:48:32  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:48:32  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:48:32  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:48:32  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:48:32  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:48:32  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:48:33  INFO      samco_client                SAMCO login successful
+2026-04-27 18:48:33  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:48:33  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:48:33  ERROR     startup_manager             ❌ Failed to fetch broker positions: 'SamcoClient' object has no attribute 'get_positions'
+2026-04-27 18:48:33  ERROR     startup_manager             ❌ Failed to fetch broker positions
+2026-04-27 18:48:33  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:48:33  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:49:57  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:49:57  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:49:57  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:49:57  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:49:57  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:49:57  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:49:57  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:49:57  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:49:57  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:49:57  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:49:57  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:49:57  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:49:57  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:49:59  INFO      samco_client                SAMCO login successful
+2026-04-27 18:49:59  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:49:59  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:49:59  ERROR     startup_manager             ❌ Failed to fetch broker positions: 'SamcoClient' object has no attribute 'get_positions'
+2026-04-27 18:49:59  ERROR     startup_manager             ❌ Failed to fetch broker positions
+2026-04-27 18:49:59  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:49:59  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:49:59  INFO      state_manager               State loaded from database
+2026-04-27 18:49:59  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:49:59  INFO      samco_client                SAMCO login successful
+2026-04-27 18:49:59  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:49:59  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:49:59  ERROR     startup_manager             ❌ Failed to fetch broker positions: 'SamcoClient' object has no attribute 'get_positions'
+2026-04-27 18:49:59  ERROR     startup_manager             ❌ Failed to fetch broker positions
+2026-04-27 18:49:59  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:49:59  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:49:59  INFO      state_manager               State loaded from database
+2026-04-27 18:49:59  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:49:59  INFO      samco_client                SAMCO login successful
+2026-04-27 18:49:59  INFO      samco_client                SAMCO login successful
+2026-04-27 18:50:03  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:03  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:50:03  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:50:03  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:03  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:50:03  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:50:07  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:07  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:50:07  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:07  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:50:09  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:50:09  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:50:09  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:50:09  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:50:09  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:50:09  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:50:09  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:50:09  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:50:09  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:50:09  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:50:09  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:50:09  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:50:09  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:50:09  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:50:10  INFO      samco_client                SAMCO login successful
+2026-04-27 18:50:10  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:50:10  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:50:10  ERROR     startup_manager             ❌ Failed to fetch broker positions: 'SamcoClient' object has no attribute 'get_positions'
+2026-04-27 18:50:10  ERROR     startup_manager             ❌ Failed to fetch broker positions
+2026-04-27 18:50:10  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:50:10  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:50:10  INFO      state_manager               State loaded from database
+2026-04-27 18:50:10  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:50:10  INFO      samco_client                SAMCO login successful
+2026-04-27 18:50:10  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:50:10  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:50:10  ERROR     startup_manager             ❌ Failed to fetch broker positions: 'SamcoClient' object has no attribute 'get_positions'
+2026-04-27 18:50:10  ERROR     startup_manager             ❌ Failed to fetch broker positions
+2026-04-27 18:50:10  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:50:10  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:50:10  INFO      state_manager               State loaded from database
+2026-04-27 18:50:10  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:50:11  INFO      samco_client                SAMCO login successful
+2026-04-27 18:50:11  INFO      samco_client                SAMCO login successful
+2026-04-27 18:50:15  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:15  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:50:15  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:50:15  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:15  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:50:15  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:50:19  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:19  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:50:19  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:19  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:50:20  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:50:20  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:50:20  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:50:20  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:50:20  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:50:20  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:50:20  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:50:20  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:50:20  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:50:20  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:50:20  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:50:20  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:50:20  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:50:20  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:50:21  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:50:21  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:50:21  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:50:21  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:50:21  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:50:21  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:50:21  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:50:22  INFO      samco_client                SAMCO login successful
+2026-04-27 18:50:22  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:50:22  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:50:22  ERROR     samco_client                SAMCO get_positions attempt=1/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:50:23  ERROR     startup_manager             ❌ Broker login failed: SAMCO login failed: {}
+2026-04-27 18:50:23  ERROR     startup_manager             ❌ Broker login failed - cannot proceed
+2026-04-27 18:50:23  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:50:23  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:50:23  INFO      state_manager               State loaded from database
+2026-04-27 18:50:23  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:50:23  INFO      samco_client                SAMCO login successful
+2026-04-27 18:50:23  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:50:23  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:50:23  ERROR     samco_client                SAMCO get_positions attempt=1/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:50:23  INFO      samco_client                SAMCO login successful
+2026-04-27 18:50:23  ERROR     samco_client                SAMCO get_positions attempt=2/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:50:24  ERROR     samco_client                SAMCO get_positions attempt=2/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:50:25  ERROR     samco_client                SAMCO get_positions attempt=3/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:50:26  ERROR     samco_client                SAMCO get_positions attempt=3/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:50:27  WARNING   state_manager               Cache update failed: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+2026-04-27 18:50:27  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:50:27  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:50:29  ERROR     samco_client                SAMCO get_positions attempt=4/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:50:30  ERROR     samco_client                SAMCO get_positions attempt=4/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:50:31  WARNING   state_manager               Cache update failed: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+2026-04-27 18:50:31  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:50:31  INFO      main                        Lords Bot shutting down
+2026-04-27 18:50:31  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:50:35  WARNING   state_manager               Cache update failed: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+2026-04-27 18:50:35  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:50:37  ERROR     samco_client                SAMCO get_positions attempt=5/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:50:37  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:50:37  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:50:37  WARNING   samco_client                get_orders not available or failed: Circuit breaker OPEN for get_orders
+2026-04-27 18:50:37  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:50:37  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:50:38  ERROR     samco_client                SAMCO get_positions attempt=5/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:50:38  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:50:38  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:50:38  WARNING   samco_client                get_orders not available or failed: Circuit breaker OPEN for get_orders
+2026-04-27 18:50:38  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:50:38  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:50:42  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:42  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:46  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:46  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:50  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:50  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:50:50  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:50:50  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:50:50  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:50:50  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:50:50  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:50:50  INFO      state_manager               State loaded from database
+2026-04-27 18:50:50  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:50:50  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:50  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:50:50  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:50:50  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:50:50  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:50:50  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:50:50  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:50:50  INFO      state_manager               State loaded from database
+2026-04-27 18:50:50  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:50:50  INFO      samco_client                SAMCO login successful
+2026-04-27 18:50:50  INFO      samco_client                SAMCO login successful
+2026-04-27 18:50:54  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:54  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:50:54  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:50:54  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:54  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:50:54  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:50:58  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:58  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:50:59  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:50:59  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:51:00  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:51:00  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:51:00  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:51:00  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:51:00  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:51:00  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:51:00  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:51:00  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:51:00  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:51:00  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:51:00  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:51:00  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:51:00  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:51:00  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:51:01  INFO      samco_client                SAMCO login successful
+2026-04-27 18:51:01  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:51:01  INFO      samco_client                SAMCO login successful
+2026-04-27 18:51:01  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:51:01  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:51:01  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:51:01  ERROR     samco_client                SAMCO get_positions attempt=1/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:51:01  ERROR     samco_client                SAMCO get_positions attempt=1/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:51:02  ERROR     samco_client                SAMCO get_positions attempt=2/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:51:04  ERROR     samco_client                SAMCO get_positions attempt=3/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:51:04  ERROR     samco_client                SAMCO get_positions attempt=3/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:51:08  ERROR     samco_client                SAMCO get_positions attempt=4/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:51:16  ERROR     samco_client                SAMCO get_positions attempt=5/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:51:16  ERROR     samco_client                SAMCO get_positions attempt=5/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:51:16  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:51:16  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:51:16  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:51:16  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:51:16  WARNING   samco_client                get_orders not available or failed: Circuit breaker OPEN for get_orders
+2026-04-27 18:51:16  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:51:16  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:51:16  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:51:16  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:51:20  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:20  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:24  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:24  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:28  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:28  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:51:28  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:51:28  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:51:28  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:51:28  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:51:28  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:51:28  INFO      state_manager               State loaded from database
+2026-04-27 18:51:28  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:51:28  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:28  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:51:28  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:51:28  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:51:28  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:51:28  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:51:28  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:51:28  INFO      state_manager               State loaded from database
+2026-04-27 18:51:28  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:51:29  INFO      samco_client                SAMCO login successful
+2026-04-27 18:51:29  INFO      samco_client                SAMCO login successful
+2026-04-27 18:51:33  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:33  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:51:33  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:51:33  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:33  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:51:33  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:51:37  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:37  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:51:37  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:37  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:51:41  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:41  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:45  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:45  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:51  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:51  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:55  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:51:55  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:01  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:01  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:05  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:05  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:11  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:11  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:15  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:16  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:22  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:22  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:26  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:26  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:28  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:52:28  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:52:28  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:52:28  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:52:28  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:52:28  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:52:28  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:52:29  INFO      samco_client                SAMCO login successful
+2026-04-27 18:52:29  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:52:29  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:52:29  ERROR     samco_client                SAMCO get_positions attempt=1/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:52:30  ERROR     samco_client                SAMCO get_positions attempt=2/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:52:32  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:32  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:32  ERROR     samco_client                SAMCO get_positions attempt=3/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:52:33  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:52:33  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:52:36  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:36  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:36  ERROR     samco_client                SAMCO get_positions attempt=4/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:52:42  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:42  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:44  ERROR     samco_client                SAMCO get_positions attempt=5/5 error='StocknoteAPIPythonBridge' object has no attribute 'get_positions'
+2026-04-27 18:52:44  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:52:44  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:52:44  WARNING   samco_client                get_orders not available or failed: Circuit breaker OPEN for get_orders
+2026-04-27 18:52:44  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:52:44  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:52:46  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:46  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:48  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:52  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:52  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:52  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:56  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:56  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:56  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:52:56  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:52:56  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:52:56  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:52:56  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:52:56  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:52:56  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:52:56  INFO      state_manager               State loaded from database
+2026-04-27 18:52:56  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:52:57  INFO      samco_client                SAMCO login successful
+2026-04-27 18:53:01  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:01  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:53:01  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:53:02  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:02  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:05  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:05  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:53:06  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:06  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:12  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:12  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:16  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:16  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:22  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:22  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:26  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:26  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:32  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:32  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:33  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:53:33  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:53:36  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:36  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:42  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:42  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:46  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:47  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:52  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:53  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:56  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:53:57  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:03  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:03  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:07  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:07  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:13  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:13  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:13  INFO      main                        Lords Bot shutting down
+2026-04-27 18:54:13  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:54:13  INFO      main                        Lords Bot shutting down
+2026-04-27 18:54:13  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:54:17  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:17  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:54:17  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:17  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:54:19  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:54:19  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:54:19  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:54:19  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:54:19  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:54:19  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:54:19  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:54:19  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:54:19  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:54:19  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:54:19  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:54:19  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:54:19  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:54:19  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:54:20  INFO      samco_client                SAMCO login successful
+2026-04-27 18:54:20  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:54:20  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:54:20  ERROR     samco_client                SAMCO get_positions_data attempt=1/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:20  INFO      samco_client                SAMCO login successful
+2026-04-27 18:54:20  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:54:20  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:54:20  ERROR     samco_client                SAMCO get_positions_data attempt=1/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:21  ERROR     samco_client                SAMCO get_positions_data attempt=2/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:21  ERROR     samco_client                SAMCO get_positions_data attempt=2/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:23  ERROR     samco_client                SAMCO get_positions_data attempt=3/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:23  ERROR     samco_client                SAMCO get_positions_data attempt=3/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:26  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:54:26  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:54:26  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:54:26  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:54:26  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:54:26  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:54:26  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:54:27  INFO      samco_client                SAMCO login successful
+2026-04-27 18:54:27  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:54:27  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:54:27  ERROR     samco_client                SAMCO get_positions_data attempt=1/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:27  ERROR     samco_client                SAMCO get_positions_data attempt=4/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:27  ERROR     samco_client                SAMCO get_positions_data attempt=4/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:28  ERROR     samco_client                SAMCO get_positions_data attempt=2/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:30  ERROR     samco_client                SAMCO get_positions_data attempt=3/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:34  ERROR     samco_client                SAMCO get_positions_data attempt=4/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:35  ERROR     samco_client                SAMCO get_positions_data attempt=5/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:35  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:54:35  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:54:35  WARNING   samco_client                get_order_book not available or failed: Circuit breaker OPEN for get_order_book
+2026-04-27 18:54:35  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:54:35  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:54:35  ERROR     samco_client                SAMCO get_positions_data attempt=5/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:35  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:54:35  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:54:35  WARNING   samco_client                get_order_book not available or failed: Circuit breaker OPEN for get_order_book
+2026-04-27 18:54:35  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:54:35  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:54:39  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:39  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:42  ERROR     samco_client                SAMCO get_positions_data attempt=5/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:54:42  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:54:42  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:54:42  WARNING   samco_client                get_order_book not available or failed: Circuit breaker OPEN for get_order_book
+2026-04-27 18:54:42  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:54:42  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:54:43  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:43  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:46  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:48  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:48  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:54:48  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:54:48  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:54:48  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:54:48  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:54:48  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:54:48  INFO      state_manager               State loaded from database
+2026-04-27 18:54:48  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:54:48  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:48  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:54:48  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:54:48  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:54:48  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:54:48  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:54:48  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:54:48  INFO      state_manager               State loaded from database
+2026-04-27 18:54:48  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:54:48  INFO      samco_client                SAMCO login successful
+2026-04-27 18:54:48  INFO      samco_client                SAMCO login successful
+2026-04-27 18:54:50  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:52  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:52  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:54:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:54:52  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:52  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:54:52  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:54:54  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:54  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:54:54  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:54:54  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:54:54  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:54:54  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:54:54  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:54:54  INFO      state_manager               State loaded from database
+2026-04-27 18:54:54  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:54:54  INFO      samco_client                SAMCO login successful
+2026-04-27 18:54:56  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:56  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:54:56  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:56  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:54:57  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:54:57  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:54:57  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:54:57  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:54:57  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:54:57  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:54:57  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:54:57  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:54:57  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:54:57  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:54:57  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:54:57  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:54:57  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:54:57  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:54:59  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:54:59  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:54:59  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:55:03  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:03  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:55:04  INFO      samco_client                SAMCO login successful
+2026-04-27 18:55:04  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:55:04  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:55:05  ERROR     samco_client                SAMCO get_positions_data attempt=1/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:55:05  INFO      samco_client                SAMCO login successful
+2026-04-27 18:55:05  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:55:06  ERROR     samco_client                SAMCO get_positions_data attempt=2/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:55:06  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:55:06  ERROR     samco_client                SAMCO get_positions_data attempt=1/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:55:07  ERROR     samco_client                SAMCO get_positions_data attempt=2/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:55:08  ERROR     samco_client                SAMCO get_positions_data attempt=3/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:55:09  ERROR     samco_client                SAMCO get_positions_data attempt=3/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:55:11  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:55:11  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:55:11  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:55:11  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:55:11  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:55:11  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:55:11  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:55:12  ERROR     samco_client                SAMCO get_positions_data attempt=4/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:55:12  INFO      samco_client                SAMCO login successful
+2026-04-27 18:55:12  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:55:12  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:55:12  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:55:12  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:55:12  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:55:12  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:55:13  ERROR     samco_client                SAMCO get_positions_data attempt=4/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:55:16  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:20  ERROR     samco_client                SAMCO get_positions_data attempt=5/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:55:20  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:55:20  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:55:20  WARNING   samco_client                get_order_book not available or failed: Circuit breaker OPEN for get_order_book
+2026-04-27 18:55:20  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:55:20  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:55:20  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:21  ERROR     samco_client                SAMCO get_positions_data attempt=5/5 error=StocknoteAPIPythonBridge.get_positions_data() missing 1 required positional argument: 'position_type'
+2026-04-27 18:55:21  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:55:21  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:55:21  WARNING   samco_client                get_order_book not available or failed: Circuit breaker OPEN for get_order_book
+2026-04-27 18:55:21  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:55:21  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:55:24  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:24  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:24  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:55:24  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:55:24  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:55:24  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:55:24  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:55:24  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:55:24  INFO      state_manager               State loaded from database
+2026-04-27 18:55:24  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:55:25  INFO      samco_client                SAMCO login successful
+2026-04-27 18:55:25  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:28  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:29  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:29  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:55:29  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:55:29  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:32  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:32  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:55:32  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:55:32  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:55:32  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:55:32  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:55:32  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:55:32  INFO      state_manager               State loaded from database
+2026-04-27 18:55:32  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:55:33  INFO      samco_client                SAMCO login successful
+2026-04-27 18:55:33  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:33  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:55:33  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:33  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:55:33  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:55:33  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:55:33  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:55:33  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:55:33  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:55:33  INFO      state_manager               State loaded from database
+2026-04-27 18:55:33  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:55:34  INFO      samco_client                SAMCO login successful
+2026-04-27 18:55:37  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:37  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:55:37  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:55:37  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:38  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:38  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:55:38  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:55:41  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:41  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:55:41  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:42  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:42  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:55:42  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:55:42  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:55:42  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:55:42  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:55:42  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:55:42  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:55:42  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:55:43  INFO      main                        Lords Bot shutting down
+2026-04-27 18:55:43  INFO      market_scheduler            Stopping Lords Bot scheduler
+2026-04-27 18:55:44  INFO      samco_client                SAMCO login successful
+2026-04-27 18:55:44  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:55:44  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:55:44  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:55:44  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:55:44  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:55:44  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:55:44  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:55:44  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:55:44  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:55:44  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:55:44  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:55:44  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:55:44  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:55:45  INFO      samco_client                SAMCO login successful
+2026-04-27 18:55:45  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:55:45  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:55:45  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:55:45  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:55:45  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:55:45  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:55:47  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:47  INFO      market_scheduler            Scheduler stopped
+2026-04-27 18:55:48  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:48  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:55:48  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:55:48  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:55:48  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:55:48  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:55:48  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:55:48  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:55:49  INFO      samco_client                SAMCO login successful
+2026-04-27 18:55:49  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:55:49  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:55:49  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:55:49  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:55:49  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:49  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:55:49  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:55:52  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:54  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:54  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:56  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:56  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:55:56  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:55:56  ERROR     startup_manager             ❌ Reconciliation failed: 'ReconciliationEngine' object has no attribute 'reconcile'
+2026-04-27 18:55:56  ERROR     startup_manager             ❌ Reconciliation failed - critical mismatch
+2026-04-27 18:55:56  ERROR     main                        ❌ Safe startup failed — refusing to start trading system
+2026-04-27 18:55:56  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:55:56  INFO      state_manager               State loaded from database
+2026-04-27 18:55:56  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:55:56  INFO      samco_client                SAMCO login successful
+2026-04-27 18:55:58  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:58  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:55:58  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:55:58  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:55:58  INFO      startup_manager             ✅ No issues found
+2026-04-27 18:55:58  INFO      startup_manager             🏥 Validating system health...
+2026-04-27 18:56:00  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:56:00  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:56:00  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:56:00  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:56:00  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:56:00  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:56:00  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:00  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:00  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:56:01  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:56:01  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:01  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:56:01  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:56:01  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:56:01  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:56:01  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:56:01  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:56:02  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:02  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:56:02  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:56:02  INFO      startup_manager             ✅ No issues found
+2026-04-27 18:56:02  INFO      startup_manager             🏥 Validating system health...
+2026-04-27 18:56:02  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:05  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:05  WARNING   main                        ⚠️ Trading disabled due to startup synchronization failure
+2026-04-27 18:56:05  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:06  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:06  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:56:06  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:56:06  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:56:06  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:56:06  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:56:06  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:56:06  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:06  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:06  INFO      startup_manager             ✅ System health validation completed
+2026-04-27 18:56:06  INFO      startup_manager             ✅ Safe startup completed successfully
+2026-04-27 18:56:06  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:56:06  INFO      state_manager               State loaded from database
+2026-04-27 18:56:06  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:06  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:07  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:07  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:56:07  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:56:07  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:56:07  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:56:07  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:56:07  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:56:09  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:10  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:10  INFO      startup_manager             ✅ System health validation completed
+2026-04-27 18:56:10  INFO      startup_manager             ✅ Safe startup completed successfully
+2026-04-27 18:56:10  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:56:10  INFO      state_manager               State loaded from database
+2026-04-27 18:56:10  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:10  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:10  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:10  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:56:10  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:56:11  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:12  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:56:12  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:56:12  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:56:12  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:56:12  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:56:12  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:56:12  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:13  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:13  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:56:13  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:56:13  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:56:13  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:56:13  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:56:13  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:56:13  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:13  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:56:13  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:56:13  INFO      startup_manager             ✅ No issues found
+2026-04-27 18:56:13  INFO      startup_manager             🏥 Validating system health...
+2026-04-27 18:56:14  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:14  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:56:14  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:56:15  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:16  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:56:16  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:56:16  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:56:16  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:56:16  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:56:16  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:56:16  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:17  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:17  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:56:17  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:56:17  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:56:17  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:56:17  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:56:17  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:56:17  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:17  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:19  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:19  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:56:19  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:56:19  INFO      startup_manager             ✅ No issues found
+2026-04-27 18:56:19  INFO      startup_manager             🏥 Validating system health...
+2026-04-27 18:56:21  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:21  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:21  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:21  INFO      startup_manager             ✅ System health validation completed
+2026-04-27 18:56:21  INFO      startup_manager             ✅ Safe startup completed successfully
+2026-04-27 18:56:21  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:56:21  INFO      state_manager               State loaded from database
+2026-04-27 18:56:21  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:21  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:23  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:25  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:25  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:25  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:56:25  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:56:25  INFO      startup_manager             ✅ No issues found
+2026-04-27 18:56:25  INFO      startup_manager             🏥 Validating system health...
+2026-04-27 18:56:25  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:25  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:56:25  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:56:27  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:27  INFO      startup_manager             ✅ System health validation completed
+2026-04-27 18:56:27  INFO      startup_manager             ✅ Safe startup completed successfully
+2026-04-27 18:56:27  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:56:27  INFO      state_manager               State loaded from database
+2026-04-27 18:56:27  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:28  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:29  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:29  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:56:29  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:56:29  INFO      startup_manager             ✅ No issues found
+2026-04-27 18:56:29  INFO      startup_manager             🏥 Validating system health...
+2026-04-27 18:56:32  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:32  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:32  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:56:32  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:56:33  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:33  INFO      startup_manager             ✅ System health validation completed
+2026-04-27 18:56:33  INFO      startup_manager             ✅ Safe startup completed successfully
+2026-04-27 18:56:33  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:56:33  INFO      state_manager               State loaded from database
+2026-04-27 18:56:33  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:33  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:56:33  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:56:33  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:56:33  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:56:33  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:56:33  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:56:33  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:34  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:34  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:34  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:56:34  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:56:34  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:56:34  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:56:34  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:56:34  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:56:36  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:37  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:37  INFO      startup_manager             ✅ System health validation completed
+2026-04-27 18:56:37  INFO      startup_manager             ✅ Safe startup completed successfully
+2026-04-27 18:56:37  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:56:37  INFO      state_manager               State loaded from database
+2026-04-27 18:56:37  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:38  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:38  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:38  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:56:38  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:56:38  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:42  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:42  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:56:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:56:42  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:42  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:44  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:46  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:46  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:46  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:56:46  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:56:46  INFO      startup_manager             ✅ No issues found
+2026-04-27 18:56:46  INFO      startup_manager             🏥 Validating system health...
+2026-04-27 18:56:48  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:48  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:50  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:52  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:52  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:54  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:55  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:55  INFO      startup_manager             ✅ System health validation completed
+2026-04-27 18:56:55  INFO      startup_manager             ✅ Safe startup completed successfully
+2026-04-27 18:56:55  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:56:55  INFO      state_manager               State loaded from database
+2026-04-27 18:56:55  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:56:55  INFO      samco_client                SAMCO login successful
+2026-04-27 18:56:56  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:58  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:58  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:59  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:56:59  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:56:59  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:57:02  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:02  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:04  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:05  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:06  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:08  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:08  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:09  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:12  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:12  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:13  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:57:13  INFO      trade_store                 TradeStore loaded 0 trades pnl=0.00
+2026-04-27 18:57:13  INFO      main                        Lords Bot v5.1 starting — mode=PAPER
+2026-04-27 18:57:13  INFO      main                        🔄 Performing safe startup synchronization...
+2026-04-27 18:57:13  INFO      startup_manager             🔄 Starting safe startup synchronization...
+2026-04-27 18:57:13  INFO      startup_manager             🔑 Logging into broker...
+2026-04-27 18:57:13  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:57:14  INFO      samco_client                SAMCO login successful
+2026-04-27 18:57:14  INFO      startup_manager             ✅ Broker login successful
+2026-04-27 18:57:14  INFO      startup_manager             📊 Fetching broker positions...
+2026-04-27 18:57:14  INFO      startup_manager             ✅ Fetched 0 positions from broker
+2026-04-27 18:57:14  INFO      startup_manager             📋 Fetching broker orders...
+2026-04-27 18:57:14  INFO      startup_manager             ✅ Fetched 0 open orders from broker
+2026-04-27 18:57:14  INFO      startup_manager             🔄 Rebuilding internal state from broker data...
+2026-04-27 18:57:14  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:15  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:16  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:18  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:18  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:18  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:19  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:22  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:22  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:22  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:24  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:26  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:26  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:57:26  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:26  INFO      startup_manager             ✅ Internal state rebuilt from broker data
+2026-04-27 18:57:26  INFO      startup_manager             🔧 Forcing reconciliation...
+2026-04-27 18:57:26  INFO      startup_manager             ✅ No issues found
+2026-04-27 18:57:26  INFO      startup_manager             🏥 Validating system health...
+2026-04-27 18:57:26  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:28  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:28  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:30  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:30  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:32  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:32  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:34  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:34  INFO      startup_manager             ✅ System health validation completed
+2026-04-27 18:57:34  INFO      startup_manager             ✅ Safe startup completed successfully
+2026-04-27 18:57:34  INFO      market_scheduler            Starting Lords Bot v5.1 — mode=PAPER trend_filter=True skip_first=True
+2026-04-27 18:57:34  INFO      state_manager               State loaded from database
+2026-04-27 18:57:34  INFO      samco_client                SAMCO login user=DB41588
+2026-04-27 18:57:34  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:35  INFO      samco_client                SAMCO login successful
+2026-04-27 18:57:36  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:36  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:38  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:57:38  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:38  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:39  WARNING   state_manager               Cache update failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:39  INFO      market_scheduler            All tasks started (5 tasks)
+2026-04-27 18:57:39  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:57:40  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:42  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:57:42  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:42  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:44  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:45  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:46  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:47  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:48  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:49  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:49  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:50  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:52  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:53  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:55  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:55  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:56  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:57  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:59  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:59  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:59  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:57:59  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:58:00  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:03  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:03  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:05  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:05  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:06  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:07  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:09  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:09  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:09  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:10  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:13  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:13  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:15  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:15  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:16  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:17  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:19  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:19  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:19  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:20  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:23  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:23  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:25  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:25  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:26  INFO      market_scheduler            Market closed (outside market hours) — polling paused
+2026-04-27 18:58:26  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:27  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:29  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:29  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:29  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:30  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:33  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:33  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:35  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:35  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:36  WARNING   state_manager               Cache read failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.
+2026-04-27 18:58:37  WARNING   state_manager               Cache write failed: Error Multiple exceptions: [Errno 10061] Connect call failed ('::1', 6379, 0, 0), [Errno 10061] Connect call failed ('127.0.0.1', 6379) connecting to localhost:6379.

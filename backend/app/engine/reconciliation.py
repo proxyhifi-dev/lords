@@ -78,6 +78,7 @@ class ReconciliationEngine:
 
             # ── 1. Phantom position ───────────────────────
             # SAMCO has open NIFTY position, bot has no active trade
+            # CRITICAL: Force sync state from broker
             if nifty_pos and not state.active_trade:
                 result["issues_found"] += 1
                 for pos in nifty_pos:
@@ -86,29 +87,39 @@ class ReconciliationEngine:
                     avg = pos.get("averagePrice") or pos.get("avgPrice") or "?"
                     msg = (
                         f"PHANTOM_POSITION: {sym} qty={qty} avg=₹{avg} "
-                        f"— bot has no active trade. Emergency exit triggered."
+                        f"— bot has no active trade. FORCE SYNC from broker."
                     )
                     logger.critical("RECONCILE: %s", msg)
                     result["actions_taken"].append(msg)
-                    await self._emergency_exit(sym, abs(qty))
+
+                    # AUTHORITATIVE ACTION: Rebuild state from broker
+                    await self._force_sync_from_broker(positions)
 
             # ── 2. Ghost trade ───────────────────────────
             # Bot thinks trade is open, SAMCO has no matching position
+            # CRITICAL: Force clear local state
             if state.active_trade and not nifty_pos:
                 sym = state.active_trade.get("symbol", "unknown")
                 qty = state.active_trade.get("qty", 0)
                 msg = (
                     f"GHOST_TRADE: {sym} qty={qty} "
                     f"— local state shows open trade but no SAMCO position. "
-                    f"Clearing local state."
+                    f"FORCE CLEAR local state."
                 )
                 logger.warning("RECONCILE: %s", msg)
                 result["issues_found"] += 1
                 result["actions_taken"].append(msg)
+
+                # AUTHORITATIVE ACTION: Clear inconsistent state
                 await self.state_manager.update(
-                    active_trade=None, live_pnl=0.0)
+                    active_trade=None,
+                    live_pnl=0.0,
+                    unrealized_pnl=0.0,
+                    positions={}
+                )
 
             # ── 3. Qty mismatch ──────────────────────────
+            # CRITICAL: Force sync quantities from broker
             if state.active_trade and nifty_pos:
                 local_sym = state.active_trade.get("symbol", "")
                 for pos in nifty_pos:
@@ -125,24 +136,35 @@ class ReconciliationEngine:
                         msg = (
                             f"QTY_MISMATCH: {local_sym} "
                             f"bot_expected={expected_qty} samco_actual={samco_qty} "
-                            f"— manual review needed"
+                            f"— FORCE SYNC from broker"
                         )
                         logger.warning("RECONCILE: %s", msg)
                         result["issues_found"] += 1
                         result["actions_taken"].append(msg)
 
+                        # AUTHORITATIVE ACTION: Update quantities from broker
+                        await self._force_sync_from_broker(positions)
+
             # ── 4. P&L drift ─────────────────────────────
+            # CRITICAL: Force sync P&L from broker
             samco_pnl = self._sum_tradebook_pnl(trades)
             if samco_pnl != 0 and abs(samco_pnl - state.daily_pnl) > 500:
                 msg = (
                     f"PNL_MISMATCH: bot=₹{state.daily_pnl:.2f} "
+                    f"samco=₹{state.daily_pnl:.2f} "
                     f"samco=₹{samco_pnl:.2f} "
                     f"diff=₹{abs(samco_pnl - state.daily_pnl):.2f} "
-                    f"— manual review needed"
+                    f"— FORCE SYNC from broker"
                 )
                 logger.warning("RECONCILE: %s", msg)
                 result["issues_found"] += 1
                 result["actions_taken"].append(msg)
+
+                # AUTHORITATIVE ACTION: Update P&L from broker
+                await self.state_manager.update(
+                    daily_pnl=samco_pnl,
+                    live_pnl=samco_pnl
+                )
 
             if result["issues_found"] == 0:
                 logger.info("Reconciliation OK — no issues")
@@ -234,3 +256,85 @@ class ReconciliationEngine:
                     except (ValueError, TypeError):
                         pass
         return round(total, 2)
+
+    async def _force_sync_from_broker(self, positions: list[dict]) -> None:
+        """
+        AUTHORITATIVE: Force synchronize internal state from broker positions.
+
+        This method makes the broker the source of truth and overrides
+        any conflicting internal state.
+        """
+        try:
+            logger.info("🔧 FORCE SYNC: Updating internal state from broker positions")
+
+            # Rebuild positions dict from broker data
+            broker_positions = {}
+            total_pnl = 0.0
+
+            for pos in positions:
+                symbol = pos.get("tradingSymbol", "")
+                if not symbol or "NIFTY" not in symbol.upper():
+                    continue
+
+                net_qty = self._net_qty(pos)
+                if net_qty == 0:
+                    continue
+
+                broker_positions[symbol] = net_qty
+
+                # Extract P&L
+                pnl = 0.0
+                for key in ("pnl", "unrealizedPnl", "profitLoss"):
+                    val = pos.get(key)
+                    if val is not None:
+                        try:
+                            pnl = float(str(val).replace(",", "").replace("₹", "").strip())
+                            break
+                        except (ValueError, TypeError):
+                            pass
+                total_pnl += pnl
+
+            # Update state with broker data
+            await self.state_manager.update(
+                positions=broker_positions,
+                live_pnl=total_pnl,
+                unrealized_pnl=total_pnl
+            )
+
+            # Reconstruct active trade if positions exist
+            if broker_positions:
+                # Find the primary position (largest quantity)
+                primary_symbol = max(broker_positions.keys(),
+                                   key=lambda s: abs(broker_positions[s]))
+
+                # Find position details
+                primary_pos = None
+                for pos in positions:
+                    if pos.get("tradingSymbol") == primary_symbol:
+                        primary_pos = pos
+                        break
+
+                if primary_pos:
+                    active_trade = {
+                        "symbol": primary_symbol,
+                        "qty": abs(broker_positions[primary_symbol]),
+                        "entry_price": float(primary_pos.get("averagePrice") or
+                                           primary_pos.get("avgPrice") or 0),
+                        "current_price": float(primary_pos.get("ltp") or 0),
+                        "entry_time": datetime.now(IST).isoformat(),  # Approximate
+                        "unrealized_pnl": float(primary_pos.get("pnl") or 0)
+                    }
+                    await self.state_manager.update(active_trade=active_trade)
+                    logger.info(f"✅ FORCE SYNC: Reconstructed active trade: {active_trade}")
+                else:
+                    logger.warning("FORCE SYNC: Could not find position details for reconstruction")
+            else:
+                # No positions, clear active trade
+                await self.state_manager.update(active_trade=None)
+                logger.info("✅ FORCE SYNC: Cleared active trade (no positions)")
+
+            logger.info(f"✅ FORCE SYNC: Completed - {len(broker_positions)} positions, P&L: ₹{total_pnl}")
+
+        except Exception as exc:
+            logger.error(f"❌ FORCE SYNC failed: {exc}", exc_info=True)
+            # Don't raise - reconciliation should continue
