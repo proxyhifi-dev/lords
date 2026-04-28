@@ -233,30 +233,42 @@ class SamcoClient:
         return False
 
     async def get_positions(self) -> list[dict]:
-        """Get current positions. NOTE: This may not be available in all SAMCO SDK versions."""
+        """Return current positions as normalized list of dicts."""
         try:
             await self.ensure_session()
-            # Try to get positions - this method may not exist in all SDK versions
             bridge = self._get_bridge()
             result = await self._call_sdk(
                 lambda: bridge.get_positions_data(position_type=bridge.POSITION_TYPE_NET),
                 "get_positions_data",
             )
-            return result if isinstance(result, list) else []
+            positions = (
+                result.get("positionDetails")
+                if isinstance(result, dict) else result
+            )
+            if isinstance(positions, dict):
+                positions = [positions]
+            return positions if isinstance(positions, list) else []
         except Exception as exc:
             logger.warning(f"get_positions_data not available or failed: {exc}")
-            # Return empty list - positions will be handled via trade book
             return []
 
     async def get_trade_book(self) -> list[dict]:
-        """Get trade book for the day."""
+        """Return today's trade book as normalized list of dicts."""
         try:
             await self.ensure_session()
             result = await self._call_sdk(
                 lambda: self._get_bridge().get_trade_book(),
                 "get_trade_book",
             )
-            return result if isinstance(result, list) else []
+            trades = (
+                result.get("tradeBookDetails")
+                or result.get("data")
+                or result.get("trades")
+                or []
+            ) if isinstance(result, dict) else result
+            if isinstance(trades, dict):
+                trades = [trades]
+            return trades if isinstance(trades, list) else []
         except Exception as exc:
             logger.warning(f"get_trade_book failed: {exc}")
             return []
@@ -275,6 +287,91 @@ class SamcoClient:
             logger.warning(f"get_order_book not available or failed: {exc}")
             # Return empty list - orders will be tracked internally
             return []
+
+    # ── FILL PRICE FROM TRADEBOOK ─────────────────────
+    async def get_actual_fill_price(self, order_id: str) -> float | None:
+        """
+        Fetch average fill price for a completed order from trade book/order status.
+        Paper orders return None (caller should use LTP fallback).
+        """
+        if order_id.startswith("PAPER-"):
+            return None
+
+        try:
+            trades = await self.get_trade_book()
+            for trade in trades:
+                trade_oid = str(trade.get("orderNumber") or trade.get("orderId") or "")
+                if trade_oid != str(order_id):
+                    continue
+                for key in ("avgFillPrice", "averagePrice", "price",
+                            "fillPrice", "tradedPrice", "lastTradedPrice"):
+                    val = trade.get(key)
+                    if val is None:
+                        continue
+                    try:
+                        price = float(str(val).replace(",", "").strip())
+                        if price > 0:
+                            return price
+                    except (TypeError, ValueError):
+                        continue
+        except Exception as exc:
+            logger.warning("get_actual_fill_price tradebook error order=%s: %s", order_id, exc)
+
+        try:
+            resp = await self.get_order_status(order_id)
+            data = resp.get("orderDetails") or resp.get("data") or resp
+            if isinstance(data, list):
+                data = data[0] if data else {}
+            for key in ("avgFillPrice", "averagePrice", "price", "filledPrice"):
+                val = data.get(key)
+                if val is None:
+                    continue
+                try:
+                    price = float(str(val).replace(",", "").strip())
+                    if price > 0:
+                        return price
+                except (TypeError, ValueError):
+                    continue
+        except Exception as exc:
+            logger.warning("get_actual_fill_price order_status fallback error: %s", exc)
+
+        logger.warning("Could not determine fill price for order=%s — using LTP fallback", order_id)
+        return None
+
+    async def place_order_and_wait_fill(
+        self,
+        symbol: str,
+        side: str,
+        quantity: int,
+        exchange: str = "NFO",
+        max_fill_wait: int = 10,
+    ) -> tuple[str | None, float | None]:
+        """
+        Place order -> wait for fill -> return (order_id, avg_fill_price).
+        Returns (None, None) if placement fails.
+        Returns (order_id, None) if fill not confirmed in time.
+        """
+        resp = await self.place_order(
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            exchange=exchange,
+        )
+        order_id = resp.get("orderNumber") or resp.get("orderId") or resp.get("order_id")
+        if not order_id:
+            logger.error(
+                "place_order_and_wait_fill: no order_id side=%s symbol=%s resp=%s",
+                side, symbol, resp,
+            )
+            return None, None
+
+        filled = await self.confirm_fill(order_id, max_attempts=max_fill_wait)
+        if not filled:
+            logger.error("place_order_and_wait_fill: fill not confirmed order=%s", order_id)
+            return order_id, None
+
+        fill_price = await self.get_actual_fill_price(order_id)
+        return order_id, fill_price
 
     # ── PARSE SPOT ────────────────────────────────────
     @staticmethod
@@ -440,122 +537,3 @@ def get_weekly_expiry() -> date:
 def get_expiry_api() -> str:
     # SAMCO expiry format: DDMMMYYYY (e.g. 21APR2026)
     return get_weekly_expiry().strftime("%d%b%Y").upper()
-
-    # ── FILL PRICE FROM TRADEBOOK (v5.0) ─────────────
-    async def get_actual_fill_price(self, order_id: str) -> float | None:
-        """
-        Fetch the average fill price for a completed order from SAMCO tradeBook.
-        Returns avgFillPrice if available, else None.
-        Paper orders return None (caller uses LTP as fallback).
-        """
-        if order_id.startswith("PAPER-"):
-            return None  # paper: caller uses LTP
-
-        try:
-            result = await self._call_sdk(
-                lambda: self._get_bridge().get_trade_book(),
-                "get_trade_book",
-            )
-            trades = (result.get("tradeBookDetails")
-                      or result.get("data")
-                      or result.get("trades")
-                      or [])
-            if isinstance(trades, dict):
-                trades = [trades]
-
-            for t in trades:
-                if str(t.get("orderNumber") or t.get("orderId") or "") == str(order_id):
-                    for key in ("avgFillPrice", "averagePrice", "price",
-                                "fillPrice", "tradedPrice", "lastTradedPrice"):
-                        val = t.get(key)
-                        if val is not None:
-                            try:
-                                p = float(str(val).replace(",", "").strip())
-                                if p > 0:
-                                    logger.info("Fill price order=%s avgFillPrice=%.2f", order_id, p)
-                                    return p
-                            except (ValueError, TypeError):
-                                continue
-        except Exception as exc:
-            logger.warning("get_actual_fill_price error order=%s: %s", order_id, exc)
-
-        # Fallback: try order status for fill price
-        try:
-            resp = await self.get_order_status(order_id)
-            data = resp.get("orderDetails") or resp.get("data") or resp
-            if isinstance(data, list): data = data[0] if data else {}
-            for key in ("avgFillPrice", "averagePrice", "price", "filledPrice"):
-                val = data.get(key)
-                if val is not None:
-                    try:
-                        p = float(str(val).replace(",", "").strip())
-                        if p > 0:
-                            logger.info("Fill price (order status) order=%s price=%.2f", order_id, p)
-                            return p
-                    except (ValueError, TypeError):
-                        continue
-        except Exception as exc:
-            logger.warning("get_actual_fill_price order_status fallback error: %s", exc)
-
-        logger.warning("Could not determine fill price for order=%s — will use LTP fallback", order_id)
-        return None
-
-    async def place_order_and_wait_fill(
-        self,
-        symbol: str,
-        side: str,
-        quantity: int,
-        exchange: str = "NFO",
-        max_fill_wait: int = 10,
-    ) -> tuple[str | None, float | None]:
-        """
-        Place order → wait for fill → return (order_id, avg_fill_price).
-        Returns (None, None) if order fails or fill not confirmed.
-        avg_fill_price is None for paper mode — caller uses LTP.
-        """
-        resp = await self.place_order(symbol=symbol, side=side,
-                                      quantity=quantity, exchange=exchange)
-        order_id = (resp.get("orderNumber") or resp.get("orderId")
-                    or resp.get("order_id"))
-        if not order_id:
-            logger.error("place_order_and_wait_fill: no order_id side=%s symbol=%s resp=%s",
-                         side, symbol, resp)
-            return None, None
-
-        filled = await self.confirm_fill(order_id, max_attempts=max_fill_wait)
-        if not filled:
-            logger.error("place_order_and_wait_fill: fill not confirmed order=%s", order_id)
-            return order_id, None  # Return ID so caller can retry/reconcile
-
-        fill_price = await self.get_actual_fill_price(order_id)
-        return order_id, fill_price
-
-    async def get_trade_book(self) -> list[dict]:
-        """Return today's trade book as a list of trade dicts."""
-        await self.ensure_session()
-        result = await self._call_sdk(
-            lambda: self._get_bridge().get_trade_book(),
-            "get_trade_book",
-        )
-        trades = (result.get("tradeBookDetails")
-                  or result.get("data")
-                  or result.get("trades")
-                  or [])
-        if isinstance(trades, dict):
-            trades = [trades]
-        return trades if isinstance(trades, list) else []
-
-    async def get_positions(self) -> list[dict]:
-        """Return current open positions."""
-        await self.ensure_session()
-        result = await self._call_sdk(
-            lambda: self._get_bridge().get_positions_data(),
-            "get_positions",
-        )
-        positions = (result.get("positionDetails")
-                     or result.get("data")
-                     or result.get("positions")
-                     or [])
-        if isinstance(positions, dict):
-            positions = [positions]
-        return positions if isinstance(positions, list) else []

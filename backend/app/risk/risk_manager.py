@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, time
 from typing import Dict, Any
 import asyncio
+from zoneinfo import ZoneInfo
 
 from backend.app.core.config_loader import get_settings
 from backend.app.core.event_bus import EventBus
@@ -13,6 +14,7 @@ from backend.app.utils.logger import get_logger
 
 settings = get_settings()
 logger = get_logger("risk_manager")
+IST = ZoneInfo("Asia/Kolkata")
 
 class RiskManager:
     """
@@ -194,9 +196,18 @@ class RiskManager:
     
     async def _check_market_conditions(self, payload) -> bool:
         """Market condition validation."""
-        now = datetime.now().time()
-        if now > settings.no_entry_after:
-            await self._block(f"late_entry_{settings.no_entry_after}")
+        now = datetime.now(IST).time()
+        cutoff_raw = getattr(settings, "no_entry_after", "13:30")
+        if isinstance(cutoff_raw, str):
+            h, m = map(int, cutoff_raw.split(":"))
+            cutoff = time(h, m)
+        elif isinstance(cutoff_raw, time):
+            cutoff = cutoff_raw
+        else:
+            cutoff = time(13, 30)
+
+        if now > cutoff:
+            await self._block(f"late_entry_{cutoff.strftime('%H:%M')}")
             return False
         
         if payload.get("price", 0) <= 0:
