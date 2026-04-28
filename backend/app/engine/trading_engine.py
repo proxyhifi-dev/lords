@@ -408,7 +408,10 @@ class TradingEngine:
             trade["t1_pnl"] = t1_pnl
             trade["t1_exit_price"] = exit_price
 
-            await self.state_manager.update(active_trade=trade)
+            await self.state_manager.update(
+                active_trade=trade,
+                daily_pnl=round(state.daily_pnl + t1_pnl, 2),
+            )
 
             logger.info(
                 "✅ PARTIAL BOOKED: %s t1_pnl=₹%.2f remaining_qty=%d",
