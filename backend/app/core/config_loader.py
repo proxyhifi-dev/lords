@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     capital: float = 50_000.0
     max_daily_loss: float = 5_000.0
     max_trades: int = 3
+    max_consecutive_losses: int = 3
+    max_drawdown_pct: float = 0.10
 
     # ── ORDER ─────────────────────────────────────────
     order_qty: int = 65
@@ -36,6 +38,9 @@ class Settings(BaseSettings):
     min_entry_premium: float = 30.0
     min_option_volume: int = 0
     otm_distance: int = 1
+    max_spread_pct: float = 0.05
+    max_breakout_extension_pct: float = 0.02
+    max_option_spike_pct: float = 0.15
 
     # ── ORB SETTINGS ──────────────────────────────────
     orb_duration_seconds: int = 900

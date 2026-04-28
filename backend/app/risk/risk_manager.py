@@ -132,6 +132,11 @@ class RiskManager:
         if state.trade_count >= settings.max_trades:
             await self._block(f"max_trades_exceeded_{settings.max_trades}")
             return False
+
+        if getattr(state, "consecutive_losses", 0) >= settings.max_consecutive_losses:
+            await self.state_manager.update(trading_enabled=False)
+            await self._block(f"max_consecutive_losses_{state.consecutive_losses}")
+            return False
         
         if state.daily_pnl <= -abs(settings.max_daily_loss):
             await self.state_manager.update(trading_enabled=False)
