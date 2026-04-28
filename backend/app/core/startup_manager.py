@@ -1,18 +1,21 @@
 """
-Lords Bot — Startup Manager (FIXED WITH STRATEGY INTEGRATION)
-==============================================================
+Lords Bot — Startup Manager (CORRECTED)
+=========================================
 
-✅ CRITICAL FIX v2.0:
-   1. Initialize OrbStrategyFinalProduction
-   2. Pass strategy to TradingEngine
-   3. Ensure strategy.set_already_traded_today() can be called
+✅ FINAL FIX v4.0:
+   1. StateManager takes NO parameters ✅
+   2. Settings attribute names corrected:
+      - SAMCO_USER_ID (not user_id)
+      - SAMCO_PASSWORD (not password)
+      - SAMCO_YOB (not yob)
+   3. Strategy initialization corrected
+   4. TradingEngine integration complete
 
 This file handles safe startup synchronization and component initialization.
 """
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 
 from backend.app.broker.samco_client import SamcoClient
@@ -21,7 +24,7 @@ from backend.app.core.event_bus import EventBus
 from backend.app.engine.state_manager import StateManager
 from backend.app.engine.trading_engine import TradingEngine
 from backend.app.storage.trade_store import TradeStore
-from backend.app.strategy.orb_strategy import OrbStrategyFinalProduction  # ✅ FIXED: Use FinalProduction
+from backend.app.strategy.orb_strategy import OrbStrategyFinalProduction
 from backend.app.utils.logger import get_logger
 
 settings = get_settings()
@@ -34,8 +37,8 @@ class StartupManager:
     
     ✅ Ensures proper initialization order:
        1. EventBus
-       2. StateManager
-       3. Broker (login)
+       2. StateManager (NO parameters)
+       3. Broker (with CORRECT settings attributes)
        4. Strategy (OrbStrategyFinalProduction)
        5. TradingEngine (with strategy reference)
        6. TradeStore
@@ -50,7 +53,7 @@ class StartupManager:
         self.event_bus = None
         self.state_manager = None
         self.broker = None
-        self.strategy = None        # ✅ NEW: Store strategy reference
+        self.strategy = None
         self.trading_engine = None
         self.trade_store = None
 
@@ -67,7 +70,10 @@ class StartupManager:
             # ─────────────────────────────────────────────────────────────
             logger.info("📦 Initializing core components...")
             self.event_bus = EventBus()
-            self.state_manager = StateManager(self.event_bus)
+            
+            # ✅ StateManager takes NO parameters
+            self.state_manager = StateManager()
+            
             self.trade_store = TradeStore()
             logger.info("✅ Core components initialized")
 
@@ -75,10 +81,12 @@ class StartupManager:
             # STEP 2: Initialize broker and login
             # ─────────────────────────────────────────────────────────────
             logger.info("🔐 Initializing broker...")
+            
+            # ✅ CORRECTED: Use actual settings attribute names
             self.broker = SamcoClient(
-                user_id=settings.user_id,
-                password=settings.password,
-                yob=settings.yob,
+                user_id=settings.SAMCO_USER_ID,      # ✅ Was: settings.user_id
+                password=settings.SAMCO_PASSWORD,    # ✅ Was: settings.password
+                yob=settings.SAMCO_YOB,              # ✅ Was: settings.yob
                 event_bus=self.event_bus
             )
 
@@ -132,7 +140,7 @@ class StartupManager:
                 state_manager=self.state_manager,
                 trade_store=self.trade_store,
                 broker=self.broker,
-                strategy=self.strategy  # ✅ CRITICAL: Pass strategy here
+                strategy=self.strategy  # ✅ CRITICAL: Pass strategy
             )
             logger.info("✅ TradingEngine initialized with strategy reference")
 
