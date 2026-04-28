@@ -166,10 +166,22 @@ class TradingEngine:
                 # 📊 Get quote and LTP
                 quote = await self.broker.get_quote(symbol_name=symbol, exchange="NFO")
                 ltp   = self.broker.parse_ltp(quote)
+                bid, ask = self.broker.parse_bid_ask(quote)
                 if not ltp:
                     logger.warning("❌ LTP UNAVAILABLE: %s", symbol)
                     return
                 logger.info("💰 LTP FETCHED: %s = ₹%.2f", symbol, ltp)
+
+                if bid and ask and ask > bid:
+                    spread = ask - bid
+                    spread_pct = spread / ask
+                    max_spread_pct = getattr(settings, "max_spread_pct", 0.05)
+                    if spread_pct > max_spread_pct:
+                        logger.warning(
+                            "❌ SPREAD TOO WIDE: %.2f%% > %.2f%% symbol=%s bid=%.2f ask=%.2f",
+                            spread_pct * 100, max_spread_pct * 100, symbol, bid, ask
+                        )
+                        return
 
                 # 🛡️ Premium check
                 if ltp < settings.min_entry_premium:
@@ -204,7 +216,8 @@ class TradingEngine:
                     logger.error("❌ BUY FILL NOT CONFIRMED: order=%s", order_id)
                     return
 
-                entry_price = fill_price if fill_price else ltp
+                conservative_ltp = ask if ask else ltp
+                entry_price = fill_price if fill_price else conservative_ltp
                 logger.info("💰 BUY FILL CONFIRMED: order=%s fill=₹%.2f ltp=₹%.2f mode=%s",
                            order_id, entry_price, ltp, settings.mode.upper())
 
@@ -398,7 +411,10 @@ class TradingEngine:
                 )
                 return
 
-            exit_price = fill_price if fill_price else ltp
+            quote = await self.broker.get_quote(symbol_name=symbol, exchange="NFO")
+            bid, _ = self.broker.parse_bid_ask(quote)
+            conservative_ltp = bid if bid else ltp
+            exit_price = fill_price if fill_price else conservative_ltp
             t1_pnl = round((exit_price - trade["entry_price"]) * t1_qty, 2)
 
             logger.info("💰 T1 PARTIAL FILL: order=%s fill=₹%.2f pnl=₹%.2f",
@@ -451,7 +467,10 @@ class TradingEngine:
                 )
                 return
 
-            exit_price = fill_price if fill_price else ltp
+            quote = await self.broker.get_quote(symbol_name=symbol, exchange="NFO")
+            bid, _ = self.broker.parse_bid_ask(quote)
+            conservative_ltp = bid if bid else ltp
+            exit_price = fill_price if fill_price else conservative_ltp
             t2_pnl = round((exit_price - trade["entry_price"]) * t2_qty, 2)
             total_pnl = round(trade.get("t1_pnl", 0) + t2_pnl, 2)
             new_daily = round(state.daily_pnl + t2_pnl, 2)
@@ -518,7 +537,10 @@ class TradingEngine:
                     {"symbol": symbol, "qty": qty, "reason": reason})
                 return
 
-            exit_price = fill_price if fill_price else ltp
+            quote = await self.broker.get_quote(symbol_name=symbol, exchange="NFO")
+            bid, _ = self.broker.parse_bid_ask(quote)
+            conservative_ltp = bid if bid else ltp
+            exit_price = fill_price if fill_price else conservative_ltp
             exit_pnl   = round((exit_price - trade["entry_price"]) * qty, 2)
             total_pnl  = round(trade.get("t1_pnl", 0) + exit_pnl, 2)
             new_daily  = round(state.daily_pnl + exit_pnl, 2)

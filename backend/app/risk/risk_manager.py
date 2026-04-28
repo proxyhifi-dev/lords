@@ -51,41 +51,41 @@ class RiskManager:
                 return
             
             # Step 2: Comprehensive risk evaluation
-            async with self.state_manager.lock:
-                state = await self.state_manager.snapshot()
-                payload = event.payload or {}
-                
-                # Core guards
-                if not await self._check_core_guards(state, payload):
-                    return
-                
-                # Portfolio-level risk
-                if not await self._check_portfolio_risk(state, payload):
-                    return
-                
-                # Trade-specific risk
-                if not await self._check_trade_risk(state, payload):
-                    return
-                
-                # Market conditions
-                if not await self._check_market_conditions(payload):
-                    return
-                
-                # Liquidity validation
-                if not await self._check_liquidity(payload):
-                    return
-                
-                # ✅ APPROVED - Log with full context
-                logger.info("RISK_APPROVED", extra={
-                    "signal": payload.get("signal"),
-                    "qty": payload.get("qty", settings.order_qty),
-                    "equity": state.equity,
-                    "exposure_pct": (payload.get("notional", 0) / state.equity) * 100,
-                    "trace_id": payload.get("trace_id")
-                })
-                
-                await self.state_manager.update(signal=None, signal_meta=None)
-                await self.event_bus.publish("RISK_APPROVED", payload)
+            state = await self.state_manager.snapshot()
+            payload = event.payload or {}
+
+            # Core guards
+            if not await self._check_core_guards(state, payload):
+                return
+
+            # Portfolio-level risk
+            if not await self._check_portfolio_risk(state, payload):
+                return
+
+            # Trade-specific risk
+            if not await self._check_trade_risk(state, payload):
+                return
+
+            # Market conditions
+            if not await self._check_market_conditions(payload):
+                return
+
+            # Liquidity validation
+            if not await self._check_liquidity(payload):
+                return
+
+            equity = self._equity(state)
+            # ✅ APPROVED - Log with full context
+            logger.info("RISK_APPROVED", extra={
+                "signal": payload.get("signal"),
+                "qty": payload.get("qty", settings.order_qty),
+                "equity": equity,
+                "exposure_pct": (payload.get("notional", 0) / equity) * 100 if equity else 0.0,
+                "trace_id": payload.get("trace_id")
+            })
+
+            await self.state_manager.update(signal=None, signal_meta=None)
+            await self.event_bus.publish("RISK_APPROVED", payload)
                 
         except Exception as exc:
             logger.error(f"Risk evaluation failed: {exc}", exc_info=True)
@@ -146,9 +146,10 @@ class RiskManager:
     
     async def _check_portfolio_risk(self, state, payload) -> bool:
         """Portfolio-level risk controls."""
+        equity = self._equity(state)
         # Equity check with buffer
         equity_buffer = 0.05  # 5% buffer
-        if state.equity < settings.capital * (1 - equity_buffer):
+        if equity < settings.capital * (1 - equity_buffer):
             await self.state_manager.update(trading_enabled=False)
             await self._block("insufficient_equity")
             return False
@@ -156,7 +157,7 @@ class RiskManager:
         # Max drawdown protection
         max_drawdown_pct = getattr(settings, "max_drawdown_pct", 0.10)
         if state.peak_equity > 0:
-            drawdown = (state.peak_equity - state.equity) / state.peak_equity
+            drawdown = (state.peak_equity - equity) / state.peak_equity
             if drawdown > max_drawdown_pct:
                 await self.state_manager.update(trading_enabled=False)
                 await self._block(f"max_drawdown_exceeded_{drawdown:.1%}")
@@ -167,7 +168,10 @@ class RiskManager:
         current_exposure = sum(state.positions.values()) if hasattr(state, 'positions') else 0
         trade_exposure = payload.get("notional", 0)
         
-        if (current_exposure + trade_exposure) / state.equity > max_exposure_pct:
+        if equity <= 0:
+            await self._block("equity_not_positive")
+            return False
+        if (current_exposure + trade_exposure) / equity > max_exposure_pct:
             await self._block("portfolio_exposure_exceeded")
             return False
         
@@ -175,6 +179,7 @@ class RiskManager:
     
     async def _check_trade_risk(self, state, payload) -> bool:
         """Trade-specific risk controls."""
+        equity = self._equity(state)
         qty = payload.get("qty", settings.order_qty)
         max_qty = getattr(settings, "max_qty", settings.order_qty * 5)
         
@@ -186,7 +191,10 @@ class RiskManager:
         max_trade_risk_pct = getattr(settings, "max_trade_risk_pct", 0.02)  # 2%
         trade_risk = payload.get("notional", 0) * payload.get("risk_pct", 0.10)  # Assume 10% risk
         
-        if trade_risk / state.equity > max_trade_risk_pct:
+        if equity <= 0:
+            await self._block("equity_not_positive")
+            return False
+        if trade_risk / equity > max_trade_risk_pct:
             await self._block("trade_risk_exceeded")
             return False
         
@@ -195,7 +203,9 @@ class RiskManager:
     async def _check_market_conditions(self, payload) -> bool:
         """Market condition validation."""
         now = datetime.now().time()
-        if now > settings.no_entry_after:
+        h, m = map(int, str(settings.no_entry_after).split(":"))
+        no_entry_after = time(h, m)
+        if now > no_entry_after:
             await self._block(f"late_entry_{settings.no_entry_after}")
             return False
         
@@ -239,6 +249,10 @@ class RiskManager:
             "details": details,
             "timestamp": datetime.now().isoformat()
         })
+
+    @staticmethod
+    def _equity(state) -> float:
+        return settings.capital + float(getattr(state, "realized_pnl", 0.0)) + float(getattr(state, "unrealized_pnl", 0.0))
 
 
 class CircuitBreaker:

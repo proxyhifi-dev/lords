@@ -82,6 +82,8 @@ class MarketScheduler:
         self._last_closed_log   = 0.0
         self._daily_reset_date  = ""
         self._last_tick_time = _time.time()
+        self._last_good_quote_time = _time.time()
+        self._consecutive_quote_failures = 0
         self._last_broker_error = 0.0
 
         # Candle builder
@@ -245,8 +247,14 @@ class MarketScheduler:
                     delay = _time.time() - self._last_tick_time
                     if delay > 10:
                         logger.error("Scheduler stalled! delay=%.2fs", delay)
+                    data_stale_seconds = _time.time() - self._last_good_quote_time
+                    if data_stale_seconds > 20:
+                        logger.critical("Dead-man switch: market data stale for %.1fs", data_stale_seconds)
+                        await self._fail_safe_on_data_loss()
                 else:
                     self._last_tick_time = _time.time()
+                    self._last_good_quote_time = _time.time()
+                    self._consecutive_quote_failures = 0
 
                 if not _market_open():
                     now_ts = _time.time()
@@ -277,10 +285,14 @@ class MarketScheduler:
                 self.broker.get_index_quote(settings.nifty_symbol),
                 timeout=3
             )
+            self._last_good_quote_time = _time.time()
+            self._consecutive_quote_failures = 0
         except asyncio.TimeoutError:
             logger.warning("⏰ Broker timeout")
+            self._consecutive_quote_failures += 1
             return
         except RuntimeError as exc:
+            self._consecutive_quote_failures += 1
             now_ts = _time.time()
             if now_ts - self._last_broker_error >= _LOG_INTERVAL:
                 logger.warning("❌ Broker quote unavailable: %s", exc)
@@ -290,6 +302,7 @@ class MarketScheduler:
         spot = SamcoClient.parse_spot(quote)
         if spot is None:
             logger.warning("❌ Spot parsing failed")
+            self._consecutive_quote_failures += 1
             return
 
         logger.info("💰 TICK: spot=%.2f", spot)
@@ -528,6 +541,16 @@ class MarketScheduler:
                 score -= 1
 
         return score
+
+    async def _fail_safe_on_data_loss(self) -> None:
+        """Disable trading and flatten if quote stream is stale."""
+        state = await self.state.snapshot()
+        if state.trading_enabled:
+            await self.state.update(trading_enabled=False)
+            logger.critical("Trading disabled due to stale quote stream")
+        if state.active_trade:
+            logger.critical("Emergency flatten triggered by dead-man switch")
+            await self.flatten_position()
 
     # ── Manual flatten ───────────────────────────────────────
 
