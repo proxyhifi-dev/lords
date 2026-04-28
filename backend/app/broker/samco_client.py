@@ -211,6 +211,15 @@ class SamcoClient:
         )
         return result if isinstance(result, dict) else {}
 
+    async def cancel_order(self, order_id: str) -> dict:
+        """Cancel order by order number."""
+        await self.ensure_session()
+        result = await self._call_sdk(
+            lambda: self._get_bridge().cancel_order(orderNumber=order_id),
+            "cancel_order",
+        )
+        return result if isinstance(result, dict) else {}
+
     async def confirm_fill(self, order_id: str, max_attempts: int = 10, delay: float = 0.5) -> bool:
         """Poll until order fills. Paper orders are always filled."""
         if order_id.startswith("PAPER-"):
@@ -342,6 +351,111 @@ class SamcoClient:
 
         return _extract(quote)
 
+    @staticmethod
+    def parse_bid_ask(quote: dict | None) -> tuple[float | None, float | None]:
+        """Extract best bid/ask from quote payload."""
+        if not quote:
+            return None, None
+
+        def _f(val):
+            if val is None:
+                return None
+            try:
+                f = float(str(val).replace(",", "").strip())
+                return f if f > 0 else None
+            except (TypeError, ValueError):
+                return None
+
+        def _extract(d: dict) -> tuple[float | None, float | None]:
+            bid = None
+            ask = None
+            for key in ("bestBidPrice", "bidPrice", "best_bid", "buyPrice"):
+                bid = _f(d.get(key))
+                if bid:
+                    break
+            for key in ("bestAskPrice", "askPrice", "best_ask", "sellPrice"):
+                ask = _f(d.get(key))
+                if ask:
+                    break
+            return bid, ask
+
+        inner = quote.get("quoteDetails")
+        if isinstance(inner, list) and inner:
+            return _extract(inner[0])
+        if isinstance(inner, dict):
+            return _extract(inner)
+
+        data = quote.get("data")
+        if isinstance(data, list) and data:
+            return _extract(data[0])
+        if isinstance(data, dict):
+            return _extract(data)
+
+        return _extract(quote)
+
+    async def get_actual_fill_price(self, order_id: str) -> float | None:
+        """
+        Fetch average fill price from tradebook/order status.
+        Paper orders return None (caller uses LTP fallback).
+        """
+        if order_id.startswith("PAPER-"):
+            return None
+
+        try:
+            trades = await self.get_trade_book()
+            for t in trades:
+                if str(t.get("orderNumber") or t.get("orderId") or "") == str(order_id):
+                    for key in ("avgFillPrice", "averagePrice", "price", "fillPrice", "tradedPrice", "lastTradedPrice"):
+                        val = t.get(key)
+                        if val is not None:
+                            try:
+                                p = float(str(val).replace(",", "").strip())
+                                if p > 0:
+                                    return p
+                            except (ValueError, TypeError):
+                                continue
+        except Exception as exc:
+            logger.warning("get_actual_fill_price tradebook failed order=%s err=%s", order_id, exc)
+
+        try:
+            resp = await self.get_order_status(order_id)
+            data = resp.get("orderDetails") or resp.get("data") or resp
+            if isinstance(data, list):
+                data = data[0] if data else {}
+            for key in ("avgFillPrice", "averagePrice", "price", "filledPrice"):
+                val = data.get(key)
+                if val is not None:
+                    try:
+                        p = float(str(val).replace(",", "").strip())
+                        if p > 0:
+                            return p
+                    except (ValueError, TypeError):
+                        continue
+        except Exception as exc:
+            logger.warning("get_actual_fill_price status failed order=%s err=%s", order_id, exc)
+        return None
+
+    async def place_order_and_wait_fill(
+        self,
+        symbol: str,
+        side: str,
+        quantity: int,
+        exchange: str = "NFO",
+        max_fill_wait: int = 10,
+    ) -> tuple[str | None, float | None]:
+        """Place order and wait for fill confirmation."""
+        resp = await self.place_order(symbol=symbol, side=side, quantity=quantity, exchange=exchange)
+        order_id = resp.get("orderNumber") or resp.get("orderId") or resp.get("order_id")
+        if not order_id:
+            logger.error("place_order_and_wait_fill no order_id side=%s symbol=%s resp=%s", side, symbol, resp)
+            return None, None
+
+        filled = await self.confirm_fill(order_id, max_attempts=max_fill_wait)
+        if not filled:
+            return order_id, None
+        fill_price = await self.get_actual_fill_price(order_id)
+        return order_id, fill_price
+
     # ── EXCHANGE MAPPER ───────────────────────────────
     def _map_exchange(self, exchange: str) -> str:
         bridge = self._get_bridge()
@@ -440,122 +554,3 @@ def get_weekly_expiry() -> date:
 def get_expiry_api() -> str:
     # SAMCO expiry format: DDMMMYYYY (e.g. 21APR2026)
     return get_weekly_expiry().strftime("%d%b%Y").upper()
-
-    # ── FILL PRICE FROM TRADEBOOK (v5.0) ─────────────
-    async def get_actual_fill_price(self, order_id: str) -> float | None:
-        """
-        Fetch the average fill price for a completed order from SAMCO tradeBook.
-        Returns avgFillPrice if available, else None.
-        Paper orders return None (caller uses LTP as fallback).
-        """
-        if order_id.startswith("PAPER-"):
-            return None  # paper: caller uses LTP
-
-        try:
-            result = await self._call_sdk(
-                lambda: self._get_bridge().get_trade_book(),
-                "get_trade_book",
-            )
-            trades = (result.get("tradeBookDetails")
-                      or result.get("data")
-                      or result.get("trades")
-                      or [])
-            if isinstance(trades, dict):
-                trades = [trades]
-
-            for t in trades:
-                if str(t.get("orderNumber") or t.get("orderId") or "") == str(order_id):
-                    for key in ("avgFillPrice", "averagePrice", "price",
-                                "fillPrice", "tradedPrice", "lastTradedPrice"):
-                        val = t.get(key)
-                        if val is not None:
-                            try:
-                                p = float(str(val).replace(",", "").strip())
-                                if p > 0:
-                                    logger.info("Fill price order=%s avgFillPrice=%.2f", order_id, p)
-                                    return p
-                            except (ValueError, TypeError):
-                                continue
-        except Exception as exc:
-            logger.warning("get_actual_fill_price error order=%s: %s", order_id, exc)
-
-        # Fallback: try order status for fill price
-        try:
-            resp = await self.get_order_status(order_id)
-            data = resp.get("orderDetails") or resp.get("data") or resp
-            if isinstance(data, list): data = data[0] if data else {}
-            for key in ("avgFillPrice", "averagePrice", "price", "filledPrice"):
-                val = data.get(key)
-                if val is not None:
-                    try:
-                        p = float(str(val).replace(",", "").strip())
-                        if p > 0:
-                            logger.info("Fill price (order status) order=%s price=%.2f", order_id, p)
-                            return p
-                    except (ValueError, TypeError):
-                        continue
-        except Exception as exc:
-            logger.warning("get_actual_fill_price order_status fallback error: %s", exc)
-
-        logger.warning("Could not determine fill price for order=%s — will use LTP fallback", order_id)
-        return None
-
-    async def place_order_and_wait_fill(
-        self,
-        symbol: str,
-        side: str,
-        quantity: int,
-        exchange: str = "NFO",
-        max_fill_wait: int = 10,
-    ) -> tuple[str | None, float | None]:
-        """
-        Place order → wait for fill → return (order_id, avg_fill_price).
-        Returns (None, None) if order fails or fill not confirmed.
-        avg_fill_price is None for paper mode — caller uses LTP.
-        """
-        resp = await self.place_order(symbol=symbol, side=side,
-                                      quantity=quantity, exchange=exchange)
-        order_id = (resp.get("orderNumber") or resp.get("orderId")
-                    or resp.get("order_id"))
-        if not order_id:
-            logger.error("place_order_and_wait_fill: no order_id side=%s symbol=%s resp=%s",
-                         side, symbol, resp)
-            return None, None
-
-        filled = await self.confirm_fill(order_id, max_attempts=max_fill_wait)
-        if not filled:
-            logger.error("place_order_and_wait_fill: fill not confirmed order=%s", order_id)
-            return order_id, None  # Return ID so caller can retry/reconcile
-
-        fill_price = await self.get_actual_fill_price(order_id)
-        return order_id, fill_price
-
-    async def get_trade_book(self) -> list[dict]:
-        """Return today's trade book as a list of trade dicts."""
-        await self.ensure_session()
-        result = await self._call_sdk(
-            lambda: self._get_bridge().get_trade_book(),
-            "get_trade_book",
-        )
-        trades = (result.get("tradeBookDetails")
-                  or result.get("data")
-                  or result.get("trades")
-                  or [])
-        if isinstance(trades, dict):
-            trades = [trades]
-        return trades if isinstance(trades, list) else []
-
-    async def get_positions(self) -> list[dict]:
-        """Return current open positions."""
-        await self.ensure_session()
-        result = await self._call_sdk(
-            lambda: self._get_bridge().get_positions_data(),
-            "get_positions",
-        )
-        positions = (result.get("positionDetails")
-                     or result.get("data")
-                     or result.get("positions")
-                     or [])
-        if isinstance(positions, dict):
-            positions = [positions]
-        return positions if isinstance(positions, list) else []
