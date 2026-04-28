@@ -13,7 +13,7 @@ v4.0/v5.0 features:
   • ORB max range guard (skip chaotic days >150pts)
   • _prev_day_close stored at daily reset
   • _orb_frozen_time tracks when ORB froze
-  • ReconciliationEngine wired — startup + every 5 min (live only)
+  • ReconciliationEngine wired — startup + every 5 min
 """
 from __future__ import annotations
 
@@ -142,10 +142,9 @@ class MarketScheduler:
         self.running = True
         await self.state.update(bot_running=True)
 
-        # Startup reconciliation (live mode only — runs once immediately)
-        if settings.is_live:
-            asyncio.create_task(
-                self._reconciler.run_once(), name="reconcile-startup")
+        # Startup reconciliation (runs once immediately in all modes)
+        asyncio.create_task(
+            self._reconciler.run_once(), name="reconcile-startup")
 
         self._tasks = [
             asyncio.create_task(self._loop(),
@@ -157,7 +156,7 @@ class MarketScheduler:
             asyncio.create_task(self._daily_watcher(),
                                 name="daily-reset"),
             asyncio.create_task(self._reconciler.run_loop(300),
-                                name="reconciler"),   # every 5 min, live only
+                                name="reconciler"),   # every 5 min
         ]
         logger.info("All tasks started (%d tasks)", len(self._tasks))
 
@@ -248,7 +247,7 @@ class MarketScheduler:
                     if delay > 10:
                         logger.error("Scheduler stalled! delay=%.2fs", delay)
                     data_stale_seconds = _time.time() - self._last_good_quote_time
-                    if data_stale_seconds > 20:
+                    if data_stale_seconds > settings.deadman_timeout:
                         logger.critical("Dead-man switch: market data stale for %.1fs", data_stale_seconds)
                         await self._fail_safe_on_data_loss()
                 else:

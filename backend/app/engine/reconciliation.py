@@ -1,7 +1,7 @@
 """
 Lords Bot — Trade Reconciliation Engine  v5.1
 ==============================================
-Runs at startup AND every 5 minutes during market hours (live mode only).
+Runs at startup AND every 5 minutes during market hours.
 Compares SAMCO positions + tradebook against local bot state.
 
 Detects and handles:
@@ -52,10 +52,6 @@ class ReconciliationEngine:
         Returns a summary dict with any issues found + actions taken.
         Call at startup and after any reconnect.
         """
-        if not settings.is_live:
-            logger.debug("Reconciliation skipped — paper mode")
-            return {"mode": "paper", "status": "skipped"}
-
         logger.info("Reconciliation check starting")
         result: dict = {
             "timestamp":     datetime.now(IST).isoformat(),
@@ -184,9 +180,6 @@ class ReconciliationEngine:
         while True:
             try:
                 await asyncio.sleep(interval_seconds)
-
-                if not settings.is_live:
-                    continue
 
                 now = datetime.now(IST)
                 if now.weekday() < 5 and 9 <= now.hour < 16:
@@ -324,6 +317,17 @@ class ReconciliationEngine:
                         "entry_time": datetime.now(IST).isoformat(),  # Approximate
                         "unrealized_pnl": float(primary_pos.get("pnl") or 0)
                     }
+                    entry_price = float(active_trade.get("entry_price") or 0.0)
+                    if entry_price > 0:
+                        active_trade["sl_price"] = round(
+                            entry_price * (1 - settings.stop_loss_pct / 100), 2
+                        )
+                        active_trade["t1_price"] = round(
+                            entry_price * (1 + settings.t1_pct / 100), 2
+                        )
+                        active_trade["t2_price"] = round(
+                            entry_price * (1 + settings.t2_pct / 100), 2
+                        )
                     await self.state_manager.update(active_trade=active_trade)
                     logger.info(f"✅ FORCE SYNC: Reconstructed active trade: {active_trade}")
                 else:
