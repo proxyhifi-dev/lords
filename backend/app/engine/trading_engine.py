@@ -1,11 +1,16 @@
 """
-Lords Bot — Trading Engine  v5.1
-=================================
+Lords Bot — Trading Engine v5.2 (FIXED WITH STRATEGY INTEGRATION)
+==================================================================
 Listens to RISK_APPROVED → executes entry → monitors exit.
 
-v5.1 fixes on top of v5.0:
+✅ v5.2 CRITICAL FIX:
+  1. Added strategy parameter to __init__
+  2. Call strategy.set_already_traded_today() AFTER successful entry
+  3. Prevents overtrading (max 1 trade/day)
+  4. Prevents timing bug (flag set only after success, not before)
+
+Based on v5.1 which includes:
   1. Partial fill handling — detects qty filled < qty ordered
-     → records actual filled qty, adjusts SL/T1/T2/PnL accordingly
   2. entry_price = avgFillPrice (NOT ltp)
   3. exit_price  = avgFillPrice (NOT ltp)
   4. SELL retry up to 3 times with emergency market order fallback
@@ -83,11 +88,15 @@ def _parse_filled_qty(order_status: dict, requested_qty: int) -> int:
 class TradingEngine:
 
     def __init__(self, event_bus: EventBus, state_manager,
-                 trade_store: TradeStore, broker: SamcoClient):
+                 trade_store: TradeStore, broker: SamcoClient, strategy=None):
+        """
+        ✅ CRITICAL: Added strategy parameter for daily limit integration
+        """
         self.event_bus     = event_bus
         self.state_manager = state_manager
         self.trade_store   = trade_store
         self.broker        = broker
+        self.strategy      = strategy  # ✅ NEW: Store strategy reference
         self._trade_lock   = asyncio.Lock()
         self._symbol_cache: dict[str, str] = {}
 
@@ -267,6 +276,11 @@ class TradingEngine:
                     strike, signal, t1_qty, t2_qty, order_id
                 )
 
+                # ✅ CRITICAL FIX: Set daily limit ONLY AFTER successful entry
+                if self.strategy:
+                    self.strategy.set_already_traded_today()
+                    logger.info("🔒 Daily trade limit locked (after successful entry)")
+
                 await self.event_bus.publish("TRADE_OPENED", {"trade": trade})
 
             except Exception as exc:
@@ -351,6 +365,58 @@ class TradingEngine:
 
             except Exception as exc:
                 logger.error("Monitor loop: %s", exc, exc_info=True)
+
+    # ── BOOK PARTIAL — T1 ────────────────────────────────────
+    async def _book_partial(self, trade: dict, ltp: float):
+        if trade.get("status") == "CLOSED":
+            logger.info("🚫 BOOK PARTIAL SKIPPED: trade already closed")
+            return
+
+        async with self._trade_lock:
+            state = await self.state_manager.snapshot()
+            if not state.active_trade:
+                logger.warning("🚫 BOOK PARTIAL SKIPPED: no active trade in state")
+                return
+
+            symbol = trade["symbol"]
+            t1_qty = trade.get("t1_qty", trade["qty"] // 2)
+
+            logger.info("🔄 BOOKING PARTIAL: %s qty=%d ltp=₹%.2f",
+                       symbol, t1_qty, ltp)
+
+            sell_id, fill_price = await self._sell_with_retry(
+                symbol, t1_qty, "TARGET_1"
+            )
+            if not sell_id:
+                logger.critical(
+                    "❌ T1 SELL FAILED — position may be open! %s qty=%d",
+                    symbol, t1_qty
+                )
+                await self.event_bus.publish(
+                    "SELL_FAILED_CRITICAL",
+                    {"symbol": symbol, "qty": t1_qty, "reason": "TARGET_1"}
+                )
+                return
+
+            exit_price = fill_price if fill_price else ltp
+            t1_pnl = round((exit_price - trade["entry_price"]) * t1_qty, 2)
+
+            logger.info("💰 T1 PARTIAL FILL: order=%s fill=₹%.2f pnl=₹%.2f",
+                       sell_id, exit_price, t1_pnl)
+
+            trade["t1_booked"] = True
+            trade["t1_pnl"] = t1_pnl
+            trade["t1_exit_price"] = exit_price
+
+            await self.state_manager.update(active_trade=trade)
+
+            logger.info(
+                "✅ PARTIAL BOOKED: %s t1_pnl=₹%.2f remaining_qty=%d",
+                symbol, t1_pnl, trade.get("t2_qty", trade["qty"] // 2)
+            )
+
+            await self.event_bus.publish("PARTIAL_BOOKED", {"trade": trade})
+
      # ── EXIT REMAINING — T2 / Trail ──────────────────────────
     async def _exit_remaining(self, trade: dict, reason: str, ltp: float):
 
