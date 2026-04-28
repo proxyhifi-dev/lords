@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     min_option_volume: int = 0
     otm_distance: int = 1
     max_spread_pct: float = 0.05
+    dynamic_spread_max_pct: float = 0.12
+    dynamic_spread_vol_multiplier: float = 2.0
     max_breakout_extension_pct: float = 0.02
     max_option_spike_pct: float = 0.15
 

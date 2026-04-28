@@ -76,6 +76,7 @@ class StartupManager:
             try:
                 positions = await self.broker.get_positions()
                 orders = await self.broker.get_orders()
+                state = await self.state_manager.snapshot()
 
                 logger.info(
                     "📊 Broker sync → positions=%d orders=%d",
@@ -88,6 +89,20 @@ class StartupManager:
 
                 if orders:
                     logger.warning("⚠️ Open orders found: %d", len(orders))
+
+                has_broker_position = any(self._extract_net_qty(p) != 0 for p in positions)
+                has_local_position = bool(state.active_trade)
+                if has_broker_position != has_local_position:
+                    logger.critical(
+                        "🚨 STARTUP_RECONCILIATION_MISMATCH broker_open=%s local_open=%s — trading disabled",
+                        has_broker_position,
+                        has_local_position,
+                    )
+                    await self.state_manager.update(
+                        trading_enabled=False,
+                        last_risk_breach="startup_reconciliation_mismatch",
+                    )
+                    return False
 
             except Exception as e:
                 logger.warning("⚠️ Broker sync skipped: %s", e)
@@ -149,6 +164,15 @@ class StartupManager:
                 logger.info("✅ Cleanup complete")
         except Exception as e:
             logger.error("Cleanup error: %s", e)
+
+    @staticmethod
+    def _extract_net_qty(position: dict) -> int:
+        for key in ("netQty", "netQuantity", "net_qty", "quantity"):
+            try:
+                return int(float(str(position.get(key, 0)).replace(",", "").strip()))
+            except (TypeError, ValueError):
+                continue
+        return 0
 
 
 # Global instance

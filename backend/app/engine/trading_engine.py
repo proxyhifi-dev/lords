@@ -20,6 +20,7 @@ Based on v5.1 which includes:
 from __future__ import annotations
 
 import asyncio
+from collections import defaultdict, deque
 from datetime import datetime, timezone, time as dtime
 from zoneinfo import ZoneInfo
 
@@ -40,6 +41,8 @@ _FILL_CONFIRM_ATTEMPTS = 8
 _FILL_CONFIRM_DELAY = 0.75
 _EXIT_VERIFY_ATTEMPTS = 4
 _EXIT_VERIFY_DELAY = 1.0
+_ENTRY_MAX_RETRIES = 3
+_ENTRY_RETRY_DELAY = 1.0
 
 
 def _parse_volume(quote: dict) -> int:
@@ -104,6 +107,7 @@ class TradingEngine:
         self._trade_lock   = asyncio.Lock()
         self._symbol_cache: dict[str, str] = {}
         self._fatal_lock = asyncio.Lock()
+        self._ltp_history: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=20))
 
     def _map_signal(self, raw_signal: str) -> str:
         """Map trading signals to option types."""
@@ -177,14 +181,14 @@ class TradingEngine:
                     return
                 logger.info("💰 LTP FETCHED: %s = ₹%.2f", symbol, ltp)
 
+                dynamic_spread_limit = self._compute_dynamic_spread_limit(symbol, ltp)
                 if bid and ask and ask > bid:
                     spread = ask - bid
                     spread_pct = spread / ask
-                    max_spread_pct = getattr(settings, "max_spread_pct", 0.05)
-                    if spread_pct > max_spread_pct:
+                    if spread_pct > dynamic_spread_limit:
                         logger.warning(
-                            "❌ SPREAD TOO WIDE: %.2f%% > %.2f%% symbol=%s bid=%.2f ask=%.2f",
-                            spread_pct * 100, max_spread_pct * 100, symbol, bid, ask
+                            "❌ SPREAD TOO WIDE: %.2f%% > %.2f%% symbol=%s bid=%.2f ask=%.2f ltp=%.2f",
+                            spread_pct * 100, dynamic_spread_limit * 100, symbol, bid, ask, ltp
                         )
                         return
 
@@ -210,13 +214,13 @@ class TradingEngine:
                 requested_qty = self._get_qty(size_label)
                 logger.info("📋 QTY CALCULATED: size='%s' → qty=%d", size_label, requested_qty)
 
-                # 🛒 PLACE BUY ORDER
+                # 🛒 PLACE BUY ORDER WITH GUARANTEED RETRY + TERMINAL CONFIRMATION
                 logger.info("🛒 PLACING BUY ORDER: %s qty=%d", symbol, requested_qty)
-                order_id, fill_price = await self.broker.place_order_and_wait_fill(
-                    symbol=symbol, side="BUY", quantity=requested_qty
+                order_id, fill_price, filled_qty = await self._buy_with_retry(
+                    symbol=symbol, requested_qty=requested_qty
                 )
-                if not order_id:
-                    logger.error("❌ BUY ORDER FAILED: no order_id for %s", symbol)
+                if not order_id or filled_qty <= 0:
+                    logger.error("❌ BUY ORDER FAILED: no executable fill for %s", symbol)
                     return
 
                 # 💰 FILL CONFIRMATION
@@ -229,34 +233,6 @@ class TradingEngine:
                 entry_price = fill_price if fill_price else conservative_ltp
                 logger.info("💰 BUY FILL CONFIRMED: order=%s fill=₹%.2f ltp=₹%.2f mode=%s",
                            order_id, entry_price, ltp, settings.mode.upper())
-
-                # 🔍 PARTIAL FILL DETECTION
-                filled_qty = requested_qty  # default: full fill
-                if not is_paper:
-                    try:
-                        order_status, filled_qty, broker_avg = await self._await_fill_confirmation(
-                            order_id=order_id,
-                            requested_qty=requested_qty,
-                            side="BUY",
-                        )
-                        if broker_avg and not fill_price:
-                            fill_price = broker_avg
-                        if filled_qty < requested_qty:
-                            logger.warning(
-                                "⚠️  PARTIAL FILL DETECTED: requested=%d filled=%d symbol=%s",
-                                requested_qty, filled_qty, symbol
-                            )
-                            remaining = requested_qty - filled_qty
-                            if remaining > 0:
-                                logger.warning(
-                                    "⚠️ BUY PARTIAL REMAINING: cancelling unfilled qty=%d order=%s",
-                                    remaining, order_id
-                                )
-                                await self._safe_cancel_order(order_id)
-                        else:
-                            logger.info("✅ FULL FILL CONFIRMED: qty=%d", filled_qty)
-                    except Exception as exc:
-                        logger.warning("⚠️  COULD NOT VERIFY FILLED QTY: %s — assuming full fill", exc)
 
                 logger.info(
                     "📈 ENTRY SUMMARY: fill=₹%.2f ltp=₹%.2f qty=%d/%d order=%s mode=%s",
@@ -297,6 +273,7 @@ class TradingEngine:
                     active_trade=trade,
                     trade_count=state.trade_count + 1,
                 )
+                await self._validate_post_order_position(symbol, filled_qty, "ENTRY")
 
                 # 🎉 TRADE OPEN LOG
                 logger.info(
@@ -681,6 +658,56 @@ class TradingEngine:
 
         return None, None
 
+    async def _buy_with_retry(self, symbol: str, requested_qty: int) -> tuple[str | None, float | None, int]:
+        """
+        Buy with strict terminal-state checks (FILLED/REJECTED/CANCELLED) and retry.
+        Returns (order_id, fill_price, filled_qty). filled_qty can be partial.
+        """
+        for attempt in range(1, _ENTRY_MAX_RETRIES + 1):
+            try:
+                order_id, fill_price = await self.broker.place_order_and_wait_fill(
+                    symbol=symbol, side="BUY", quantity=requested_qty
+                )
+                if not order_id:
+                    logger.warning("BUY attempt=%d/%d failed: no order_id", attempt, _ENTRY_MAX_RETRIES)
+                    continue
+
+                if order_id.startswith("PAPER-"):
+                    return order_id, fill_price, requested_qty
+
+                status, filled_qty, broker_avg = await self._await_fill_confirmation(
+                    order_id=order_id,
+                    requested_qty=requested_qty,
+                    side="BUY",
+                )
+                if broker_avg and not fill_price:
+                    fill_price = broker_avg
+                data = status.get("orderDetails") or status.get("data") or status
+                if isinstance(data, list):
+                    data = data[0] if data else {}
+                broker_state = str(data.get("orderStatus") or data.get("status") or "").upper()
+                if broker_state in ("REJECTED", "CANCELLED", "CANCELED"):
+                    logger.warning(
+                        "BUY rejected/cancelled attempt=%d/%d order=%s state=%s",
+                        attempt, _ENTRY_MAX_RETRIES, order_id, broker_state
+                    )
+                    continue
+                if filled_qty > 0:
+                    if filled_qty < requested_qty:
+                        await self._safe_cancel_order(order_id)
+                    return order_id, fill_price, filled_qty
+                logger.warning(
+                    "BUY no-fill attempt=%d/%d order=%s state=%s",
+                    attempt, _ENTRY_MAX_RETRIES, order_id, broker_state or "UNKNOWN"
+                )
+            except Exception as exc:
+                logger.error("BUY attempt=%d/%d exception: %s", attempt, _ENTRY_MAX_RETRIES, exc)
+                if attempt == _ENTRY_MAX_RETRIES:
+                    raise
+            if attempt < _ENTRY_MAX_RETRIES:
+                await asyncio.sleep(_ENTRY_RETRY_DELAY * attempt)
+        return None, None, 0
+
     async def emergency_exit_active_trade(self, reason: str = "EMERGENCY") -> bool:
         state = await self.state_manager.snapshot()
         trade = state.active_trade
@@ -713,8 +740,12 @@ class TradingEngine:
                 if not await self.broker.healthcheck():
                     logger.warning("Healthcheck failed — re-login")
                     await self.broker.login()
+                    state = await self.state_manager.snapshot()
+                    if state.active_trade:
+                        raise RuntimeError("Broker healthcheck failed during active trade")
             except Exception as exc:
                 logger.error("Health loop: %s", exc)
+                await self._handle_fatal_exception("health_loop", exc)
 
     # ── HELPERS ──────────────────────────────────────────────
     def _get_qty(self, size_label: str) -> int:
@@ -836,6 +867,12 @@ class TradingEngine:
     async def _ensure_position_closed(self, symbol: str, reason: str, fallback_qty: int) -> bool:
         for attempt in range(1, _EXIT_VERIFY_ATTEMPTS + 1):
             open_qty = await self._get_open_position_qty(symbol)
+            if open_qty < 0:
+                logger.critical(
+                    "🚨 EXIT VALIDATION INCONCLUSIVE: position API unavailable symbol=%s reason=%s",
+                    symbol, reason
+                )
+                return False
             if open_qty <= 0:
                 return True
             logger.warning(
@@ -853,7 +890,7 @@ class TradingEngine:
             positions = await self.broker.get_positions()
         except Exception as exc:
             logger.warning("Position fetch failed for exit validation: %s", exc)
-            return 0
+            return -1
         total = 0
         symbol_upper = str(symbol).upper()
         for pos in positions or []:
@@ -867,6 +904,37 @@ class TradingEngine:
                 except (TypeError, ValueError):
                     continue
         return max(total, 0)
+
+    async def _validate_post_order_position(self, symbol: str, expected_qty: int, context: str) -> None:
+        if expected_qty <= 0:
+            raise RuntimeError(f"{context} invalid expected qty={expected_qty}")
+        observed_qty = await self._get_open_position_qty(symbol)
+        if observed_qty < 0:
+            raise RuntimeError(f"{context} position check failed: broker positions unavailable")
+        if observed_qty < expected_qty:
+            raise RuntimeError(
+                f"{context} position mismatch expected>={expected_qty} observed={observed_qty}"
+            )
+
+    def _compute_dynamic_spread_limit(self, symbol: str, ltp: float) -> float:
+        history = self._ltp_history[symbol]
+        history.append(float(ltp))
+        base_limit = float(getattr(settings, "max_spread_pct", 0.05))
+        hard_cap = float(getattr(settings, "dynamic_spread_max_pct", 0.12))
+        vol_multiplier = float(getattr(settings, "dynamic_spread_vol_multiplier", 2.0))
+        if ltp <= 50:
+            liquidity_floor = 0.08
+        elif ltp <= 100:
+            liquidity_floor = 0.06
+        else:
+            liquidity_floor = 0.04
+        if len(history) < 3:
+            return min(max(base_limit, liquidity_floor), hard_cap)
+        max_ltp = max(history)
+        min_ltp = min(history)
+        realized_vol = ((max_ltp - min_ltp) / ltp) if ltp > 0 else 0.0
+        dynamic = max(base_limit, liquidity_floor, realized_vol * vol_multiplier)
+        return min(dynamic, hard_cap)
 
     async def _handle_fatal_exception(self, context: str, exc: Exception) -> None:
         async with self._fatal_lock:
