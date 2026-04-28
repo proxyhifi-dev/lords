@@ -147,11 +147,19 @@ class StateManager:
     
     def _init_redis(self):
         """Initialize Redis connection for caching."""
+        use_redis = os.getenv("USE_REDIS")
+
+        if use_redis != "true":
+            logger.info(f"🚫 Redis disabled (USE_REDIS={use_redis})")
+            self._redis = None
+            return
+
         try:
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
             self._redis = redis.from_url(redis_url, decode_responses=True)
+            logger.info("✅ Redis client initialized")
         except Exception as exc:
-            logger.warning(f"Redis initialization failed, using memory cache: {exc}")
+            logger.warning(f"Redis init failed: {exc}")
             self._redis = None
     
     async def snapshot(self) -> RuntimeState:
@@ -166,8 +174,8 @@ class StateManager:
                         state = RuntimeState(**state_dict)
                         if state.validate():
                             return state
-                except Exception as exc:
-                    logger.warning(f"Cache read failed: {exc}")
+                except Exception:
+                    self._redis = None
             
             # Fallback to database
             state = self._load_state()
@@ -179,8 +187,8 @@ class StateManager:
             if self._redis:
                 try:
                     await self._redis.set("state", json.dumps(asdict(state)), ex=30)
-                except Exception as exc:
-                    logger.warning(f"Cache write failed: {exc}")
+                except Exception:
+                    self._redis = None
             
             return state
     
@@ -243,8 +251,8 @@ class StateManager:
                 if self._redis:
                     try:
                         await self._redis.set("state", json.dumps(asdict(self._state)), ex=30)
-                    except Exception as exc:
-                        logger.warning(f"Cache update failed: {exc}")
+                    except Exception:
+                        self._redis = None
                 
                 # Clear cache
                 self._cache.clear()

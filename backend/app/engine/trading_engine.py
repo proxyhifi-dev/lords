@@ -91,7 +91,17 @@ class TradingEngine:
         self._trade_lock   = asyncio.Lock()
         self._symbol_cache: dict[str, str] = {}
 
+    def _map_signal(self, raw_signal: str) -> str:
+        """Map trading signals to option types."""
+        if raw_signal == "LONG":
+            return "CALL"
+        elif raw_signal == "SHORT":
+            return "PUT"
+        else:
+            raise ValueError(f"Invalid signal: {raw_signal}. Expected LONG or SHORT.")
+
     async def run(self):
+        logger.info("TradingEngine started")
         await asyncio.gather(
             self._entry_listener(),
             self._monitor_loop(),
@@ -100,8 +110,10 @@ class TradingEngine:
 
     # ── ENTRY ────────────────────────────────────────────────
     async def _entry_listener(self):
+        logger.info("TradingEngine listening for RISK_APPROVED events")
         queue = self.event_bus.subscribe("RISK_APPROVED")
         async for event in self.event_bus.iter_events(queue):
+            logger.info("📡 TradingEngine received event: %s", event.payload)
             await self._enter_trade(event.payload)
 
     async def _enter_trade(self, payload: dict):
@@ -117,47 +129,77 @@ class TradingEngine:
             if datetime.now(IST).time() >= dtime(no_h, no_m):
                 logger.info("Past no-entry time — skipping"); return
 
-            signal     = payload.get("signal")
+            # 🔍 LOG: Signal received
+            raw_signal = payload.get("signal")
             size_label = payload.get("size_label", "FULL")
+            logger.info("📡 SIGNAL RECEIVED: raw='%s' size='%s' spot=₹%.2f",
+                       raw_signal, size_label, state.spot_price or 0)
 
             try:
+                # 🔄 Map signal to option type
+                signal = self._map_signal(raw_signal)
+                logger.info("🔄 SIGNAL MAPPED: '%s' → '%s'", raw_signal, signal)
+
+                # 🎯 Calculate strike
                 strike = OptionSelector.get_otm_strike(
                     state.spot_price, signal, distance=settings.otm_distance)
-                symbol = await self._resolve_symbol(strike, signal)
-                if not symbol: return
+                logger.info("🎯 STRIKE CALCULATED: spot=₹%.2f signal='%s' → strike=%d",
+                           state.spot_price, signal, strike)
 
+                # 🔍 Resolve symbol
+                symbol = await self._resolve_symbol(strike, signal)
+                if not symbol:
+                    logger.error("❌ SYMBOL RESOLUTION FAILED: strike=%d signal='%s'",
+                                strike, signal)
+                    return
+                logger.info("✅ SYMBOL RESOLVED: %s", symbol)
+
+                # 📊 Get quote and LTP
                 quote = await self.broker.get_quote(symbol_name=symbol, exchange="NFO")
                 ltp   = self.broker.parse_ltp(quote)
                 if not ltp:
-                    logger.warning("LTP unavailable %s", symbol); return
+                    logger.warning("❌ LTP UNAVAILABLE: %s", symbol)
+                    return
+                logger.info("💰 LTP FETCHED: %s = ₹%.2f", symbol, ltp)
 
+                # 🛡️ Premium check
                 if ltp < settings.min_entry_premium:
-                    logger.warning("Premium ₹%.1f < min ₹%.1f — skip %s",
-                                   ltp, settings.min_entry_premium, symbol); return
+                    logger.warning("❌ PREMIUM TOO LOW: ₹%.1f < min ₹%.1f — skip %s",
+                                   ltp, settings.min_entry_premium, symbol)
+                    return
 
+                # 📈 Volume check
                 if settings.min_option_volume > 0:
                     vol = _parse_volume(quote)
                     if vol < settings.min_option_volume:
-                        logger.warning("Low volume %d < %d — skip %s",
-                                       vol, settings.min_option_volume, symbol); return
+                        logger.warning("❌ LOW VOLUME: %d < %d — skip %s",
+                                       vol, settings.min_option_volume, symbol)
+                        return
+                    logger.info("📊 VOLUME OK: %s = %d", symbol, vol)
 
                 requested_qty = self._get_qty(size_label)
+                logger.info("📋 QTY CALCULATED: size='%s' → qty=%d", size_label, requested_qty)
 
-                # ── PLACE BUY → ACTUAL FILL PRICE + QTY ─────
+                # 🛒 PLACE BUY ORDER
+                logger.info("🛒 PLACING BUY ORDER: %s qty=%d", symbol, requested_qty)
                 order_id, fill_price = await self.broker.place_order_and_wait_fill(
                     symbol=symbol, side="BUY", quantity=requested_qty
                 )
                 if not order_id:
-                    logger.error("BUY order failed — no order_id"); return
+                    logger.error("❌ BUY ORDER FAILED: no order_id for %s", symbol)
+                    return
 
-                # Paper mode: fill_price is None, use LTP
+                # 💰 FILL CONFIRMATION
                 is_paper = order_id.startswith("PAPER-")
                 if fill_price is None and not is_paper:
-                    logger.error("BUY fill not confirmed order=%s", order_id); return
+                    logger.error("❌ BUY FILL NOT CONFIRMED: order=%s", order_id)
+                    return
 
                 entry_price = fill_price if fill_price else ltp
+                logger.info("💰 BUY FILL CONFIRMED: order=%s fill=₹%.2f ltp=₹%.2f mode=%s",
+                           order_id, entry_price, ltp, settings.mode.upper())
 
-                # ── PARTIAL FILL DETECTION ───────────────────
+                # 🔍 PARTIAL FILL DETECTION
                 filled_qty = requested_qty  # default: full fill
                 if not is_paper:
                     try:
@@ -165,20 +207,21 @@ class TradingEngine:
                         filled_qty   = _parse_filled_qty(order_status, requested_qty)
                         if filled_qty < requested_qty:
                             logger.warning(
-                                "PARTIAL FILL detected: requested=%d filled=%d symbol=%s "
-                                "— trading with filled qty only",
+                                "⚠️  PARTIAL FILL DETECTED: requested=%d filled=%d symbol=%s",
                                 requested_qty, filled_qty, symbol
                             )
+                        else:
+                            logger.info("✅ FULL FILL CONFIRMED: qty=%d", filled_qty)
                     except Exception as exc:
-                        logger.warning("Could not verify filled qty: %s — assuming full fill", exc)
+                        logger.warning("⚠️  COULD NOT VERIFY FILLED QTY: %s — assuming full fill", exc)
 
                 logger.info(
-                    "ENTRY fill=₹%.2f ltp=₹%.2f qty=%d/%d order=%s mode=%s",
+                    "📈 ENTRY SUMMARY: fill=₹%.2f ltp=₹%.2f qty=%d/%d order=%s mode=%s",
                     entry_price, ltp, filled_qty, requested_qty,
                     order_id, settings.mode.upper()
                 )
 
-                # T1/T2 split based on ACTUAL filled qty
+                # 🎯 CREATE TRADE OBJECT
                 t1_qty = filled_qty // 2
                 t2_qty = filled_qty - t1_qty
 
@@ -205,20 +248,29 @@ class TradingEngine:
                     "t1_pnl":          0.0,
                     "partial_fill":    filled_qty < requested_qty,
                 }
+
+                # 💾 SAVE TRADE TO STATE
                 await self.state_manager.update(
                     active_trade=trade,
                     trade_count=state.trade_count + 1,
                 )
+
+                # 🎉 TRADE OPEN LOG
                 logger.info(
-                    "TRADE OPEN %s qty=%d entry=₹%.2f SL=₹%.2f T1=₹%.2f T2=₹%.2f%s",
+                    "🚀 TRADE OPENED: %s qty=%d entry=₹%.2f SL=₹%.2f T1=₹%.2f T2=₹%.2f%s",
                     symbol, filled_qty, entry_price,
                     trade["sl_price"], trade["t1_price"], trade["t2_price"],
                     " [PARTIAL FILL]" if trade["partial_fill"] else ""
                 )
+                logger.info(
+                    "📊 TRADE DETAILS: strike=%d signal='%s' t1_qty=%d t2_qty=%d order=%s",
+                    strike, signal, t1_qty, t2_qty, order_id
+                )
+
                 await self.event_bus.publish("TRADE_OPENED", {"trade": trade})
 
             except Exception as exc:
-                logger.error("Entry failed: %s", exc, exc_info=True)
+                logger.error("❌ ENTRY FAILED: %s", exc, exc_info=True)
     # ── MONITOR ─────────────────────────────
     async def _monitor_loop(self):
         while True:
@@ -304,22 +356,27 @@ class TradingEngine:
 
         # ✅ prevent double sell
         if trade.get("status") == "CLOSED":
+            logger.info("🚫 EXIT REMAINING SKIPPED: trade already closed")
             return
 
         async with self._trade_lock:
             state = await self.state_manager.snapshot()
             if not state.active_trade:
+                logger.warning("🚫 EXIT REMAINING SKIPPED: no active trade in state")
                 return
 
             symbol = trade["symbol"]
             t2_qty = trade.get("t2_qty", trade["qty"] // 2)
+
+            logger.info("🔄 EXITING REMAINING: %s qty=%d reason='%s' ltp=₹%.2f",
+                       symbol, t2_qty, reason, ltp)
 
             sell_id, fill_price = await self._sell_with_retry(
                 symbol, t2_qty, reason
             )
             if not sell_id:
                 logger.critical(
-                    "T2 SELL FAILED — position may be open! %s qty=%d reason=%s",
+                    "❌ T2 SELL FAILED — position may be open! %s qty=%d reason=%s",
                     symbol, t2_qty, reason
                 )
                 await self.event_bus.publish(
@@ -332,6 +389,9 @@ class TradingEngine:
             t2_pnl = round((exit_price - trade["entry_price"]) * t2_qty, 2)
             total_pnl = round(trade.get("t1_pnl", 0) + t2_pnl, 2)
             new_daily = round(state.daily_pnl + t2_pnl, 2)
+
+            logger.info("💰 T2 EXIT FILL: order=%s fill=₹%.2f pnl=₹%.2f total_pnl=₹%.2f",
+                       sell_id, exit_price, t2_pnl, total_pnl)
 
             # ✅ mark closed BEFORE saving
             trade["status"] = "CLOSED"
@@ -355,8 +415,8 @@ class TradingEngine:
             )
 
             logger.info(
-                "EXIT %s reason=%s fill=₹%.2f pnl=₹%.2f",
-                symbol, reason, exit_price, total_pnl
+                "✅ TRADE CLOSED (REMAINING): %s reason='%s' exit=₹%.2f pnl=₹%.2f daily_pnl=₹%.2f",
+                symbol, reason, exit_price, total_pnl, new_daily
             )
 
             await self.event_bus.publish("TRADE_CLOSED", {"trade": closed})
@@ -365,11 +425,13 @@ class TradingEngine:
 
         # ✅ CRITICAL: prevent double sell
         if trade.get("status") == "CLOSED":
+            logger.info("🚫 EXIT SKIPPED: trade already closed")
             return
 
         async with self._trade_lock:
             state = await self.state_manager.snapshot()
             if not state.active_trade:
+                logger.warning("🚫 EXIT SKIPPED: no active trade in state")
                 return
 
             symbol = trade["symbol"]
@@ -378,10 +440,13 @@ class TradingEngine:
                 if trade.get("t1_booked") else trade["qty"]
             )
 
+            logger.info("🔄 EXITING TRADE: %s qty=%d reason='%s' ltp=₹%.2f",
+                       symbol, qty, reason, ltp)
+
             sell_id, fill_price = await self._sell_with_retry(symbol, qty, reason)
             if not sell_id:
                 logger.critical(
-                    "SELL FAILED — position may be open! %s qty=%d reason=%s",
+                    "❌ SELL FAILED — position may be open! %s qty=%d reason=%s",
                     symbol, qty, reason)
                 await self.event_bus.publish("SELL_FAILED_CRITICAL",
                     {"symbol": symbol, "qty": qty, "reason": reason})
@@ -391,6 +456,9 @@ class TradingEngine:
             exit_pnl   = round((exit_price - trade["entry_price"]) * qty, 2)
             total_pnl  = round(trade.get("t1_pnl", 0) + exit_pnl, 2)
             new_daily  = round(state.daily_pnl + exit_pnl, 2)
+
+            logger.info("💰 EXIT FILL: order=%s fill=₹%.2f pnl=₹%.2f total_pnl=₹%.2f",
+                       sell_id, exit_price, exit_pnl, total_pnl)
 
             # ✅ mark CLOSED BEFORE saving
             trade["status"] = "CLOSED"
@@ -414,8 +482,8 @@ class TradingEngine:
             )
 
             logger.info(
-                "EXIT %s reason=%s fill=₹%.2f pnl=₹%.2f",
-                symbol, reason, exit_price, total_pnl
+                "✅ TRADE CLOSED: %s reason='%s' exit=₹%.2f pnl=₹%.2f daily_pnl=₹%.2f",
+                symbol, reason, exit_price, total_pnl, new_daily
             )
 
             await self.event_bus.publish("TRADE_CLOSED", {"trade": closed})
@@ -498,16 +566,35 @@ class TradingEngine:
 
         opt_type = OptionSelector.get_option_type(signal)
         expiry   = OptionSelector.get_expiry_api()
-        chain    = await self.broker.get_option_chain(
-            search_symbol_name="NIFTY", exchange="NFO",
-            expiry_date=expiry, strike_price=str(strike),
+
+        chain = await self.broker.get_option_chain(
+            search_symbol_name=settings.nifty_symbol,
+            exchange="NFO",
+            expiry_date=expiry,
+            strike_price=str(strike),
             option_type=opt_type,
         )
-        rows = chain.get("optionChainDetails") or chain.get("data") or []
+        rows = self._extract_chain_rows(chain)
+
         if not rows:
-            logger.error(
-                "Option chain empty expiry=%s strike=%s type=%s",
+            logger.warning(
+                "Exact strike chain empty expiry=%s strike=%s type=%s, retrying full chain",
                 expiry, strike, opt_type)
+            chain = await self.broker.get_option_chain(
+                search_symbol_name=settings.nifty_symbol,
+                exchange="NFO",
+                expiry_date=expiry,
+                strike_price="0",
+                option_type=opt_type,
+            )
+            rows = self._extract_chain_rows(chain)
+
+        if not rows:
+            resp_type = type(chain).__name__
+            resp_keys = list(chain.keys()) if isinstance(chain, dict) else []
+            logger.error(
+                "Option chain empty expiry=%s strike=%s type=%s response=%s keys=%s",
+                expiry, strike, opt_type, resp_type, resp_keys)
             return None
 
         best_sym, best_diff = None, 999_999.0
@@ -521,6 +608,26 @@ class TradingEngine:
             self._symbol_cache[key] = best_sym
             logger.info("Resolved %s %s → %s", strike, opt_type, best_sym)
         return best_sym
+
+    @staticmethod
+    def _extract_chain_rows(chain: dict | list | None) -> list[dict]:
+        if not chain:
+            return []
+
+        if isinstance(chain, list):
+            return chain
+
+        rows = (chain.get("optionChainDetails")
+                or chain.get("data")
+                or chain.get("rows")
+                or chain.get("result")
+                or [])
+
+        if isinstance(rows, dict):
+            return [rows]
+        if isinstance(rows, list):
+            return rows
+        return []
 
     def clear_cache(self):
         self._symbol_cache.clear()

@@ -388,9 +388,9 @@ class SamcoClient:
         return {}
 
     @staticmethod
-    def _parse_response(result: Any) -> dict:
+    def _parse_response(result: Any) -> dict | list:
         if result is None: return {}
-        if isinstance(result, dict): return result
+        if isinstance(result, (dict, list)): return result
         if isinstance(result, str):
             result = result.strip()
             if not result: return {}

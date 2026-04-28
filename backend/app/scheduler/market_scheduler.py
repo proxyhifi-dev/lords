@@ -113,6 +113,23 @@ class MarketScheduler:
         )
 
         await self.state.load()
+        
+        # Check if ORB was already frozen from previous run
+        state = await self.state.snapshot()
+        logger.info("State check: orb_high=%s orb_low=%s spot_price=%s trading_enabled=%s",
+                   state.orb_high, state.orb_low, state.spot_price, state.trading_enabled)
+        if state.orb_high is not None and state.orb_low is not None:
+            self._orb_frozen = True
+            self._orb_frozen_time = _time.time()  # Approximate
+            logger.info("ORB restored from state: high=%.2f low=%.2f", 
+                       state.orb_high, state.orb_low)
+            # Re-enable trading since ORB was already established
+            await self.state.update(trading_enabled=True)
+            logger.info("Trading re-enabled after ORB restoration")
+        else:
+            logger.info("No ORB found in state, starting fresh")
+            # Note: Auto-retrigger will happen after tasks start
+        
         await self.event_bus.start()
 
         try:
@@ -141,6 +158,28 @@ class MarketScheduler:
                                 name="reconciler"),   # every 5 min, live only
         ]
         logger.info("All tasks started (%d tasks)", len(self._tasks))
+
+        # Auto-retrigger: publish after engine/risk listeners are running
+        asyncio.create_task(self._delayed_retrigger(), name="auto-retrigger")
+
+    async def _delayed_retrigger(self) -> None:
+        await asyncio.sleep(0.25)
+        state = await self.state.snapshot()
+        if (self._orb_frozen and state.spot_price and
+            state.orb_high is not None and state.spot_price > state.orb_high
+            and state.trading_enabled):
+            logger.info(
+                "🔄 Auto-retrigger: price %.2f > ORB high %.2f, emitting LONG signal",
+                state.spot_price, state.orb_high)
+            await self.event_bus.publish("RISK_APPROVED", {
+                "signal": "LONG",
+                "size_label": "FULL"
+            })
+        else:
+            logger.info(
+                "🚫 Auto-retrigger skipped: frozen=%s spot=%s orb_high=%s enabled=%s",
+                self._orb_frozen, state.spot_price, state.orb_high,
+                state.trading_enabled)
 
     async def stop(self) -> None:
         if not self.running: return
@@ -198,6 +237,7 @@ class MarketScheduler:
 
     # ── Main poll loop ───────────────────────────────────────
     async def _loop(self) -> None:
+        logger.info("🔄 Market loop started")
         while self.running:
             try:
                 # ✅ WATCHDOG FIX
@@ -217,6 +257,7 @@ class MarketScheduler:
                         logger.info("Market closed (%s) — polling paused", reason)
                         self._last_closed_log = now_ts
                 else:
+                    logger.info("📊 Market open — calling _tick")
                     await self._tick()
 
             except Exception as exc:
@@ -230,24 +271,30 @@ class MarketScheduler:
 
     async def _tick(self) -> None:
         self._last_tick_time = _time.time()
+        logger.info("🕐 TICK: Starting market data fetch")
         try:
             quote = await asyncio.wait_for(
                 self.broker.get_index_quote(settings.nifty_symbol),
                 timeout=3
             )
         except asyncio.TimeoutError:
-            logger.warning("Broker timeout")
+            logger.warning("⏰ Broker timeout")
             return
         except RuntimeError as exc:
             now_ts = _time.time()
             if now_ts - self._last_broker_error >= _LOG_INTERVAL:
-                logger.warning("Broker quote unavailable: %s", exc)
+                logger.warning("❌ Broker quote unavailable: %s", exc)
                 self._last_broker_error = now_ts
             return
 
         spot = SamcoClient.parse_spot(quote)
         if spot is None:
+            logger.warning("❌ Spot parsing failed")
             return
+
+        logger.info("💰 TICK: spot=%.2f", spot)
+        await self.state.update(spot_price=spot)
+        logger.info("✅ TICK: State updated with spot_price=%.2f", spot)
 
         # Capture today's first tick as open price
         if self._today_open is None:
