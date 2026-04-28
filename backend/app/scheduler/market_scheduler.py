@@ -543,14 +543,24 @@ class MarketScheduler:
         return score
 
     async def _fail_safe_on_data_loss(self) -> None:
-        """Disable trading and flatten if quote stream is stale."""
+        """Dead-man switch: retry exit and hard-disable trading."""
         state = await self.state.snapshot()
         if state.trading_enabled:
             await self.state.update(trading_enabled=False)
             logger.critical("Trading disabled due to stale quote stream")
         if state.active_trade:
             logger.critical("Emergency flatten triggered by dead-man switch")
-            await self.flatten_position()
+            closed = False
+            for attempt in range(1, 4):
+                result = await self.flatten_position()
+                closed = result.get("status") in {"flattened", "no_active_trade"}
+                if closed:
+                    logger.critical("Dead-man switch exit success attempt=%d", attempt)
+                    break
+                await asyncio.sleep(1.0)
+            if not closed:
+                logger.critical("Dead-man switch exit failed after retries")
+            await self.state.update(trading_enabled=False, last_risk_breach="deadman_switch")
 
     # ── Manual flatten ───────────────────────────────────────
 
@@ -567,11 +577,14 @@ class MarketScheduler:
             else trade.get("qty", 0)
         )
         try:
-            resp = await self.broker.place_order(
-                symbol=symbol, side="SELL", quantity=qty)
+            order_id, _ = await self.broker.place_order_and_wait_fill(
+                symbol=symbol, side="SELL", quantity=qty
+            )
+            if not order_id:
+                return {"status": "error", "message": "no_order_id"}
             await self.state.update(active_trade=None, live_pnl=0.0)
-            logger.info("Manual flatten %s qty=%d", symbol, qty)
-            return {"status": "flattened", "symbol": symbol, "qty": qty}
+            logger.info("Manual flatten %s qty=%d order=%s", symbol, qty, order_id)
+            return {"status": "flattened", "symbol": symbol, "qty": qty, "order_id": order_id}
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
 

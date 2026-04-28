@@ -55,6 +55,7 @@ class RuntimeState:
     cooldown_active: bool = False
     cooldown_until: str | None = None
     last_risk_breach: str | None = None
+    consecutive_losses: int = 0
     
     # Execution safety
     last_order_failed: bool = False
