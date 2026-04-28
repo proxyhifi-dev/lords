@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     # ── TIMING ───────────────────────────────────────
     no_entry_after: str = "13:30"
     square_off: str = "15:10"
+    deadman_timeout: int = 45
 
     # ── MARKET ───────────────────────────────────────
     poll_seconds: int = 1

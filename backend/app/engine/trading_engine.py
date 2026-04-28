@@ -120,11 +120,23 @@ class TradingEngine:
 
     async def run(self):
         logger.info("TradingEngine started")
-        await asyncio.gather(
-            self._entry_listener(),
-            self._monitor_loop(),
-            self._health_loop(),
-        )
+        try:
+            await asyncio.gather(
+                self._entry_listener(),
+                self._monitor_loop(),
+                self._health_loop(),
+            )
+        except Exception as exc:
+            logger.critical("🚨 TradingEngine run loop failure: %s", exc, exc_info=True)
+            try:
+                await self.emergency_exit_active_trade(reason="SYSTEM_FAILURE")
+            except Exception as exit_exc:
+                logger.critical("🚨 SYSTEM_FAILURE emergency exit failed: %s", exit_exc, exc_info=True)
+            await self.state_manager.update(
+                trading_enabled=False,
+                last_order_failed=True,
+                last_risk_breach="system_failure",
+            )
 
     # ── ENTRY ────────────────────────────────────────────────
     async def _entry_listener(self):
