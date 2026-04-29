@@ -29,6 +29,7 @@ from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.config_loader import get_settings
 from backend.app.core.event_bus import EventBus
 from backend.app.storage.trade_store import TradeStore
+from backend.app.engine.execution_manager import ExecutionManager, OrderState
 from backend.app.strategy.option_selector import OptionSelector
 from backend.app.utils.logger import get_logger
 
@@ -109,6 +110,8 @@ class TradingEngine:
         self._symbol_cache: dict[str, str] = {}
         self._fatal_lock = asyncio.Lock()
         self._ltp_history: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=20))
+        self.reconciliation = None
+        self.execution_manager = ExecutionManager(broker=self.broker, state_manager=self.state_manager, event_bus=self.event_bus)
 
     def _map_signal(self, raw_signal: str) -> str:
         """Map trading signals to option types."""
@@ -232,9 +235,11 @@ class TradingEngine:
 
                 # 🛒 PLACE BUY ORDER WITH GUARANTEED RETRY + TERMINAL CONFIRMATION
                 logger.info("🛒 PLACING BUY ORDER: %s qty=%d", symbol, requested_qty)
-                order_id, fill_price, filled_qty = await self._buy_with_retry(
-                    symbol=symbol, requested_qty=requested_qty
-                )
+                exec_result = await self.execution_manager.execute_order({"signal": raw_signal, "symbol": symbol, "timestamp": datetime.now(timezone.utc).isoformat(), "quantity": requested_qty, "side": "BUY"})
+                order_id, fill_price, filled_qty = exec_result.order_id, exec_result.avg_price, exec_result.filled_qty
+                if exec_result.is_uncertain:
+                    await self._global_fail_safe("ENTRY_EXECUTION_UNCERTAIN")
+                    return
                 if not order_id or filled_qty <= 0:
                     logger.error("❌ BUY ORDER FAILED: no executable fill for %s", symbol)
                     return
@@ -574,7 +579,11 @@ class TradingEngine:
             logger.info("🔄 EXITING TRADE: %s qty=%d reason='%s' ltp=₹%.2f",
                        symbol, qty, reason, ltp)
 
-            sell_id, fill_price = await self._sell_with_retry(symbol, qty, reason)
+            sell_exec = await self.execution_manager.execute_order({"signal": reason, "symbol": symbol, "timestamp": datetime.now(timezone.utc).isoformat(), "quantity": qty, "side": "SELL"})
+        sell_id, fill_price = sell_exec.order_id, sell_exec.avg_price
+        if sell_exec.is_uncertain:
+            await self._global_fail_safe("SELL_EXECUTION_UNCERTAIN")
+            return False
             if not sell_id:
                 logger.critical(
                     "❌ SELL FAILED — position may be open! %s qty=%d reason=%s",
