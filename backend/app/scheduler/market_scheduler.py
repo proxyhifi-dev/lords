@@ -124,7 +124,7 @@ class MarketScheduler:
             self._orb_frozen = True
             self._orb_frozen_time = _time.time()  # Approximate
             logger.info("ORB restored from state: high=%.2f low=%.2f", 
-                       state.orb_high, state.orb_low)
+                        state.orb_high, state.orb_low)
             # Re-enable trading since ORB was already established
             await self.state.update(trading_enabled=True)
             logger.info("Trading re-enabled after ORB restoration")
@@ -273,14 +273,13 @@ class MarketScheduler:
             await asyncio.sleep(settings.poll_seconds)
 
    
-
     # ── Tick ─────────────────────────────────────────────────
 
     async def _tick(self) -> None:
         self._last_tick_time = _time.time()
         logger.info("🕐 TICK: Starting market data fetch")
         try:
-            quote = await asyncio.wait_for(
+            index_quote = await asyncio.wait_for(
                 self.broker.get_index_quote(settings.nifty_symbol),
                 timeout=3
             )
@@ -298,14 +297,47 @@ class MarketScheduler:
                 self._last_broker_error = now_ts
             return
 
-        spot = SamcoClient.parse_spot(quote)
+        spot = SamcoClient.parse_spot(index_quote)
         if spot is None:
             logger.warning("❌ Spot parsing failed")
             self._consecutive_quote_failures += 1
             return
 
         logger.info("💰 TICK: spot=%.2f", spot)
-        await self.state.update(spot_price=spot)
+
+        # ✅ PROPERLY INDENTED BLOCK
+        state = await self.state.snapshot()
+
+        if state.active_trade:
+            symbol = state.active_trade.get("symbol")
+
+            try:
+                option_quote = await self.broker.get_quote(
+                    symbol_name=symbol,
+                    exchange="NFO"
+                )
+
+                option_ltp = self.broker.parse_ltp(option_quote)
+
+                if option_ltp is not None and option_ltp > 0:
+                    await self.state.update(
+                        spot_price=spot,
+                        active_trade={
+                            **state.active_trade,
+                            "ltp": option_ltp  # 🔥 THIS FIXES PnL
+                        }
+                    )
+                else:
+                    logger.warning("⚠️ LTP missing or zero for %s", symbol)
+                    await self.state.update(spot_price=spot)
+
+            except Exception as e:
+                logger.warning("⚠️ Option quote failed: %s", e)
+                await self.state.update(spot_price=spot)
+
+        else:
+            await self.state.update(spot_price=spot)
+
         logger.info("✅ TICK: State updated with spot_price=%.2f", spot)
 
         # Capture today's first tick as open price
@@ -313,17 +345,15 @@ class MarketScheduler:
             self._today_open = spot
             logger.info("Today open captured: %.2f", spot)
 
-        await self.state.update(spot_price=spot)
         await self.event_bus.publish("TICK", {
             "price":  spot,
-            "volume": float(quote.get("volume") or 0),
+            "volume": float(index_quote.get("volume") or 0),
         })
 
         self._recent_spots.append(spot)
         if len(self._recent_spots) > 10:
             self._recent_spots.pop(0)
 
-        state = await self.state.snapshot()
         now   = _now_ist()
 
         completed_candle = self._update_candle(spot, now)

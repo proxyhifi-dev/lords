@@ -43,6 +43,7 @@ class ReconciliationEngine:
         self.broker        = broker
         self.state_manager = state_manager
         self.event_bus     = event_bus
+        self._last_paper_log = 0.0
 
     # ── Public API ───────────────────────────────────────────
 
@@ -52,13 +53,22 @@ class ReconciliationEngine:
         Returns a summary dict with any issues found + actions taken.
         Call at startup and after any reconnect.
         """
-        logger.info("Reconciliation check starting")
         result: dict = {
             "timestamp":     datetime.now(IST).isoformat(),
             "issues_found":  0,
             "actions_taken": [],
             "status":        "ok",
         }
+
+        # 🔥 FIX: Early exit for PAPER mode to save API calls & throttle logs
+        if not settings.is_live:
+            now = asyncio.get_event_loop().time()
+            if now - self._last_paper_log > 300:
+                logger.info("ℹ️ PAPER MODE: Broker reconciliation bypassed.")
+                self._last_paper_log = now
+            return result
+
+        logger.info("Reconciliation check starting")
 
         try:
             state     = await self.state_manager.snapshot()
@@ -73,8 +83,6 @@ class ReconciliationEngine:
             ]
 
             # ── 1. Phantom position ───────────────────────
-            # SAMCO has open NIFTY position, bot has no active trade
-            # CRITICAL: Force sync state from broker
             if nifty_pos and not state.active_trade:
                 result["issues_found"] += 1
                 for pos in nifty_pos:
@@ -92,8 +100,6 @@ class ReconciliationEngine:
                     await self._force_sync_from_broker(positions)
 
             # ── 2. Ghost trade ───────────────────────────
-            # Bot thinks trade is open, SAMCO has no matching position
-            # CRITICAL: Force clear local state
             if state.active_trade and not nifty_pos:
                 sym = state.active_trade.get("symbol", "unknown")
                 qty = state.active_trade.get("qty", 0)
@@ -115,7 +121,6 @@ class ReconciliationEngine:
                 )
 
             # ── 3. Qty mismatch ──────────────────────────
-            # CRITICAL: Force sync quantities from broker
             if state.active_trade and nifty_pos:
                 local_sym = state.active_trade.get("symbol", "")
                 for pos in nifty_pos:
@@ -142,12 +147,10 @@ class ReconciliationEngine:
                         await self._force_sync_from_broker(positions)
 
             # ── 4. P&L drift ─────────────────────────────
-            # CRITICAL: Force sync P&L from broker
             samco_pnl = self._sum_tradebook_pnl(trades)
             if samco_pnl != 0 and abs(samco_pnl - state.daily_pnl) > 500:
                 msg = (
                     f"PNL_MISMATCH: bot=₹{state.daily_pnl:.2f} "
-                    f"samco=₹{state.daily_pnl:.2f} "
                     f"samco=₹{samco_pnl:.2f} "
                     f"diff=₹{abs(samco_pnl - state.daily_pnl):.2f} "
                     f"— FORCE SYNC from broker"

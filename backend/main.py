@@ -106,7 +106,7 @@ async def dashboard():
             "daily_pnl":       round(state.daily_pnl, 2),
             "live_pnl":        round(state.live_pnl,  2),
             "trade_count":     state.trade_count,
-            "trade_history":   trades[-50:],
+            "trades":          trades[-50:],  # 🔥 FIXED HERE
             "timestamp":       datetime.now(timezone.utc).isoformat(),
         }
     except Exception as exc:
