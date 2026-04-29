@@ -108,7 +108,7 @@ class SamcoClient:
             q = await self.get_index_quote(settings.nifty_symbol)
             return bool(q)
         except Exception:
-            return False
+            return "FAILED", 0, None
 
     # ── QUOTES ────────────────────────────────────────
     async def get_index_quote(self, index_name: str) -> dict:
@@ -220,10 +220,10 @@ class SamcoClient:
         )
         return result if isinstance(result, dict) else {}
 
-    async def confirm_fill(self, order_id: str, max_attempts: int = 10, delay: float = 0.5) -> bool:
-        """Poll until order fills. Paper orders are always filled."""
+    async def confirm_fill(self, order_id: str, requested_qty: int = 0, max_attempts: int = 10, delay: float = 0.5) -> tuple[str, int, float | None]:
+        """Poll until terminal fill state is known."""
         if order_id.startswith("PAPER-"):
-            return True
+            return "FILLED", requested_qty, None
         for attempt in range(1, max_attempts + 1):
             try:
                 resp = await self.get_order_status(order_id)
@@ -231,7 +231,9 @@ class SamcoClient:
                 if isinstance(data, list): data = data[0] if data else {}
                 status = (data.get("orderStatus") or data.get("status") or "").upper()
                 logger.debug("Fill check #%d order=%s status=%s", attempt, order_id, status)
-                if status in ("COMPLETE", "FILLED", "TRADED"): return True
+                if status in ("COMPLETE", "FILLED", "TRADED"):
+                    avg = await self.get_actual_fill_price(order_id)
+                    return "FILLED", requested_qty, avg
                 if status in ("REJECTED", "CANCELLED", "CANCELED"):
                     logger.error("Order %s %s", order_id, status)
                     return False
@@ -239,7 +241,7 @@ class SamcoClient:
                 logger.warning("confirm_fill attempt %d error: %s", attempt, exc)
             await asyncio.sleep(delay)
         logger.error("confirm_fill timeout order=%s", order_id)
-        return False
+        return "UNKNOWN", 0, None
 
     async def get_positions(self) -> list[dict]:
         """Get current positions. NOTE: This may not be available in all SAMCO SDK versions."""
@@ -450,10 +452,9 @@ class SamcoClient:
             logger.error("place_order_and_wait_fill no order_id side=%s symbol=%s resp=%s", side, symbol, resp)
             return None, None
 
-        filled = await self.confirm_fill(order_id, max_attempts=max_fill_wait)
-        if not filled:
+        fill_state, _, fill_price = await self.confirm_fill(order_id, requested_qty=quantity, max_attempts=max_fill_wait)
+        if fill_state != "FILLED":
             return order_id, None
-        fill_price = await self.get_actual_fill_price(order_id)
         return order_id, fill_price
 
     async def place_stop_loss_order(self, symbol: str, quantity: int, trigger_price: float, side: str = "SELL", exchange: str = "NFO") -> dict:

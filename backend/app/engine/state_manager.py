@@ -426,5 +426,24 @@ class StateManager:
         """Calculate current equity."""
         return settings.capital + self._state.realized_pnl + self._state.unrealized_pnl
 
+    async def has_idempotency_key(self, key: str) -> bool:
+        async with self._lock:
+            with sqlite3.connect(self._db_path) as conn:
+                row = conn.execute("SELECT value FROM state WHERE key = ?", (f"idemp:{key}",)).fetchone()
+                return bool(row)
+
+    async def add_idempotency_key(self, key: str) -> None:
+        async with self._lock:
+            with sqlite3.connect(self._db_path) as conn:
+                conn.execute("INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)", (f"idemp:{key}", "1"))
+                conn.commit()
+
+    async def record_uncertain_order(self, data: dict) -> None:
+        async with self._lock:
+            await self._journal_event("ORDER_UNCERTAIN", data)
+            with sqlite3.connect(self._db_path) as conn:
+                conn.execute("INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)", ("last_uncertain_order", json.dumps(data)))
+                conn.commit()
+
 # Global instance
 state_manager = StateManager()
