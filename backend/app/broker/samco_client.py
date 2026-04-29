@@ -456,6 +456,56 @@ class SamcoClient:
         fill_price = await self.get_actual_fill_price(order_id)
         return order_id, fill_price
 
+    async def place_stop_loss_order(self, symbol: str, quantity: int, trigger_price: float, side: str = "SELL", exchange: str = "NFO") -> dict:
+        """Place broker-level stop-loss order (fail-closed caller must verify acceptance)."""
+        if not settings.is_live:
+            oid = _next_paper_id()
+            return {"status": "Success", "orderNumber": oid, "type": "PAPER_SL"}
+        await self.ensure_session()
+        bridge = self._get_bridge()
+        txn_type = bridge.TRANSACTION_TYPE_BUY if side == "BUY" else bridge.TRANSACTION_TYPE_SELL
+        exch = self._map_exchange(exchange)
+        return await self._call_sdk(
+            lambda: bridge.place_order(body={
+                "symbolName": symbol,
+                "exchange": exch,
+                "transactionType": txn_type,
+                "orderType": getattr(bridge, "ORDER_TYPE_SL_M", "SL-M"),
+                "triggerPrice": str(trigger_price),
+                "quantity": str(quantity),
+                "productType": bridge.PRODUCT_MIS,
+                "orderValidity": bridge.VALIDITY_DAY,
+            }),
+            "place_stop_loss_order",
+        )
+
+    async def cancel_all_open_orders(self) -> None:
+        orders = await self.get_orders()
+        for o in orders:
+            oid = o.get("orderNumber") or o.get("orderId")
+            status = str(o.get("orderStatus") or "").upper()
+            if oid and status in {"OPEN", "PENDING", "TRIGGER_PENDING"}:
+                try:
+                    await self.cancel_order(str(oid))
+                except Exception as exc:
+                    logger.error("cancel order failed order_id=%s error=%s", oid, exc)
+
+    async def close_all_positions_market(self) -> None:
+        positions = await self.get_positions()
+        for p in positions:
+            sym = p.get("tradingSymbol") or p.get("symbolName")
+            qty = 0
+            for key in ("netQty", "netQuantity", "net_qty"):
+                try:
+                    qty = int(float(str(p.get(key, 0)).replace(",", "")))
+                    break
+                except Exception:
+                    continue
+            if not sym or qty == 0:
+                continue
+            side = "SELL" if qty > 0 else "BUY"
+            await self.place_order(symbol=sym, side=side, quantity=abs(qty))
+
     # ── EXCHANGE MAPPER ───────────────────────────────
     def _map_exchange(self, exchange: str) -> str:
         bridge = self._get_bridge()

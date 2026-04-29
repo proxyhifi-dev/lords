@@ -63,7 +63,7 @@ class RuntimeState:
     
     # Metadata
     trade_date: str = ""
-    version: str = "5.1"
+    version: int = 1
     last_updated: str = ""
     
     def __post_init__(self):
@@ -237,6 +237,7 @@ class StateManager:
                     else:
                         logger.warning("Unknown state key", extra={"key": key})
                 
+                self._state.version = int(self._state.version) + 1
                 self._state.last_updated = datetime.now().isoformat()
                 
                 # Validate
@@ -261,6 +262,31 @@ class StateManager:
             except Exception as exc:
                 logger.error(f"State update failed: {exc}", exc_info=True)
                 await self._journal_event("UPDATE_FAILED", {"error": str(exc), "updates": kwargs})
+
+    async def update_cas(self, expected_version: int, **kwargs) -> bool:
+        """Compare-and-swap state update to prevent stale writes."""
+        async with self._lock:
+            if int(self._state.version) != int(expected_version):
+                await self._journal_event("CAS_REJECTED", {
+                    "expected_version": expected_version,
+                    "actual_version": self._state.version,
+                    "updates": kwargs,
+                })
+                return False
+            for key, value in kwargs.items():
+                if hasattr(self._state, key):
+                    setattr(self._state, key, value)
+            self._state.version = int(self._state.version) + 1
+            self._state.last_updated = datetime.now().isoformat()
+            if not self._state.validate():
+                return False
+            self._save_state(self._state)
+            if self._redis:
+                try:
+                    await self._redis.set("state", json.dumps(asdict(self._state)), ex=30)
+                except Exception:
+                    self._redis = None
+            return True
     
     def _save_state(self, state: RuntimeState) -> None:
         """Save state to database with backup."""
