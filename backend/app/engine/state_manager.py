@@ -77,15 +77,18 @@ class RuntimeState:
     def validate(self) -> bool:
         """Validate state integrity."""
         try:
-            # Check P&L consistency
-            total_pnl = self.realized_pnl + self.unrealized_pnl
-            if abs(total_pnl - self.live_pnl) > 0.01:  # 1 paisa tolerance
-                logger.error("P&L inconsistency detected", extra={
-                    "realized": self.realized_pnl,
-                    "unrealized": self.unrealized_pnl,
-                    "live": self.live_pnl
-                })
-                return False
+            # Check P&L consistency (LIVE mode only — paper mode positions are simulated)
+            if settings.is_live:
+                total_pnl = self.realized_pnl + self.unrealized_pnl
+                if abs(total_pnl - self.live_pnl) > 0.01:  # 1 paisa tolerance
+                    logger.error("P&L inconsistency detected", extra={
+                        "realized": self.realized_pnl,
+                        "unrealized": self.unrealized_pnl,
+                        "live": self.live_pnl
+                    })
+                    return False
+            else:
+                logger.debug("PAPER MODE: skipping strict P&L validation")
             
             # Check trade count consistency
             if self.active_trade and self.trade_count < 1:
@@ -293,21 +296,32 @@ class StateManager:
         try:
             state_json = json.dumps(asdict(state), default=str)
             
-            with sqlite3.connect(self._db_path) as conn:
+            with sqlite3.connect(str(self._db_path)) as conn:
                 conn.execute(
                     "INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)",
                     ("runtime", state_json)
                 )
                 conn.commit()
             
-            # Create backup
-            if self._db_path.exists():
-                import shutil
-                shutil.copy2(self._db_path, self._backup_path)
+            # Create backup (safe — non-blocking failure)
+            self._safe_backup()
                 
         except Exception as exc:
             logger.error(f"State save failed: {exc}")
             raise
+    
+    def _safe_backup(self) -> None:
+        """Safely create backup without blocking state save."""
+        try:
+            if self._db_path.exists():
+                import shutil
+                # Ensure parent directory exists
+                self._backup_path.parent.mkdir(parents=True, exist_ok=True)
+                # Convert Path objects to strings for Windows compatibility
+                shutil.copy2(str(self._db_path), str(self._backup_path))
+        except Exception as exc:
+            logger.warning(f"⚠️ State backup skipped: {exc}")
+
     
     async def _journal_event(self, event_type: str, data: Dict[str, Any]) -> None:
         """Journal state changes for audit trail."""

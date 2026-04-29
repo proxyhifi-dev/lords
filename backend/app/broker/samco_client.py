@@ -603,5 +603,5 @@ def get_weekly_expiry() -> date:
 
 
 def get_expiry_api() -> str:
-    # SAMCO expiry format: DDMMMYYYY (e.g. 21APR2026)
-    return get_weekly_expiry().strftime("%d%b%Y").upper()
+    """SAMCO expects: YYYY-MM-DD format"""
+    return get_weekly_expiry().strftime("%Y-%m-%d")
