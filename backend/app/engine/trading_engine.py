@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict, deque
+import os
 from datetime import datetime, timezone, time as dtime
 from zoneinfo import ZoneInfo
 
@@ -150,6 +151,9 @@ class TradingEngine:
         async with self._trade_lock:
             state = await self.state_manager.snapshot()
             await self.state_manager.update(signal=None, signal_meta=None)
+            if os.getenv("TRADING_KILL_SWITCH", "0") == "1":
+                logger.critical("Kill switch enabled; rejecting entry")
+                return
 
             if state.active_trade: return
             if state.spot_price is None: return
@@ -278,7 +282,22 @@ class TradingEngine:
                     "t2_qty":          t2_qty,
                     "t1_pnl":          0.0,
                     "partial_fill":    filled_qty < requested_qty,
+                    "sl_order_id":     None,
                 }
+
+                # Mandatory broker-level SL protection: fail closed if unavailable
+                sl_resp = await self.broker.place_stop_loss_order(
+                    symbol=symbol,
+                    quantity=filled_qty,
+                    trigger_price=trade["sl_price"],
+                    side="SELL",
+                )
+                sl_order_id = sl_resp.get("orderNumber") or sl_resp.get("orderId")
+                if sl_resp.get("status") != "Success" or not sl_order_id:
+                    logger.critical("SL placement failed after entry fill; forcing exit and halting. resp=%s", sl_resp)
+                    await self._force_exit_and_halt(symbol=symbol, qty=filled_qty, reason="STOP_LOSS_PLACEMENT_FAILED")
+                    return
+                trade["sl_order_id"] = sl_order_id
 
                 # 💾 SAVE TRADE TO STATE
                 await self.state_manager.update(
@@ -962,6 +981,19 @@ class TradingEngine:
                 closed = await self.emergency_exit_active_trade(reason=f"HARD_FAIL_{context}")
                 if not closed:
                     logger.critical("🚨 HARD FAIL EXIT UNSUCCESSFUL context=%s", context)
+
+    async def _force_exit_and_halt(self, symbol: str, qty: int, reason: str) -> None:
+        await self.state_manager.update(
+            trading_enabled=False,
+            last_order_failed=True,
+            last_risk_breach=reason,
+        )
+        try:
+            await self.broker.place_order(symbol=symbol, side="SELL", quantity=qty)
+        except Exception as exc:
+            logger.critical("Forced exit failed symbol=%s qty=%s err=%s", symbol, qty, exc, exc_info=True)
+        await self.broker.cancel_all_open_orders()
+        await self.event_bus.publish("ORDER_UNCERTAIN", {"reason": reason, "symbol": symbol, "qty": qty})
 
     def _validate_trade_setup(
         self,

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 from fastapi import APIRouter
+from backend.app.broker.samco_client import SamcoClient
 from backend.app.engine.state_manager import StateManager
 
 
-def build_dashboard_router(state_manager: StateManager) -> APIRouter:
+def build_dashboard_router(state_manager: StateManager, broker: SamcoClient | None = None) -> APIRouter:
 
     router = APIRouter()
 
@@ -25,5 +27,14 @@ def build_dashboard_router(state_manager: StateManager) -> APIRouter:
             "live_pnl":        round(state.live_pnl, 2),
             "trade_count":     state.trade_count,
         }
+
+    @router.post("/api/kill-switch")
+    async def kill_switch() -> dict:
+        os.environ["TRADING_KILL_SWITCH"] = "1"
+        await state_manager.update(trading_enabled=False, last_risk_breach="manual_kill_switch")
+        if broker:
+            await broker.cancel_all_open_orders()
+            await broker.close_all_positions_market()
+        return {"ok": True, "trading_enabled": False, "timestamp": state.last_updated if (state := await state_manager.snapshot()) else None}
 
     return router
