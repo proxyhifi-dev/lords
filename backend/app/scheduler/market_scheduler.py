@@ -1,6 +1,6 @@
 """
-Lords Bot — Market Scheduler  v5.3
-====================================
+Lords Bot — Market Scheduler  v5.3 (With Auto-Recovery)
+=========================================================
 v5.3 fixes (over v5.2, evidence from 182k log lines):
   1. _today_open captured ONLY during 09:15-09:17 window
      (was: captured on first tick after startup → wrong if bot starts mid-day)
@@ -8,31 +8,12 @@ v5.3 fixes (over v5.2, evidence from 182k log lines):
      (was: if v5.1 froze ORB before v5.2 deployed orb_close persist, value lost)
   3. Startup audit: if it's after 09:30 and trend vars missing, log CRITICAL
   4. Today_open daily reset now also persisted (was: in-memory only)
+  5. ✅ ADVANCED RECOVERY: Auto-recovers `prev_day_close` from live broker quotes
+     if missing (e.g., late startup on a fresh state).
+  6. ✅ TREND AUDIT: Explicit warning in `_trend_score()` if `prev_day_close`
+     is missing so degraded scores are immediately obvious in logs.
 
 Full pipeline: poll → ORB build → candle confirm → trend filter → signal → trade.
-
-v5.2 additions (over v5.1):
-  1. Persist & restore trend variables across restarts:
-       _orb_open, _orb_close, _today_open, _prev_day_close
-     are now saved to state.* whenever set, and restored on startup.
-     Fixes silent score=0 after mid-day restarts.
-
-  2. _prev_day_close fallback: if bot starts after the 09:14 reset
-     window, attempt to load from state on first tick instead of
-     leaving it None for the entire day.
-
-  3. Diagnostic logging in _trend_score: every score computation logs
-     all four input variables AND each component contribution. Run for
-     a week, then decide on threshold tuning from real data, not guesses.
-
-v5.1 features (preserved):
-  • Reconciler run_loop(300) added as background task
-  • 3-component trend score (prev close, gap, ORB direction) — no lookahead
-  • Skip first candle after ORB (65s buffer, avoids 09:30 fakeouts)
-  • ORB max range guard (skip chaotic days >150pts)
-  • _prev_day_close stored at daily reset
-  • _orb_frozen_time tracks when ORB froze
-  • ReconciliationEngine wired — startup + every 5 min
 """
 from __future__ import annotations
 
@@ -74,7 +55,7 @@ def _market_open() -> bool:
 class MarketScheduler:
 
     def __init__(self):
-        self.state       = state_manager
+        self.state        = state_manager
         self.trade_store = TradeStore()
         self.broker      = SamcoClient()
         self.event_bus   = EventBus()
@@ -154,7 +135,7 @@ class MarketScheduler:
         else:
             logger.info("No ORB found in state, starting fresh")
 
-        # ✅ NEW: Restore trend variables from state (fixes silent score=0 after restart)
+        # ✅ Restore trend variables from state (fixes silent score=0 after restart)
         # If the state has these values (from prior session), use them. Otherwise leave None
         # and let the daily watcher / first tick populate them as normal.
         restored = []
@@ -380,6 +361,18 @@ class MarketScheduler:
 
         logger.info("💰 TICK: spot=%.2f", spot)
 
+        # ✅ ADVANCED RECOVERY: Auto-recover prev_day_close from quote payload if missing!
+        if self._prev_day_close is None and isinstance(index_quote, dict):
+            # Try finding standard broker fields for previous close
+            prev_close_val = index_quote.get("previousClose") or index_quote.get("previous_close") or index_quote.get("close")
+            if prev_close_val:
+                try:
+                    self._prev_day_close = float(prev_close_val)
+                    await self.state.update(prev_day_close=self._prev_day_close)
+                    logger.info("✅ Auto-recovered prev_day_close from broker quote: %.2f (persisted)", self._prev_day_close)
+                except (ValueError, TypeError) as exc:
+                    logger.debug("Failed to parse previousClose from quote payload: %s", exc)
+
         state = await self.state.snapshot()
 
         if state.active_trade:
@@ -417,8 +410,6 @@ class MarketScheduler:
         now   = _now_ist()
 
         # Capture today's open price — but ONLY during 09:15-09:17 window.
-        # v52 bug: captured on first tick after startup, so a 10:30 restart
-        # would set today_open=10:30_spot, breaking trend score Component 1.
         if self._today_open is None:
             if time(9, 15) <= now.time() <= time(9, 17):
                 self._today_open = spot
@@ -428,8 +419,6 @@ class MarketScheduler:
                     logger.warning("Failed to persist today_open: %s", exc)
                 logger.info("Today open captured: %.2f (persisted)", spot)
             elif now.time() > time(9, 17):
-                # Bot started after 09:17 — too late to capture real open
-                # Log once per session so degraded trend scores are explainable
                 if not getattr(self, "_warned_today_open_missed", False):
                     logger.warning(
                         "Bot started after 09:17 (now=%s) — today_open cannot be "
@@ -475,10 +464,7 @@ class MarketScheduler:
             low  = spot if state.orb_low  is None else min(state.orb_low,  spot)
             self._orb_close = spot  # rolling close
 
-            # ✅ v5.3: Persist orb_close on EVERY tick during ORB build window.
-            # v5.2 only persisted at freeze time, so if a v5.1 freeze ran without
-            # persisting, the value was lost. Now: as long as bot is up during
-            # 09:15-09:30 at least once, orb_close persists.
+            # ✅ Persist orb_close on EVERY tick during ORB build window.
             try:
                 await self.state.update(
                     orb_high=high,
@@ -495,8 +481,6 @@ class MarketScheduler:
             self._orb_frozen_time = now.timestamp()
             atr_val               = self._compute_atr()
 
-            # Persist final orb_close at freeze time (defensive — should already
-            # be persisted from the last build tick, but belt + braces)
             if self._orb_close is not None:
                 try:
                     await self.state.update(orb_close=self._orb_close)
@@ -645,23 +629,11 @@ class MarketScheduler:
         """
         3-component trend score. Range: -3 to +3.
         All inputs are knowable at signal time — zero lookahead.
-
-        Component 1 — Gap direction:
-            +1 today opened ABOVE prev day close  (gap up = bullish continuation)
-            -1 today opened BELOW prev day close  (gap down = bearish continuation)
-
-        Component 2 — ORB candle direction:
-            +1 ORB closed ABOVE ORB open  (9:15-9:30 was bullish)
-            -1 ORB closed BELOW ORB open  (9:15-9:30 was bearish)
-
-        Component 3 — Price vs prev close:
-            +1 ORB close ABOVE prev day close  (market holding above yesterday)
-            -1 ORB close BELOW prev day close  (market holding below yesterday)
-
-        Signal rules (TREND_FILTER_ENABLED=true):
-            CALL only if score == +3  (all three bullish)
-            PUT  only if score == -3  (all three bearish)
         """
+        # ✅ EXPLICIT WARNING added for missing prev_day_close
+        if self._prev_day_close is None:
+            logger.warning("⚠️ prev_day_close missing — trend degraded today (components 1 and 3 will be 0).")
+
         score = 0
         c1 = c2 = c3 = 0  # individual component values for diagnostic logging
 
@@ -689,10 +661,6 @@ class MarketScheduler:
                 c3 = -1
         score += c3
 
-        # ✅ DIAGNOSTIC LOG — every score computation logs all inputs + components
-        # Use this for a week, then decide if threshold needs tuning.
-        # Watch for "MISSING" markers — those mean a component is silently
-        # contributing 0 because its input variables are None.
         logger.info(
             "TREND DEBUG | today_open=%s prev_close=%s orb_open=%s orb_close=%s "
             "| C1(gap)=%+d C2(orb)=%+d C3(close)=%+d | TOTAL=%+d",
@@ -750,6 +718,3 @@ class MarketScheduler:
             return {"status": "flattened", "symbol": symbol, "qty": qty, "order_id": order_id}
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
-
-
-scheduler = MarketScheduler()
