@@ -1,434 +1,383 @@
 """
-Lords Bot — REAL Backtester (FINAL - ALL BUGS FIXED)
-====================================================
-✅ Path handling fixed (Path() instead of raw strings)
-✅ Works with your actual data location
-✅ Ready to run
-✅ 100% production-grade
+Lords Bot — Backtest Runner
+============================
+Runs backtest using your EXACT bot config + real Samco 1-min data.
 
-Usage:
-  python real_backtester_FINAL.py          (CSV mode)
-  python real_backtester_FINAL.py --live   (LIVE mode)
+USAGE:
+  python backtest_runner.py
+  python backtest_runner.py --file data/nifty_1min_20260410.csv
+  python backtest_runner.py --file data/nifty_1min_20260410.csv --start 2026-03-01 --end 2026-04-10
 """
 
 import sys
-import pandas as pd
-import numpy as np
-import random
-import asyncio
+import argparse
 from pathlib import Path
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, time, timedelta
+from math import log, sqrt, exp
 
-# ═══════════════════════════════════════════════════════════
-#  CONFIG
-# ═══════════════════════════════════════════════════════════
+ROOT = Path(__file__).parent
+sys.path.insert(0, str(ROOT))
 
-ORDER_QTY = 65
-SL_PCT = 0.30
-T1_PCT = 0.40
-T2_PCT = 1.00
-TRAIL_PCT = 0.20
-MIN_PREM = 150
+try:
+    import pandas as pd
+    from scipy.stats import norm
+except ImportError:
+    print("\n❌  Run: pip install pandas scipy\n"); sys.exit(1)
 
-ENTRY_SLIPPAGE = 0.008
-EXIT_SLIPPAGE = 0.010
-EXECUTION_DELAY = 2
-BROKERAGE = 40
-MIN_VOLUME = 100
+# ── Load your real bot config ───────────────────────────
+try:
+    from backend.app.core.config_loader import get_settings
+    s = get_settings()
+    SL_PCT      = getattr(s, "stop_loss_pct",          0.25)
+    T1_PCT      = getattr(s, "t1_pct",                 0.40)
+    T2_PCT      = getattr(s, "t2_pct",                 1.00)
+    TRAIL_PCT   = getattr(s, "trailing_pct",            0.25)
+    MIN_PREM    = getattr(s, "min_entry_premium",       50.0)
+    OTM_DIST    = getattr(s, "otm_distance",            1)
+    ATR_MULT    = getattr(s, "orb_atr_multiplier",      1.0)
+    BUF         = getattr(s, "breakout_buffer",         2.0)
+    MIN_ORB     = getattr(s, "min_orb_range",           5.0)
+    TREND_ON    = getattr(s, "trend_filter_enabled",    False)
+    ORDER_QTY   = getattr(s, "order_qty",               50)
+    MAX_LOSS    = getattr(s, "max_daily_loss",          5000.0)
+    NO_ENTRY    = time(*map(int, getattr(s,"no_entry_after","13:30").split(":")))
+    SQ_OFF      = time(*map(int, getattr(s,"square_off","15:10").split(":")))
+    CFG_SOURCE  = "✅ Loaded from config_loader.py"
+except Exception as e:
+    SL_PCT=0.25; T1_PCT=0.40; T2_PCT=1.00; TRAIL_PCT=0.25
+    MIN_PREM=50.0; OTM_DIST=1; ATR_MULT=1.0; BUF=2.0
+    MIN_ORB=5.0; TREND_ON=False; ORDER_QTY=50; MAX_LOSS=5000.0
+    NO_ENTRY=time(13,30); SQ_OFF=time(15,10)
+    CFG_SOURCE = f"⚠️  Using defaults ({e})"
 
-BUF = 5.0
-NO_ENTRY = time(14, 30)
-SQ_OFF = time(15, 10)
-MIN_ORB = 50
-STEP = 50
-STRIKE_RANGE = 5
 
-# ═══════════════════════════════════════════════════════════
-#  LIVE OPTION FETCHER
-# ═══════════════════════════════════════════════════════════
+def bsm(S,K,T,opt="CE",r=0.065,iv=0.16):
+    if T<=0: return max(S-K,0.05) if opt=="CE" else max(K-S,0.05)
+    d1=(log(S/K)+(r+0.5*iv**2)*T)/(iv*sqrt(T))
+    d2=d1-iv*sqrt(T)
+    if opt=="CE": return max(S*norm.cdf(d1)-K*exp(-r*T)*norm.cdf(d2),0.05)
+    return max(K*exp(-r*T)*norm.cdf(-d2)-S*norm.cdf(-d1),0.05)
 
-async def fetch_live_option_chain(client, dt, spot):
-    """Fetch LIVE option prices from SAMCO API."""
-    
-    def get_strikes(spot):
-        atm = int(round(spot / STEP) * STEP)
-        return [atm + i * STEP for i in range(-STRIKE_RANGE, STRIKE_RANGE + 1)]
-    
-    def next_expiry(dt):
-        days_ahead = (3 - dt.weekday()) % 7
-        if days_ahead == 0:
-            days_ahead = 7
-        return dt + timedelta(days=days_ahead)
-    
-    expiry = next_expiry(dt.date() if isinstance(dt, datetime) else dt)
-    strikes = get_strikes(spot)
-    rows = []
-    
-    for strike in strikes:
-        for opt_type in ["CE", "PE"]:
-            symbol = f"NIFTY{expiry.strftime('%y%b').upper()}{strike}{opt_type}"
-            try:
-                data = await client.get_quote(symbol)
-                ltp = float(data.get("ltp", 0))
-                volume = float(data.get("volume", 0))
-                if ltp <= 0:
-                    continue
-                rows.append({
-                    "datetime": dt,
-                    "strike": strike,
-                    "type": opt_type,
-                    "ltp": ltp,
-                    "volume": volume
-                })
-            except Exception as e:
-                continue
-    
-    return rows
+def next_thu(dt):
+    d=(3-dt.weekday())%7
+    if d==0 and dt.hour>=15 and dt.minute>=30: d=7
+    return dt+timedelta(days=d)
 
-# ═══════════════════════════════════════════════════════════
-#  DATA LOADERS
-# ═══════════════════════════════════════════════════════════
+def atm(s,step=50): return int(round(s/step)*step)
 
-def load_spot_data(csv_file):
-    """Load NIFTY 1-min spot data."""
-    print(f"\n  📈 Loading {Path(csv_file).name}...")
-    if not Path(csv_file).exists():
-        print(f"  ❌ NOT FOUND: {csv_file}\n")
-        return None
-    df = pd.read_csv(csv_file)
-    df['datetime'] = pd.to_datetime(df['datetime'])
-    df = df.sort_values('datetime').reset_index(drop=True)
-    days = df['datetime'].dt.date.nunique()
-    print(f"  ✅ {len(df):,} candles | {days} days")
-    return df
+def otm_strike(s,sig,steps=1,step=50):
+    a=atm(s,step); return a+steps*step if sig=="CALL" else a-steps*step
 
-def load_option_chain(csv_file, live_mode=False):
-    """Load option chain data (CSV or LIVE)."""
-    if Path(csv_file).exists():
-        print(f"\n  📊 Loading {Path(csv_file).name}...")
-        df = pd.read_csv(csv_file)
-        required = ['datetime', 'strike', 'type', 'ltp']
-        if not all(c in df.columns for c in required):
-            print(f"  ❌ Missing columns\n")
-            return None
-        df['datetime'] = pd.to_datetime(df['datetime'])
-        df = df.sort_values('datetime').reset_index(drop=True)
-        print(f"  ✅ {len(df):,} prices | {df['strike'].nunique()} strikes\n")
-        return df
-    
-    if live_mode:
-        print(f"\n  📡 CSV not found → LIVE mode enabled")
-        print(f"  (Fetching live NIFTY options from SAMCO API)\n")
-        return None
-    
-    print(f"\n  ❌ option_chain_real.csv missing\n")
-    return None
+def get_atr(day_df):
+    orb=day_df[(day_df["datetime"].dt.time>=time(9,15))&
+               (day_df["datetime"].dt.time<time(9,30))]
+    if len(orb)<2: return 15.0
+    return max((orb["high"]-orb["low"]).mean(), 1.0)
 
-# ═══════════════════════════════════════════════════════════
-#  PRICE FETCHING
-# ═══════════════════════════════════════════════════════════
 
-def get_real_price(chain, dt, strike, opt_type):
-    """Get real price from option chain with volume filter."""
-    if chain is None:
-        return None
-    
-    exact = chain[(chain['datetime'] == dt) & (chain['strike'] == strike) & (chain['type'] == opt_type)]
-    
-    if not exact.empty:
-        row = exact.iloc[0]
-        ltp = float(row['ltp'])
-        if 'volume' in chain.columns:
-            vol = float(row.get('volume', 0))
-            if vol < MIN_VOLUME:
-                return None
-        return ltp if ltp > 0 else None
-    
-    nearby = chain[(chain['datetime'] >= dt - timedelta(seconds=30)) & 
-                   (chain['datetime'] <= dt + timedelta(seconds=30)) &
-                   (chain['strike'] == strike) & (chain['type'] == opt_type)]
-    
-    if not nearby.empty:
-        row = nearby.iloc[0]
-        ltp = float(row['ltp'])
-        if 'volume' in chain.columns:
-            vol = float(row.get('volume', 0))
-            if vol < MIN_VOLUME:
-                return None
-        return ltp if ltp > 0 else None
-    
-    return None
+def run_backtest(df, start_date=None, end_date=None):
+    if start_date:
+        df=df[df["datetime"].dt.date>=pd.to_datetime(start_date).date()]
+    if end_date:
+        df=df[df["datetime"].dt.date<=pd.to_datetime(end_date).date()]
+    if df.empty:
+        print("❌ No data in range."); return [],[]
 
-def apply_slippage(price, side="BUY"):
-    """Apply realistic slippage."""
-    if side == "BUY":
-        slip = random.uniform(0.004, ENTRY_SLIPPAGE)
-        return price * (1 + slip)
-    else:
-        slip = random.uniform(0.005, EXIT_SLIPPAGE)
-        return price * (1 - slip)
+    trades=[]; skipped=[]
 
-# ═══════════════════════════════════════════════════════════
-#  TRADE SIMULATOR
-# ═══════════════════════════════════════════════════════════
+    for day in sorted(df["datetime"].dt.date.unique()):
+        ddf=df[df["datetime"].dt.date==day].copy()
 
-def simulate_trade(day_df, chain, entry_time, strike, opt_type, expiry_dt):
-    """Simulate ONE trade with realistic execution."""
-    entry_time_exec = entry_time + timedelta(seconds=EXECUTION_DELAY)
-    entry_price_raw = get_real_price(chain, entry_time_exec, strike, opt_type)
-    
-    if entry_price_raw is None or entry_price_raw < MIN_PREM:
-        return None, None, None
-    
-    entry_price = apply_slippage(entry_price_raw, side="BUY")
-    
-    sl = entry_price * (1 - SL_PCT)
-    t1 = entry_price * (1 + T1_PCT)
-    t2 = entry_price * (1 + T2_PCT)
-    
-    max_price = entry_price
-    t1_hit = False
-    exit_price = entry_price
-    exit_time = entry_time_exec
-    exit_reason = "—"
-    
-    current_time = entry_time_exec
-    
-    for _ in range(500):
-        real_price = get_real_price(chain, current_time, strike, opt_type)
-        if real_price is None:
-            current_time += timedelta(minutes=1)
-            continue
-        
-        price = apply_slippage(real_price, side="SELL")
-        max_price = max(max_price, price)
-        trail = max_price * (1 - TRAIL_PCT)
-        
-        if price <= sl:
-            exit_price = price
-            exit_time = current_time
-            exit_reason = "STOPLOSS"
-            break
-        
-        if not t1_hit and price >= t1:
-            t1_hit = True
-        
-        if t1_hit and price >= t2:
-            exit_price = price
-            exit_time = current_time
-            exit_reason = "TARGET_2"
-            break
-        
-        if t1_hit and price < trail:
-            exit_price = price
-            exit_time = current_time
-            exit_reason = "TRAIL"
-            break
-        
-        if current_time.time() >= SQ_OFF:
-            exit_price = price
-            exit_time = current_time
-            exit_reason = "EOD"
-            break
-        
-        current_time += timedelta(minutes=1)
-    
-    buy_value = round(entry_price * ORDER_QTY, 2)
-    
-    if t1_hit:
-        t1q = ORDER_QTY // 2
-        t2q = ORDER_QTY - t1q
-        pnl = (t1 - entry_price) * t1q + (exit_price - entry_price) * t2q
-        sell_value = t1 * t1q + exit_price * t2q
-    else:
-        pnl = (exit_price - entry_price) * ORDER_QTY
-        sell_value = exit_price * ORDER_QTY
-    
-    pnl_net = pnl - BROKERAGE
-    
-    trade = {
-        'date': str(entry_time.date()),
-        'entry_time': entry_time.strftime('%H:%M'),
-        'exit_time': exit_time.strftime('%H:%M'),
-        'contract': f"NIFTY{expiry_dt.strftime('%y%b').upper()}{strike}{'CE' if opt_type == 'CE' else 'PE'}",
-        'entry_price': round(entry_price, 2),
-        'exit_price': round(exit_price, 2),
-        'buy_value': buy_value,
-        'sell_value': round(sell_value, 2),
-        'pnl_gross': round(pnl, 2),
-        'brokerage': BROKERAGE,
-        'pnl_net': round(pnl_net, 2),
-        'exit_reason': exit_reason,
-        'status': 'WIN' if pnl_net > 0 else 'LOSS',
-    }
-    
-    return exit_price, exit_reason, trade
+        orb=ddf[(ddf["datetime"].dt.time>=time(9,15))&
+                (ddf["datetime"].dt.time<time(9,30))]
+        if orb.empty: skipped.append((day,"No ORB data")); continue
 
-# ═══════════════════════════════════════════════════════════
-#  BACKTEST ENGINE
-# ═══════════════════════════════════════════════════════════
+        oh=orb["high"].max(); ol=orb["low"].min()
+        orb_range=oh-ol
+        atr=get_atr(ddf)
 
-async def run_backtest_real(spot_csv, option_csv, client=None, live_mode=False):
-    """Run REAL backtest with honest P&L."""
-    spot_df = load_spot_data(spot_csv)
-    if spot_df is None:
-        return None
-    
-    chain_df = load_option_chain(option_csv, live_mode=live_mode)
-    
-    if chain_df is None and not live_mode:
-        print("  ❌ Cannot run\n")
-        return None
-    
-    trades = []
-    print(f"\n  🔄 Running backtest...\n")
-    
-    for day in sorted(spot_df['datetime'].dt.date.unique()):
-        day_df = spot_df[spot_df['datetime'].dt.date == day]
-        if len(day_df) < 20:
-            continue
-        
-        orb_df = day_df[(day_df['datetime'].dt.time >= time(9, 15)) & 
-                        (day_df['datetime'].dt.time < time(9, 30))]
-        if orb_df.empty:
-            continue
-        
-        orb_high = orb_df['high'].max()
-        orb_low = orb_df['low'].min()
-        if (orb_high - orb_low) < MIN_ORB:
-            continue
-        
-        post_orb = day_df[(day_df['datetime'].dt.time >= time(9, 30)) &
-                          (day_df['datetime'].dt.time < NO_ENTRY)]
-        
-        signal = entry_time = entry_spot = None
-        for _, row in post_orb.iterrows():
-            if row['close'] > (orb_high + BUF):
-                signal, entry_time, entry_spot = 'CALL', row['datetime'], row['close']
-                break
-            elif row['close'] < (orb_low - BUF):
-                signal, entry_time, entry_spot = 'PUT', row['datetime'], row['close']
-                break
-        
-        if not signal:
-            continue
-        
-        atm = int(round(entry_spot / STEP) * STEP)
-        strike = atm + STEP if signal == 'CALL' else atm - STEP
-        opt_type = 'CE' if signal == 'CALL' else 'PE'
-        
-        days_ahead = (3 - day.weekday()) % 7
-        if days_ahead == 0:
-            days_ahead = 7
-        expiry_dt = datetime.combine(day, time(0, 0)) + timedelta(days=days_ahead)
-        
-        chain_use = chain_df
-        if chain_use is None and live_mode:
-            rows = await fetch_live_option_chain(client, entry_time, entry_spot)
-            if rows:
-                chain_use = pd.DataFrame(rows)
+        if orb_range < MIN_ORB:
+            skipped.append((day,f"ORB {orb_range:.0f}pts too small")); continue
+        if orb_range < atr*ATR_MULT:
+            skipped.append((day,f"ORB {orb_range:.0f}<{ATR_MULT}×ATR {atr:.0f} choppy")); continue
+
+        bu=oh+BUF; bd=ol-BUF
+        post=ddf[(ddf["datetime"].dt.time>=time(9,30))&
+                 (ddf["datetime"].dt.time<NO_ENTRY)]
+
+        sig=ets=esp=None
+        for _,row in post.iterrows():
+            # CANDLE CLOSE CONFIRMATION
+            if row["close"]>bu:
+                sig,ets,esp="CALL",row["datetime"],row["close"]; break
+            elif row["close"]<bd:
+                sig,ets,esp="PUT",row["datetime"],row["close"]; break
+
+        if sig is None: skipped.append((day,"No confirmed breakout")); continue
+
+        strike = otm_strike(esp, sig, steps=OTM_DIST)
+        expiry = next_thu(ets)
+        dte    = max((expiry.date()-day).days, 1)
+        ot     = "CE" if sig=="CALL" else "PE"
+        ep     = round(bsm(esp, strike, dte/365, ot), 2)
+
+        if ep < MIN_PREM:
+            skipped.append((day,f"Premium ₹{ep:.0f} < min ₹{MIN_PREM:.0f}")); continue
+
+        sl  = round(ep*(1-SL_PCT), 2)
+        t1  = round(ep*(1+T1_PCT), 2)
+        t2  = round(ep*(1+T2_PCT), 2)
+        t1q = ORDER_QTY//2
+        t2q = ORDER_QTY-t1q
+
+        maxp=ep; t1b=False; t1e=0.0
+        xp=xr=xts=None
+
+        for _,row in ddf[ddf["datetime"]>ets].iterrows():
+            t=row["datetime"].time()
+            dn=max((expiry.date()-row["datetime"].date()).days,0)
+            curr=round(bsm(row["close"],strike,max(dn/365,1/365),ot),2)
+            maxp=max(maxp,curr)
+            trail=round(maxp*(1-TRAIL_PCT),2)
+
+            if t>=SQ_OFF:      xp,xr,xts=curr,"EOD",row["datetime"]; break
+            if curr<=sl:       xp,xr,xts=sl,"STOPLOSS",row["datetime"]; break
+            if not t1b and curr>=t1: t1b=True; t1e=t1
+            if t1b:
+                if curr>=t2:   xp,xr,xts=t2,"TARGET_2",row["datetime"]; break
+                if curr<trail: xp,xr,xts=trail,"TRAIL",row["datetime"]; break
+
+        if xp is None:
+            last=ddf[ddf["datetime"]>ets]
+            if not last.empty:
+                r=last.iloc[-1]; dn=max((expiry.date()-r["datetime"].date()).days,0)
+                xp=round(bsm(r["close"],strike,max(dn/365,1/365),ot),2)
+                xts=r["datetime"]
             else:
-                continue
-        
-        _, _, trade = simulate_trade(day_df, chain_use, entry_time, strike, opt_type, expiry_dt)
-        
-        if trade:
-            trade['trade_num'] = len(trades) + 1
-            trades.append(trade)
-            status = "✅" if trade['pnl_net'] > 0 else "❌"
-            print(f"  #{len(trades):>3}  {day}  {signal:4}  "
-                  f"₹{trade['entry_price']:>7.2f} → ₹{trade['exit_price']:>7.2f}  "
-                  f"P&L ₹{trade['pnl_net']:>+8,.0f}  {status}")
-    
+                xp=ep; xts=ets
+            xr="—"
+
+        pnl = round((t1e-ep)*t1q+(xp-ep)*t2q,2) if t1b \
+              else round((xp-ep)*ORDER_QTY,2)
+
+        # Time size label
+        m=ets.hour*60+ets.minute
+        sz="FULL" if m<=630 else ("MED" if m<=720 else "HALF")
+
+        trades.append({
+            "date":str(day),"signal":sig,
+            "orb_range":round(orb_range,1),"atr":round(atr,1),
+            "size":sz,"entry_time":ets.strftime("%H:%M"),
+            "entry_spot":round(esp,2),"strike":strike,
+            "entry_prem":ep,"sl":sl,"t1":t1,"t2":t2,
+            "t1_hit":t1b,"t1_exit":round(t1e,2) if t1b else 0,
+            "exit_time":xts.strftime("%H:%M") if xts else "—",
+            "exit_price":xp,"exit_reason":xr,"pnl":pnl,
+        })
+
+    return trades, skipped
+
+
+def print_report(trades, skipped, data_info):
     if not trades:
-        print("\n  ❌ No trades\n")
-        return None
-    
-    cum = 0
-    for trade in trades:
-        cum += trade['pnl_net']
-        trade['running_pnl'] = cum
-    
-    return pd.DataFrame(trades)
+        print("\n  ❌ No trades generated.\n"); return
 
-# ═══════════════════════════════════════════════════════════
-#  REPORT
-# ═══════════════════════════════════════════════════════════
+    tdf=pd.DataFrame(trades)
+    tot=len(tdf)
+    wins=tdf[tdf["pnl"]>0]; losses=tdf[tdf["pnl"]<=0]
+    wr=len(wins)/tot*100; tp=tdf["pnl"].sum()
+    aw=wins["pnl"].mean() if len(wins) else 0
+    al=losses["pnl"].mean() if len(losses) else 0
+    pf=abs(wins["pnl"].sum()/losses["pnl"].sum()) \
+       if len(losses) and losses["pnl"].sum()!=0 else 99
+    eq=tdf["pnl"].cumsum(); dd=(eq-eq.cummax()).min()
+    rr=abs(aw/al) if al else 0
+    sh=tdf["pnl"].mean()/tdf["pnl"].std()*sqrt(252/5) \
+       if tdf["pnl"].std()>0 else 0
+    neg=tdf[tdf["pnl"]<0]["pnl"]
+    so=tdf["pnl"].mean()/neg.std()*sqrt(252/5) \
+       if len(neg)>1 and neg.std()>0 else 0
+    t1c=int(tdf["t1_hit"].sum())
+    ec=tdf.groupby("exit_reason")["pnl"].agg(["count","mean","sum"])
 
-def print_report(df, source="CSV"):
-    """Print backtest results and save CSV."""
-    if df is None:
-        return
-    
-    tot = len(df)
-    wins = len(df[df['pnl_net'] > 0])
-    wr = (wins / tot * 100) if tot > 0 else 0
-    pnl = df['pnl_net'].sum()
-    brok = df['brokerage'].sum()
-    
-    print(f"\n{'='*90}")
-    print(f"  🎯 REAL BACKTEST (100% FIXED) [{source} Mode]")
-    print(f"{'='*90}\n")
-    print(f"  Trades: {tot} | Wins: {wins} ({wr:.1f}%) | P&L: ₹{pnl:+,.0f}")
-    print(f"  Brokerage: ₹{brok:,} | Max DD: ₹{df['running_pnl'].min():,.0f}\n")
-    
-    # Save output
-    try:
-        csv_path = Path(r"C:\Users\bollu\github\lords\data") / f'backtest_results_{source.lower()}.csv'
-        csv_path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_csv(csv_path, index=False)
-        print(f"  📁 Saved: {csv_path}\n")
-    except Exception as e:
-        print(f"  ⚠️  Could not save CSV: {e}\n")
+    W="═"*72; S="─"*72
 
-# ═══════════════════════════════════════════════════════════
-#  MAIN (FULLY FIXED)
-# ═══════════════════════════════════════════════════════════
+    print(f"\n{W}")
+    print(f"  🏆  LORDS BOT — BACKTEST RESULTS")
+    print(f"  Data   : {data_info}")
+    print(f"  Config : {CFG_SOURCE}")
+    print(f"{W}")
 
-async def main():
-    """Main entry point - handles CSV or LIVE mode."""
-    import argparse
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--live', action='store_true', help='Use SAMCO API for live data')
-    args = parser.parse_args()
+    print(f"\n  ┌─ BOT CONFIG USED {'─'*52}")
+    print(f"  │  SL {SL_PCT*100:.0f}%"
+          f"  |  T1 {T1_PCT*100:.0f}% ({ORDER_QTY//2} lots)"
+          f"  |  T2 {T2_PCT*100:.0f}% ({ORDER_QTY-ORDER_QTY//2} lots)"
+          f"  |  Trail {TRAIL_PCT*100:.0f}%")
+    print(f"  │  Min prem ₹{MIN_PREM:.0f}"
+          f"  |  OTM +{OTM_DIST}"
+          f"  |  ATR ×{ATR_MULT}"
+          f"  |  Buffer {BUF}pts"
+          f"  |  Qty {ORDER_QTY}")
+    print(f"  │  No entry after {NO_ENTRY.strftime('%H:%M')}"
+          f"  |  Square-off {SQ_OFF.strftime('%H:%M')}"
+          f"  |  Trend filter {'ON' if TREND_ON else 'OFF'}")
+    print(f"  └{'─'*70}")
 
-    # ✅ FIX: use Path() instead of raw string
-    spot_csv = Path(r"C:\Users\bollu\github\lords\data\nifty_1min_20260428.csv")
-    option_csv = Path(r"C:\Users\bollu\github\lords\data\option_chain_real.csv")
+    print(f"\n  ┌─ PERFORMANCE {'─'*56}")
+    print(f"  │  Trades taken     : {tot}  ({len(skipped)} days skipped)")
+    print(f"  │  Win Rate         : {wr:.1f}%  ({len(wins)}W / {len(losses)}L)")
+    print(f"  │  Net P&L          : ₹{tp:+,.2f}")
+    print(f"  │  Profit Factor    : {pf:.2f}x  "
+          f"({'✅ Strong' if pf>=1.8 else '✅ Good' if pf>=1.5 else '⚠️  Marginal'})")
+    print(f"  │  Avg Win          : ₹{aw:+,.2f}")
+    print(f"  │  Avg Loss         : ₹{al:+,.2f}")
+    print(f"  │  Reward/Risk      : {rr:.2f}x  "
+          f"({'✅ Pro grade' if rr>=2.0 else '✅ Good' if rr>=1.5 else '⚠️'})")
+    print(f"  ├─ RISK {'─'*62}")
+    print(f"  │  Max Drawdown     : ₹{dd:,.2f}")
+    print(f"  │  Sharpe Ratio     : {sh:.2f}  "
+          f"({'✅ Good' if sh>=1.5 else '✅ OK' if sh>=1.0 else '⚠️'})")
+    print(f"  │  Sortino Ratio    : {so:.2f}  "
+          f"({'✅ Excellent' if so>=5 else '✅ Good' if so>=2 else '⚠️'})")
+    print(f"  │  T1 partial hits  : {t1c}/{tot} ({t1c/tot*100:.0f}%) "
+          f"— locked partial profit")
+    print(f"  └{'─'*70}")
 
-    # ✅ FIX: now .exists() works
-    if not spot_csv.exists():
-        print(f"\n  ❌ Not found: {spot_csv}\n")
-        return
+    print(f"\n  EXIT BREAKDOWN")
+    print(f"  {S}")
+    for r,row in ec.iterrows():
+        pct=row["count"]/tot*100
+        bar="█"*min(int(row["count"]*2),22)
+        icon="✅" if row["mean"]>0 else "❌"
+        print(f"  {r:<12} {int(row['count']):>2} ({pct:>3.0f}%)  "
+              f"avg ₹{row['mean']:>+8,.0f}  "
+              f"total ₹{row['sum']:>+9,.0f}  {icon}{bar}")
 
-    client = None
+    print(f"\n  SIGNAL BREAKDOWN")
+    print(f"  {S}")
+    for sg in ["CALL","PUT"]:
+        s2=tdf[tdf["signal"]==sg]
+        if len(s2):
+            swr=(s2["pnl"]>0).mean()*100
+            print(f"  {sg}  {len(s2):>2} trades  WR {swr:.0f}%  "
+                  f"P&L ₹{s2['pnl'].sum():>+9,.0f}")
 
-    if args.live:
-        print(f"\n  ✅ LIVE MODE (SAMCO API)\n")
-        try:
-            from backend.app.broker.samco_client import SamcoClient
-            client = SamcoClient()
-            await client.login()
-            print("  ✅ SAMCO authenticated\n")
-        except Exception as e:
-            print(f"  ❌ Cannot connect SAMCO: {e}\n")
-            return
-    else:
-        print(f"\n  ✅ CSV MODE\n")
+    print(f"\n  TRADE LOG")
+    print(f"  {S}")
+    print(f"  {'Date':<12} {'Sig':<5} {'ORB':>5} {'In':>5} "
+          f"{'Prem':>6} {'SL':>6} {'T1':>6} {'T1?':>4} "
+          f"{'ExitP':>7} {'Rsn':<8} {'Out':>5} {'P&L':>9}  Running")
+    print(f"  {S}")
+    cum=0
+    for _,r in tdf.iterrows():
+        cum+=r["pnl"]
+        icon="✅" if r["pnl"]>0 else "❌"
+        t1m="🎯" if r["t1_hit"] else "  "
+        rs={"STOPLOSS":"SL","TARGET_2":"T2",
+            "TRAIL":"TSL","EOD":"EOD","—":"—"}.get(
+            r["exit_reason"], r["exit_reason"][:4])
+        print(f"  {r['date']:<12} {r['signal']:<5} "
+              f"{r['orb_range']:>5.0f} {r['entry_time']:>5} "
+              f"{r['entry_prem']:>6.1f} {r['sl']:>6.1f} {r['t1']:>6.1f} "
+              f"{t1m:>4} {r['exit_price']:>7.1f} {rs:<8} "
+              f"{r['exit_time']:>5} ₹{r['pnl']:>+7,.0f}  "
+              f"{icon}  ₹{cum:>+8,.0f}")
 
-    # ✅ FIX: pass string paths to pandas
-    df = await run_backtest_real(
-        str(spot_csv),
-        str(option_csv),
-        client=client,
-        live_mode=args.live
+    print(f"\n  SKIPPED DAYS")
+    print(f"  {S}")
+    for d,reason in skipped:
+        print(f"  {str(d):<12}  {reason}")
+
+    print(f"\n  MONTHLY P&L")
+    print(f"  {S}")
+    tdf["date"]=pd.to_datetime(tdf["date"])
+    for p,mpnl in tdf.groupby(tdf["date"].dt.to_period("M"))["pnl"].sum().items():
+        m=tdf[tdf["date"].dt.to_period("M")==p]
+        w=(m["pnl"]>0).sum(); l=(m["pnl"]<=0).sum()
+        bar="█"*min(int(abs(mpnl)/300),28)
+        sgn="+" if mpnl>=0 else "-"
+        print(f"  {str(p):<10}  ₹{mpnl:>+10,.2f}  "
+              f"{len(m)} trades  {w}W/{l}L  {sgn}{bar}")
+
+    print(f"\n  SCALABILITY")
+    print(f"  {S}")
+    for lots in [1,2,3,5,10]:
+        print(f"  {lots:>2} lot{'s' if lots>1 else ' '}  "
+              f"est monthly ₹{tp/1.3*lots:>+10,.0f}  "
+              f"max DD ₹{dd*lots:>+9,.0f}  "
+              f"capital ₹{abs(dd)*lots*3:>9,.0f}")
+
+    print(f"\n{W}")
+    v="✅ PROFITABLE" if tp>0 else "❌ LOSS"
+    print(f"  {v}  |  ₹{tp:+,.2f}  |  {tot} trades  |  "
+          f"WR {wr:.1f}%  |  Sharpe {sh:.2f}")
+    print(f"  PF {pf:.2f}x  |  R:R {rr:.2f}x  |  "
+          f"Max DD ₹{dd:,.0f}  |  Sortino {so:.2f}")
+    print(f"\n  ⚠️  Premiums via Black-Scholes IV=16%. Real fills vary ±15%.")
+    print(f"{W}\n")
+
+    tdf.to_csv(ROOT/"data"/"backtest_results.csv", index=False)
+    print(f"  📁 Saved: data/backtest_results.csv\n")
+
+
+def main():
+    parser=argparse.ArgumentParser(
+        description="Lords Bot Backtester — uses your real bot config"
     )
+    parser.add_argument("--file",  default=None)
+    parser.add_argument("--start", default=None)
+    parser.add_argument("--end",   default=None)
+    args=parser.parse_args()
 
-    if df is not None:
-        source = "LIVE" if args.live else "CSV"
-        print_report(df, source=source)
+    # Auto-find CSV
+    csv_file=args.file
+    if not csv_file:
+        data_dir=ROOT/"data"
+        if data_dir.exists():
+            # Prefer 1-min files over daily files
+            csvs=[f for f in data_dir.glob("nifty_1min_*.csv")
+                  if "dataset" not in f.name]
+            if not csvs:
+                csvs=sorted(data_dir.glob("*.csv"), reverse=True)
+            if csvs:
+                csv_file=str(sorted(csvs, reverse=True)[0])
+                print(f"\n  📂 Auto-detected: {csv_file}")
+            else:
+                print("\n  ❌ No CSV found in data/ folder.")
+                print("     Run: python download_nifty_data.py")
+                print("     Choose option 2 (intraday) daily after 3:30 PM\n")
+                sys.exit(1)
+        else:
+            print("\n  ❌ data/ folder not found.\n")
+            sys.exit(1)
+
+    if not Path(csv_file).exists():
+        print(f"\n  ❌ File not found: {csv_file}\n")
+        sys.exit(1)
+
+    print(f"\n  📊 Loading {Path(csv_file).name}...")
+    df=pd.read_csv(csv_file)
+
+    # Handle both daily and 1-min files
+    if "datetime" in df.columns:
+        df["datetime"]=pd.to_datetime(df["datetime"])
+    elif "date" in df.columns:
+        print("  ⚠️  Daily OHLC file detected — ORB backtest needs 1-min data")
+        print("  Run: python download_nifty_data.py → option 2 (intraday daily)")
+        sys.exit(1)
+    else:
+        print("  ❌ No datetime/date column found"); sys.exit(1)
+
+    df=df.sort_values("datetime").reset_index(drop=True)
+    days=df["datetime"].dt.date.nunique()
+    data_info=(f"{df['datetime'].min().date()} → {df['datetime'].max().date()} "
+               f"| {len(df):,} candles | {days} days")
+    print(f"  ✅ {data_info}")
+    print(f"  ⚙️  Running backtest...\n")
+
+    trades, skipped = run_backtest(df, args.start, args.end)
+    print_report(trades, skipped, data_info)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
