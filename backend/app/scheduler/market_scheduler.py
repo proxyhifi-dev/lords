@@ -1,13 +1,24 @@
 """
-Lords Bot — Market Scheduler  v5.1
+Lords Bot — Market Scheduler  v5.2
 ====================================
 Full pipeline: poll → ORB build → candle confirm → trend filter → signal → trade.
 
-v5.1 additions:
-  1. Reconciler run_loop(300) added as background task (was missing in v5.0)
-  2. All v4.0 + v5.0 features preserved
+v5.2 additions (over v5.1):
+  1. Persist & restore trend variables across restarts:
+       _orb_open, _orb_close, _today_open, _prev_day_close
+     are now saved to state.* whenever set, and restored on startup.
+     Fixes silent score=0 after mid-day restarts.
 
-v4.0/v5.0 features:
+  2. _prev_day_close fallback: if bot starts after the 09:14 reset
+     window, attempt to load from state on first tick instead of
+     leaving it None for the entire day.
+
+  3. Diagnostic logging in _trend_score: every score computation logs
+     all four input variables AND each component contribution. Run for
+     a week, then decide on threshold tuning from real data, not guesses.
+
+v5.1 features (preserved):
+  • Reconciler run_loop(300) added as background task
   • 3-component trend score (prev close, gap, ORB direction) — no lookahead
   • Skip first candle after ORB (65s buffer, avoids 09:30 fakeouts)
   • ORB max range guard (skip chaotic days >150pts)
@@ -93,7 +104,7 @@ class MarketScheduler:
         self._candle_low:     float            = 999_999.0
         self._candle_close:   float | None     = None
 
-        # Trend state (v4.0)
+        # Trend state (v4.0) — now persisted to state for restart safety
         self._orb_open:       float | None = None
         self._orb_close:      float | None = None
         self._today_open:     float | None = None
@@ -108,30 +119,55 @@ class MarketScheduler:
             logger.warning("Scheduler already running"); return
 
         logger.info(
-            "Starting Lords Bot v5.1 — mode=%s trend_filter=%s skip_first=%s",
+            "Starting Lords Bot v5.2 — mode=%s trend_filter=%s skip_first=%s",
             settings.mode.upper(),
             settings.trend_filter_enabled,
             settings.skip_first_candle,
         )
 
         await self.state.load()
-        
+
         # Check if ORB was already frozen from previous run
         state = await self.state.snapshot()
-        logger.info("State check: orb_high=%s orb_low=%s spot_price=%s trading_enabled=%s",
-                   state.orb_high, state.orb_low, state.spot_price, state.trading_enabled)
+        logger.info(
+            "State check: orb_high=%s orb_low=%s spot_price=%s trading_enabled=%s",
+            state.orb_high, state.orb_low, state.spot_price, state.trading_enabled,
+        )
         if state.orb_high is not None and state.orb_low is not None:
             self._orb_frozen = True
             self._orb_frozen_time = _time.time()  # Approximate
-            logger.info("ORB restored from state: high=%.2f low=%.2f", 
-                        state.orb_high, state.orb_low)
+            logger.info(
+                "ORB restored from state: high=%.2f low=%.2f",
+                state.orb_high, state.orb_low,
+            )
             # Re-enable trading since ORB was already established
             await self.state.update(trading_enabled=True)
             logger.info("Trading re-enabled after ORB restoration")
         else:
             logger.info("No ORB found in state, starting fresh")
-            # Note: Auto-retrigger will happen after tasks start
-        
+
+        # ✅ NEW: Restore trend variables from state (fixes silent score=0 after restart)
+        # If the state has these values (from prior session), use them. Otherwise leave None
+        # and let the daily watcher / first tick populate them as normal.
+        restored = []
+        if getattr(state, "orb_open", None) is not None:
+            self._orb_open = state.orb_open
+            restored.append(f"orb_open={self._orb_open:.2f}")
+        if getattr(state, "orb_close", None) is not None:
+            self._orb_close = state.orb_close
+            restored.append(f"orb_close={self._orb_close:.2f}")
+        if getattr(state, "today_open", None) is not None:
+            self._today_open = state.today_open
+            restored.append(f"today_open={self._today_open:.2f}")
+        if getattr(state, "prev_day_close", None) is not None:
+            self._prev_day_close = state.prev_day_close
+            restored.append(f"prev_day_close={self._prev_day_close:.2f}")
+
+        if restored:
+            logger.info("Trend vars restored from state: %s", ", ".join(restored))
+        else:
+            logger.info("No trend vars in state — will populate from market data")
+
         await self.event_bus.start()
 
         try:
@@ -156,7 +192,7 @@ class MarketScheduler:
             asyncio.create_task(self._daily_watcher(),
                                 name="daily-reset"),
             asyncio.create_task(self._reconciler.run_loop(300),
-                                name="reconciler"),   # every 5 min
+                                name="reconciler"),
         ]
         logger.info("All tasks started (%d tasks)", len(self._tasks))
 
@@ -171,16 +207,18 @@ class MarketScheduler:
             and state.trading_enabled):
             logger.info(
                 "🔄 Auto-retrigger: price %.2f > ORB high %.2f, emitting LONG signal",
-                state.spot_price, state.orb_high)
+                state.spot_price, state.orb_high,
+            )
             await self.event_bus.publish("RISK_APPROVED", {
                 "signal": "LONG",
-                "size_label": "FULL"
+                "size_label": "FULL",
             })
         else:
             logger.info(
                 "🚫 Auto-retrigger skipped: frozen=%s spot=%s orb_high=%s enabled=%s",
                 self._orb_frozen, state.spot_price, state.orb_high,
-                state.trading_enabled)
+                state.trading_enabled,
+            )
 
     async def stop(self) -> None:
         if not self.running: return
@@ -216,6 +254,8 @@ class MarketScheduler:
                 state = await self.state.snapshot()
                 if state.spot_price and state.spot_price > 0:
                     self._prev_day_close = state.spot_price
+                    # ✅ Persist to state so it survives restart
+                    await self.state.update(prev_day_close=self._prev_day_close)
                     logger.info("Prev day close stored: %.2f", self._prev_day_close)
 
                 await self.state.daily_reset()
@@ -232,6 +272,14 @@ class MarketScheduler:
                 self._current_minute   = None
                 self._last_signal_time = 0.0
 
+                # ✅ Clear persisted trend vars too (fresh day)
+                await self.state.update(
+                    orb_open=None,
+                    orb_close=None,
+                    today_open=None,
+                    # Note: _prev_day_close was just SET above, don't clear it
+                )
+
                 logger.info("=== DAILY RESET COMPLETE ===")
 
             await asyncio.sleep(10)
@@ -241,14 +289,16 @@ class MarketScheduler:
         logger.info("🔄 Market loop started")
         while self.running:
             try:
-                # ✅ WATCHDOG FIX
                 if _market_open():
                     delay = _time.time() - self._last_tick_time
                     if delay > 10:
                         logger.error("Scheduler stalled! delay=%.2fs", delay)
                     data_stale_seconds = _time.time() - self._last_good_quote_time
                     if data_stale_seconds > settings.deadman_timeout:
-                        logger.critical("Dead-man switch: market data stale for %.1fs", data_stale_seconds)
+                        logger.critical(
+                            "Dead-man switch: market data stale for %.1fs",
+                            data_stale_seconds,
+                        )
                         await self._fail_safe_on_data_loss()
                 else:
                     self._last_tick_time = _time.time()
@@ -272,7 +322,6 @@ class MarketScheduler:
 
             await asyncio.sleep(settings.poll_seconds)
 
-   
     # ── Tick ─────────────────────────────────────────────────
 
     async def _tick(self) -> None:
@@ -281,7 +330,7 @@ class MarketScheduler:
         try:
             index_quote = await asyncio.wait_for(
                 self.broker.get_index_quote(settings.nifty_symbol),
-                timeout=3
+                timeout=3,
             )
             self._last_good_quote_time = _time.time()
             self._consecutive_quote_failures = 0
@@ -305,7 +354,6 @@ class MarketScheduler:
 
         logger.info("💰 TICK: spot=%.2f", spot)
 
-        # ✅ PROPERLY INDENTED BLOCK
         state = await self.state.snapshot()
 
         if state.active_trade:
@@ -314,7 +362,7 @@ class MarketScheduler:
             try:
                 option_quote = await self.broker.get_quote(
                     symbol_name=symbol,
-                    exchange="NFO"
+                    exchange="NFO",
                 )
 
                 option_ltp = self.broker.parse_ltp(option_quote)
@@ -324,8 +372,8 @@ class MarketScheduler:
                         spot_price=spot,
                         active_trade={
                             **state.active_trade,
-                            "ltp": option_ltp  # 🔥 THIS FIXES PnL
-                        }
+                            "ltp": option_ltp,
+                        },
                     )
                 else:
                     logger.warning("⚠️ LTP missing or zero for %s", symbol)
@@ -340,10 +388,11 @@ class MarketScheduler:
 
         logger.info("✅ TICK: State updated with spot_price=%.2f", spot)
 
-        # Capture today's first tick as open price
+        # Capture today's first tick as open price — and persist
         if self._today_open is None:
             self._today_open = spot
-            logger.info("Today open captured: %.2f", spot)
+            await self.state.update(today_open=self._today_open)
+            logger.info("Today open captured: %.2f (persisted)", spot)
 
         await self.event_bus.publish("TICK", {
             "price":  spot,
@@ -375,10 +424,12 @@ class MarketScheduler:
         if in_orb and not self._orb_frozen:
             if self._orb_open is None:
                 self._orb_open = spot
-                logger.info("ORB open captured: %.2f", spot)
+                # ✅ Persist orb_open
+                await self.state.update(orb_open=self._orb_open)
+                logger.info("ORB open captured: %.2f (persisted)", spot)
             high = spot if state.orb_high is None else max(state.orb_high, spot)
             low  = spot if state.orb_low  is None else min(state.orb_low,  spot)
-            self._orb_close = spot
+            self._orb_close = spot  # tracks rolling close during ORB build
             await self.state.update(orb_high=high, orb_low=low)
             return
 
@@ -387,6 +438,11 @@ class MarketScheduler:
             self._orb_frozen      = True
             self._orb_frozen_time = now.timestamp()
             atr_val               = self._compute_atr()
+
+            # ✅ Persist final orb_close at freeze time
+            if self._orb_close is not None:
+                await self.state.update(orb_close=self._orb_close)
+                logger.info("ORB close captured: %.2f (persisted)", self._orb_close)
 
             if state.orb_high is not None and state.orb_low is not None:
                 orb_range = state.orb_high - state.orb_low
@@ -408,7 +464,8 @@ class MarketScheduler:
 
                 logger.info(
                     "ORB FROZEN high=%.2f low=%.2f range=%.2f ATR=%.2f",
-                    state.orb_high, state.orb_low, orb_range, atr_val)
+                    state.orb_high, state.orb_low, orb_range, atr_val,
+                )
 
                 if orb_range < atr_val * settings.orb_atr_multiplier:
                     logger.warning(
@@ -437,7 +494,6 @@ class MarketScheduler:
         if completed_candle is None: return
 
         # ── Skip first candle after ORB freeze ───────────
-        # 09:30 candle has 43% WR — wait for 09:31+ (65s buffer)
         if settings.skip_first_candle and self._orb_frozen_time is not None:
             if now.timestamp() - self._orb_frozen_time < 65:
                 return
@@ -547,27 +603,45 @@ class MarketScheduler:
             PUT  only if score == -3  (all three bearish)
         """
         score = 0
+        c1 = c2 = c3 = 0  # individual component values for diagnostic logging
 
         # Component 1: gap direction
         if self._today_open is not None and self._prev_day_close is not None:
             if self._today_open > self._prev_day_close:
-                score += 1
+                c1 = +1
             elif self._today_open < self._prev_day_close:
-                score -= 1
+                c1 = -1
+        score += c1
 
         # Component 2: ORB candle direction
         if self._orb_open is not None and self._orb_close is not None:
             if self._orb_close > self._orb_open:
-                score += 1
+                c2 = +1
             elif self._orb_close < self._orb_open:
-                score -= 1
+                c2 = -1
+        score += c2
 
         # Component 3: ORB close vs prev day close
         if self._orb_close is not None and self._prev_day_close is not None:
             if self._orb_close > self._prev_day_close:
-                score += 1
+                c3 = +1
             elif self._orb_close < self._prev_day_close:
-                score -= 1
+                c3 = -1
+        score += c3
+
+        # ✅ DIAGNOSTIC LOG — every score computation logs all inputs + components
+        # Use this for a week, then decide if threshold needs tuning.
+        # Watch for "MISSING" markers — those mean a component is silently
+        # contributing 0 because its input variables are None.
+        logger.info(
+            "TREND DEBUG | today_open=%s prev_close=%s orb_open=%s orb_close=%s "
+            "| C1(gap)=%+d C2(orb)=%+d C3(close)=%+d | TOTAL=%+d",
+            f"{self._today_open:.2f}" if self._today_open is not None else "MISSING",
+            f"{self._prev_day_close:.2f}" if self._prev_day_close is not None else "MISSING",
+            f"{self._orb_open:.2f}" if self._orb_open is not None else "MISSING",
+            f"{self._orb_close:.2f}" if self._orb_close is not None else "MISSING",
+            c1, c2, c3, score,
+        )
 
         return score
 
@@ -607,7 +681,7 @@ class MarketScheduler:
         )
         try:
             order_id, _ = await self.broker.place_order_and_wait_fill(
-                symbol=symbol, side="SELL", quantity=qty
+                symbol=symbol, side="SELL", quantity=qty,
             )
             if not order_id:
                 return {"status": "error", "message": "no_order_id"}
