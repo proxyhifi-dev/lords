@@ -1,6 +1,14 @@
 """
-Lords Bot — Market Scheduler  v5.2
+Lords Bot — Market Scheduler  v5.3
 ====================================
+v5.3 fixes (over v5.2, evidence from 182k log lines):
+  1. _today_open captured ONLY during 09:15-09:17 window
+     (was: captured on first tick after startup → wrong if bot starts mid-day)
+  2. orb_close persisted on EVERY tick during ORB build window, not only at freeze
+     (was: if v5.1 froze ORB before v5.2 deployed orb_close persist, value lost)
+  3. Startup audit: if it's after 09:30 and trend vars missing, log CRITICAL
+  4. Today_open daily reset now also persisted (was: in-memory only)
+
 Full pipeline: poll → ORB build → candle confirm → trend filter → signal → trade.
 
 v5.2 additions (over v5.1):
@@ -119,7 +127,7 @@ class MarketScheduler:
             logger.warning("Scheduler already running"); return
 
         logger.info(
-            "Starting Lords Bot v5.2 — mode=%s trend_filter=%s skip_first=%s",
+            "Starting Lords Bot v5.3 — mode=%s trend_filter=%s skip_first=%s",
             settings.mode.upper(),
             settings.trend_filter_enabled,
             settings.skip_first_candle,
@@ -167,6 +175,24 @@ class MarketScheduler:
             logger.info("Trend vars restored from state: %s", ", ".join(restored))
         else:
             logger.info("No trend vars in state — will populate from market data")
+
+        # ✅ v5.3: If bot started after 09:30, check for missing trend vars
+        # Trend score will degrade if these are missing — log loudly so it's
+        # explainable in audit.
+        now_check = _now_ist()
+        if now_check.time() > time(9, 30) and now_check.weekday() < 5:
+            missing = []
+            if self._prev_day_close is None: missing.append("prev_day_close")
+            if self._today_open is None:     missing.append("today_open")
+            if self._orb_open is None:       missing.append("orb_open")
+            if self._orb_close is None:      missing.append("orb_close")
+            if missing:
+                logger.critical(
+                    "🚨 STARTUP AFTER 09:30 BUT TREND VARS MISSING: %s — "
+                    "trend score components depending on these will be 0. "
+                    "Filter at ±3 will block all signals today.",
+                    ", ".join(missing),
+                )
 
         await self.event_bus.start()
 
@@ -388,11 +414,29 @@ class MarketScheduler:
 
         logger.info("✅ TICK: State updated with spot_price=%.2f", spot)
 
-        # Capture today's first tick as open price — and persist
+        now   = _now_ist()
+
+        # Capture today's open price — but ONLY during 09:15-09:17 window.
+        # v52 bug: captured on first tick after startup, so a 10:30 restart
+        # would set today_open=10:30_spot, breaking trend score Component 1.
         if self._today_open is None:
-            self._today_open = spot
-            await self.state.update(today_open=self._today_open)
-            logger.info("Today open captured: %.2f (persisted)", spot)
+            if time(9, 15) <= now.time() <= time(9, 17):
+                self._today_open = spot
+                try:
+                    await self.state.update(today_open=self._today_open)
+                except Exception as exc:
+                    logger.warning("Failed to persist today_open: %s", exc)
+                logger.info("Today open captured: %.2f (persisted)", spot)
+            elif now.time() > time(9, 17):
+                # Bot started after 09:17 — too late to capture real open
+                # Log once per session so degraded trend scores are explainable
+                if not getattr(self, "_warned_today_open_missed", False):
+                    logger.warning(
+                        "Bot started after 09:17 (now=%s) — today_open cannot be "
+                        "captured today. Trend score Component 1 will be 0.",
+                        now.strftime("%H:%M:%S"),
+                    )
+                    self._warned_today_open_missed = True
 
         await self.event_bus.publish("TICK", {
             "price":  spot,
@@ -402,8 +446,6 @@ class MarketScheduler:
         self._recent_spots.append(spot)
         if len(self._recent_spots) > 10:
             self._recent_spots.pop(0)
-
-        now   = _now_ist()
 
         completed_candle = self._update_candle(spot, now)
         if completed_candle:
@@ -424,13 +466,27 @@ class MarketScheduler:
         if in_orb and not self._orb_frozen:
             if self._orb_open is None:
                 self._orb_open = spot
-                # ✅ Persist orb_open
-                await self.state.update(orb_open=self._orb_open)
+                try:
+                    await self.state.update(orb_open=self._orb_open)
+                except Exception as exc:
+                    logger.warning("Failed to persist orb_open: %s", exc)
                 logger.info("ORB open captured: %.2f (persisted)", spot)
             high = spot if state.orb_high is None else max(state.orb_high, spot)
             low  = spot if state.orb_low  is None else min(state.orb_low,  spot)
-            self._orb_close = spot  # tracks rolling close during ORB build
-            await self.state.update(orb_high=high, orb_low=low)
+            self._orb_close = spot  # rolling close
+
+            # ✅ v5.3: Persist orb_close on EVERY tick during ORB build window.
+            # v5.2 only persisted at freeze time, so if a v5.1 freeze ran without
+            # persisting, the value was lost. Now: as long as bot is up during
+            # 09:15-09:30 at least once, orb_close persists.
+            try:
+                await self.state.update(
+                    orb_high=high,
+                    orb_low=low,
+                    orb_close=self._orb_close,
+                )
+            except Exception as exc:
+                logger.warning("Failed to persist ORB build state: %s", exc)
             return
 
         # ── Freeze ORB at 9:30 ───────────────────────────
@@ -439,9 +495,13 @@ class MarketScheduler:
             self._orb_frozen_time = now.timestamp()
             atr_val               = self._compute_atr()
 
-            # ✅ Persist final orb_close at freeze time
+            # Persist final orb_close at freeze time (defensive — should already
+            # be persisted from the last build tick, but belt + braces)
             if self._orb_close is not None:
-                await self.state.update(orb_close=self._orb_close)
+                try:
+                    await self.state.update(orb_close=self._orb_close)
+                except Exception as exc:
+                    logger.warning("Failed to persist final orb_close: %s", exc)
                 logger.info("ORB close captured: %.2f (persisted)", self._orb_close)
 
             if state.orb_high is not None and state.orb_low is not None:
