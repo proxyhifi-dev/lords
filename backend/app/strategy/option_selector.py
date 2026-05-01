@@ -76,12 +76,11 @@ class OptionSelector:
 
         signal = signal.upper()
 
-        if signal == "CALL":
+        if signal in ("CALL", "LONG"):
             return "CE"
-        elif signal == "PUT":
+        elif signal in ("PUT", "SHORT"):
             return "PE"
-        else:
-            raise ValueError(f"Invalid signal: {signal}")
+        raise ValueError(f"Invalid signal: {signal}")
 
     # ─────────────────────────────
     # EXPIRY

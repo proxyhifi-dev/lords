@@ -71,6 +71,14 @@ class Settings:
     max_orb_range_pct: float = 0.0080
     orb_atr_multiplier: float = 1.0
     breakout_buffer: float = 5.0
+    max_breakout_extension_pct: float = 0.05
+    max_option_spike_pct: float = 0.20
+    max_consecutive_losses: int = 3
+    max_drawdown_pct: float = 0.20
+    min_orb_range: float = 50.0
+    nifty_symbol: str = "NIFTY 50"
+    nifty_exchange: str = "NSE"
+    poll_seconds: int = 1
     signal_cooldown: int = 86400
     gap_threshold: float = 5.0
     trend_filter_enabled: bool = False
@@ -124,6 +132,11 @@ def get_settings() -> Settings:
         min_option_volume=_parse_int(combined.get("MIN_OPTION_VOLUME", 500), 500),
         otm_distance=_parse_int(combined.get("OTM_DISTANCE", 1), 1),
         max_spread_pct=_parse_float(combined.get("MAX_SPREAD_PCT", 0.04), 0.04),
+        max_breakout_extension_pct=_parse_float(combined.get("MAX_BREAKOUT_EXTENSION_PCT", 0.05), 0.05),
+        max_option_spike_pct=_parse_float(combined.get("MAX_OPTION_SPIKE_PCT", 0.20), 0.20),
+        max_consecutive_losses=_parse_int(combined.get("MAX_CONSECUTIVE_LOSSES", 3), 3),
+        max_drawdown_pct=_parse_float(combined.get("MAX_DRAWDOWN_PCT", 0.20), 0.20),
+        min_orb_range=_parse_float(combined.get("MIN_ORB_RANGE", 50.0), 50.0),
         min_dte=_parse_int(combined.get("MIN_DTE", 2), 2),
         max_dte=_parse_int(combined.get("MAX_DTE", 7), 7),
         orb_duration_seconds=_parse_int(combined.get("ORB_DURATION_SECONDS", 900), 900),
@@ -131,6 +144,9 @@ def get_settings() -> Settings:
         max_orb_range_pct=_parse_float(combined.get("MAX_ORB_RANGE_PCT", 0.0080), 0.0080),
         orb_atr_multiplier=_parse_float(combined.get("ORB_ATR_MULTIPLIER", 1.0), 1.0),
         breakout_buffer=_parse_float(combined.get("BREAKOUT_BUFFER", 5.0), 5.0),
+        nifty_symbol=str(combined.get("NIFTY_SYMBOL", "NIFTY 50")).strip(),
+        nifty_exchange=str(combined.get("NIFTY_EXCHANGE", "NSE")).strip(),
+        poll_seconds=_parse_int(combined.get("POLL_SECONDS", 1), 1),
         signal_cooldown=_parse_int(combined.get("SIGNAL_COOLDOWN", 86400), 86400),
         gap_threshold=_parse_float(combined.get("GAP_THRESHOLD", 5.0), 5.0),
         trend_filter_enabled=_parse_bool(combined.get("TREND_FILTER_ENABLED", False), False),

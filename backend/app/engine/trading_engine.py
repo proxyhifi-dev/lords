@@ -216,6 +216,18 @@ class TradingEngine:
                 signal = self._map_signal(raw_signal)
                 logger.info("🔄 SIGNAL MAPPED: '%s' → '%s'", raw_signal, signal)
 
+                expiry = OptionSelector.get_expiry_api()
+                dte = self._days_to_expiry(expiry)
+                if dte is None:
+                    logger.warning("Unable to parse expiry for DTE validation: %s", expiry)
+                    return
+                if dte < settings.min_dte or dte > settings.max_dte:
+                    logger.warning(
+                        "Expiry DTE %d outside allowed range [%d,%d] for expiry=%s",
+                        dte, settings.min_dte, settings.max_dte, expiry,
+                    )
+                    return
+
                 strike = OptionSelector.get_otm_strike(
                     state.spot_price, signal, distance=settings.otm_distance,
                 )
@@ -1263,6 +1275,12 @@ class TradingEngine:
         bid: float | None,
         ask: float | None,
     ) -> bool:
+        try:
+            signal = self._map_signal(raw_signal)
+        except ValueError:
+            logger.warning("Invalid signal for validation: %s", raw_signal)
+            return False
+
         if ask and ltp > 0:
             spike_pct = abs((ask - ltp) / ltp)
             if spike_pct > settings.max_option_spike_pct:
@@ -1271,25 +1289,36 @@ class TradingEngine:
                     spike_pct * 100,
                 )
                 return False
-        if raw_signal == "LONG" and state.orb_high:
+
+        if signal == "CALL" and state.orb_high:
             min_break = state.orb_high + settings.breakout_buffer
             max_break = state.orb_high * (1 + settings.max_breakout_extension_pct)
             if state.spot_price < min_break or state.spot_price > max_break:
                 logger.warning(
-                    "Fake breakout/spike block LONG: spot=%.2f range=[%.2f, %.2f]",
+                    "Fake breakout/spike block CALL: spot=%.2f range=[%.2f, %.2f]",
                     state.spot_price, min_break, max_break,
                 )
                 return False
-        if raw_signal == "SHORT" and state.orb_low:
+        if signal == "PUT" and state.orb_low:
             max_break = state.orb_low - settings.breakout_buffer
             min_break = state.orb_low * (1 - settings.max_breakout_extension_pct)
             if state.spot_price > max_break or state.spot_price < min_break:
                 logger.warning(
-                    "Fake breakout/spike block SHORT: spot=%.2f range=[%.2f, %.2f]",
+                    "Fake breakout/spike block PUT: spot=%.2f range=[%.2f, %.2f]",
                     state.spot_price, min_break, max_break,
                 )
                 return False
         return True
+
+    def _days_to_expiry(self, expiry: str) -> int | None:
+        try:
+            expiry_date = datetime.fromisoformat(expiry).date()
+        except ValueError:
+            try:
+                expiry_date = datetime.strptime(expiry, "%d-%b-%Y").date()
+            except ValueError:
+                return None
+        return max((expiry_date - datetime.now(IST).date()).days, 0)
 
     @staticmethod
     def _next_consecutive_losses(current: int, trade_pnl: float) -> int:

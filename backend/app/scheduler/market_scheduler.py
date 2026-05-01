@@ -216,9 +216,11 @@ class MarketScheduler:
                 "🔄 Auto-retrigger: price %.2f > ORB high %.2f, emitting LONG signal",
                 state.spot_price, state.orb_high,
             )
-            await self.event_bus.publish("RISK_APPROVED", {
+            await self.event_bus.publish("SIGNAL", {
                 "signal": "LONG",
+                "spot_price": state.spot_price,
                 "size_label": "FULL",
+                "trend_score": 0,
             })
         else:
             logger.info(
