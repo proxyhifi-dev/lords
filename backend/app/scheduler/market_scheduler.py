@@ -725,3 +725,7 @@ class MarketScheduler:
             return {"status": "flattened", "symbol": symbol, "qty": qty, "order_id": order_id}
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
+
+
+# ── Global scheduler instance ──────────────────────────────
+scheduler = MarketScheduler()
