@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import time as _time
+from collections import deque
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
@@ -92,6 +93,12 @@ class MarketScheduler:
         self._candle_high:    float            = 0.0
         self._candle_low:     float            = 999_999.0
         self._candle_close:   float | None     = None
+        self._candle_volume:  int             = 0
+        self._last_index_volume: int | None    = None
+        self._prev_candle = None
+        self._volume_history = deque(maxlen=20)
+        self._latest_iv: float | None = None
+        self._iv_history = deque(maxlen=20)
 
         # Trend state (v4.0) — now persisted to state for restart safety
         self._orb_open:       float | None = None
@@ -429,17 +436,31 @@ class MarketScheduler:
                     )
                     self._warned_today_open_missed = True
 
+        raw_volume = int(float(index_quote.get("volume") or 0))
+        if self._last_index_volume is None:
+            current_volume = raw_volume
+        else:
+            current_volume = max(raw_volume - self._last_index_volume, 0)
+        self._last_index_volume = raw_volume
+
+        iv = self._extract_iv(index_quote)
+        if iv is not None:
+            self._latest_iv = iv
+            self._iv_history.append(iv)
+
         await self.event_bus.publish("TICK", {
             "price":  spot,
-            "volume": float(index_quote.get("volume") or 0),
+            "volume": float(current_volume),
+            "iv":    float(iv or 0.0),
         })
 
         self._recent_spots.append(spot)
         if len(self._recent_spots) > 10:
             self._recent_spots.pop(0)
 
-        completed_candle = self._update_candle(spot, now)
+        completed_candle = self._update_candle(spot, current_volume, now)
         if completed_candle:
+            self._append_volume_history(completed_candle["volume"])
             self._day_candles.append(completed_candle)
             if len(self._day_candles) > 60:
                 self._day_candles.pop(0)
@@ -556,7 +577,30 @@ class MarketScheduler:
 
         candle_above = completed_candle["close"] > bu
         candle_below = completed_candle["close"] < bd
-        if not candle_above and not candle_below: return
+        if not candle_above and not candle_below:
+            self._prev_candle = None
+            return
+
+        if candle_above:
+            if self._prev_candle is None or self._prev_candle["close"] <= bu:
+                self._prev_candle = completed_candle
+                logger.info("⏳ CALL breakout — waiting for confirmation candle")
+                return
+            signal_type = "CALL"
+        else:
+            if self._prev_candle is None or self._prev_candle["close"] >= bd:
+                self._prev_candle = completed_candle
+                logger.info("⏳ PUT breakout — waiting for confirmation candle")
+                return
+            signal_type = "PUT"
+
+        self._prev_candle = None
+
+        if not self._volume_spike_ok(completed_candle.get("volume", 0)):
+            return
+
+        if not self._iv_ok():
+            return
 
         # ── 3-component trend score ───────────────────────
         ts = self._trend_score(state.orb_high, state.orb_low)
@@ -602,28 +646,94 @@ class MarketScheduler:
         await self.event_bus.publish("SIGNAL", payload)
         self._last_signal_time = now_ts
 
+    def _append_volume_history(self, volume: int) -> None:
+        if volume <= 0:
+            return
+        self._volume_history.append(volume)
+
+    def _extract_iv(self, quote: dict) -> float | None:
+        if not isinstance(quote, dict):
+            return None
+        for key in ("impliedVolatility", "iv", "implied_volatility", "volatility"):
+            raw = quote.get(key)
+            if raw is not None:
+                try:
+                    iv = float(raw)
+                    if iv > 0:
+                        return iv
+                except (TypeError, ValueError):
+                    continue
+        return None
+
+    def _iv_percentile(self, current_iv: float) -> float | None:
+        if not self._iv_history:
+            return None
+        rank = sum(1 for iv in self._iv_history if iv <= current_iv)
+        return 100.0 * rank / len(self._iv_history)
+
+    def _volume_spike_ok(self, volume: int) -> bool:
+        if volume <= 0:
+            logger.warning("⚠️ Volume data unavailable — skipping volume filter")
+            return True
+        if len(self._volume_history) < 10:
+            logger.debug("Volume history short (%d candles) — skipping volume spike filter", len(self._volume_history))
+            return True
+        avg_volume = sum(self._volume_history) / len(self._volume_history)
+        spike = volume / avg_volume if avg_volume > 0 else 0.0
+        if spike < settings.min_volume_spike:
+            logger.info(
+                "❌ Volume spike %.2fx < min %.2fx — skipped",
+                spike, settings.min_volume_spike,
+            )
+            return False
+        logger.info("✅ Volume spike %.2fx (avg=%d)", spike, int(avg_volume))
+        return True
+
+    def _iv_ok(self) -> bool:
+        if self._latest_iv is None:
+            logger.debug("IV unavailable — skipping IV filter")
+            return True
+        if len(self._iv_history) < 10:
+            logger.debug("IV history short (%d points) — skipping IV percentile filter", len(self._iv_history))
+            return True
+        percentile = self._iv_percentile(self._latest_iv)
+        if percentile is None:
+            return True
+        if percentile > settings.max_iv_percentile:
+            logger.info(
+                "❌ IV filter blocked: current=%.2f%% percentile > %.2f%%",
+                percentile, settings.max_iv_percentile,
+            )
+            return False
+        logger.info("✅ IV filter passed: current=%.2f%% percentile", percentile)
+        return True
+
     # ── Candle builder ───────────────────────────────────────
 
-    def _update_candle(self, spot: float, now: datetime) -> dict | None:
+    def _update_candle(self, spot: float, volume: int, now: datetime) -> dict | None:
         minute_ts = now.replace(second=0, microsecond=0)
         if self._current_minute is None:
             self._current_minute = minute_ts
             self._candle_open = self._candle_high = self._candle_low = self._candle_close = spot
+            self._candle_volume = volume
             return None
         if minute_ts > self._current_minute:
             completed = {
-                "ts":    self._current_minute,
-                "open":  self._candle_open,
-                "high":  self._candle_high,
-                "low":   self._candle_low,
-                "close": self._candle_close,
+                "ts":     self._current_minute,
+                "open":   self._candle_open,
+                "high":   self._candle_high,
+                "low":    self._candle_low,
+                "close":  self._candle_close,
+                "volume": self._candle_volume,
             }
             self._current_minute = minute_ts
             self._candle_open = self._candle_high = self._candle_low = self._candle_close = spot
+            self._candle_volume = volume
             return completed
-        self._candle_high  = max(self._candle_high, spot)
-        self._candle_low   = min(self._candle_low,  spot)
-        self._candle_close = spot
+        self._candle_high   = max(self._candle_high, spot)
+        self._candle_low    = min(self._candle_low,  spot)
+        self._candle_close  = spot
+        self._candle_volume += volume
         return None
 
     def _compute_atr(self) -> float:

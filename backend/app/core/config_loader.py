@@ -76,6 +76,8 @@ class Settings:
     max_consecutive_losses: int = 3
     max_drawdown_pct: float = 0.20
     min_orb_range: float = 50.0
+    min_volume_spike: float = 1.5
+    max_iv_percentile: float = 70.0
     nifty_symbol: str = "NIFTY 50"
     nifty_exchange: str = "NSE"
     poll_seconds: int = 1
@@ -137,6 +139,8 @@ def get_settings() -> Settings:
         max_consecutive_losses=_parse_int(combined.get("MAX_CONSECUTIVE_LOSSES", 3), 3),
         max_drawdown_pct=_parse_float(combined.get("MAX_DRAWDOWN_PCT", 0.20), 0.20),
         min_orb_range=_parse_float(combined.get("MIN_ORB_RANGE", 50.0), 50.0),
+        min_volume_spike=_parse_float(combined.get("MIN_VOLUME_SPIKE", 1.5), 1.5),
+        max_iv_percentile=_parse_float(combined.get("MAX_IV_PERCENTILE", 70.0), 70.0),
         min_dte=_parse_int(combined.get("MIN_DTE", 2), 2),
         max_dte=_parse_int(combined.get("MAX_DTE", 7), 7),
         orb_duration_seconds=_parse_int(combined.get("ORB_DURATION_SECONDS", 900), 900),
@@ -151,7 +155,7 @@ def get_settings() -> Settings:
         gap_threshold=_parse_float(combined.get("GAP_THRESHOLD", 5.0), 5.0),
         trend_filter_enabled=_parse_bool(combined.get("TREND_FILTER_ENABLED", False), False),
         skip_first_candle=_parse_bool(combined.get("SKIP_FIRST_CANDLE", True), True),
-        no_entry_after=str(combined.get("NO_ENTRY_AFTER", "13:30")).strip(),
+        no_entry_after=str(combined.get("NO_ENTRY_AFTER", "11:30")).strip(),
         square_off=str(combined.get("SQUARE_OFF", "14:55")).strip(),
         reconnect_max_attempts=_parse_int(combined.get("RECONNECT_MAX_ATTEMPTS", 5), 5),
         reconnect_base_delay=_parse_float(combined.get("RECONNECT_BASE_DELAY", 1.0), 1.0),
