@@ -1,112 +1,154 @@
 from __future__ import annotations
-from functools import lru_cache
+
+import os
+from dataclasses import dataclass
 from pathlib import Path
-from pydantic_settings import BaseSettings
+from typing import Any
 
-# Load .env from project root
-_ENV_FILE = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+_ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
 
 
-class Settings(BaseSettings):
-    # ── BASIC ─────────────────────────────────────────
-    app_name: str = "Lords Bot"
-    mode: str = "paper"
+def _parse_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    return text in ("1", "true", "yes", "on")
 
-    # ── SAMCO ─────────────────────────────────────────
+
+def _parse_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _load_env() -> dict[str, str]:
+    env = {}
+    if _ENV_PATH.exists():
+        for line in _ENV_PATH.read_text(encoding="utf-8").splitlines():
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            env[key.strip()] = value.strip()
+    return env
+
+
+@dataclass
+class Settings:
     samco_user_id: str = ""
     samco_password: str = ""
     samco_yob: str = ""
     samco_access_token: str = ""
-
-    # ── CAPITAL & RISK ───────────────────────────────
-    capital: float = 50_000.0
-    max_daily_loss: float = 5_000.0
-    max_trades: int = 3
-    max_consecutive_losses: int = 3
-    max_drawdown_pct: float = 0.10
-
-    # ── ORDER ─────────────────────────────────────────
+    mode: str = "paper"
+    capital: float = 50000.0
+    max_daily_loss: float = 5000.0
+    max_trades: int = 1
     order_qty: int = 65
-
-    # ── EXIT LEVELS ───────────────────────────────────
-    stop_loss_pct: float = 0.30
-    t1_pct: float = 0.40
-    t2_pct: float = 1.00
-    trailing_pct: float = 0.20
-
-    # ── ENTRY FILTERS ─────────────────────────────────
-    min_entry_premium: float = 30.0
-    min_option_volume: int = 0
+    stop_loss_pct: float = 0.45
+    t1_pct: float = 0.50
+    t2_pct: float = 1.25
+    trailing_pct: float = 0.15
+    breakeven_at_pct: float = 0.25
+    min_entry_premium: float = 50.0
+    min_option_volume: int = 500
     otm_distance: int = 1
-    max_spread_pct: float = 0.05
-    dynamic_spread_max_pct: float = 0.12
-    dynamic_spread_vol_multiplier: float = 2.0
-    max_breakout_extension_pct: float = 0.02
-    max_option_spike_pct: float = 0.15
-
-    # ── ORB SETTINGS ──────────────────────────────────
+    max_spread_pct: float = 0.04
+    min_dte: int = 2
+    max_dte: int = 7
     orb_duration_seconds: int = 900
-    min_orb_range: float = 50.0
-    orb_max_range: float = 150.0
+    min_orb_range_pct: float = 0.0020
+    max_orb_range_pct: float = 0.0080
     orb_atr_multiplier: float = 1.0
     breakout_buffer: float = 5.0
-    signal_cooldown: int = 120
-    trend_filter_enabled: bool = True
-    skip_first_candle: bool = True
+    signal_cooldown: int = 86400
     gap_threshold: float = 5.0
-
-    # ── SLIPPAGE MODEL ────────────────────────────────
-    slippage_entry: float = 2.0
-    slippage_exit: float = 1.5
-    slippage_sl_gap: float = 5.0
-
-    # ── TIMING ───────────────────────────────────────
+    trend_filter_enabled: bool = False
+    skip_first_candle: bool = True
     no_entry_after: str = "13:30"
-    square_off: str = "15:10"
-    deadman_timeout: int = 45
-
-    # ── MARKET ───────────────────────────────────────
-    poll_seconds: int = 1
-    nifty_symbol: str = "NIFTY 50"
-    nifty_exchange: str = "NSE"
-
-    # ── RECONNECT ────────────────────────────────────
+    square_off: str = "14:55"
     reconnect_max_attempts: int = 5
-    reconnect_base_delay: int = 1
-
-    # ── CIRCUIT BREAKER ──────────────────────────────
+    reconnect_base_delay: float = 1.0
     circuit_failure_threshold: int = 3
     circuit_cooldown_seconds: int = 30
-
-    # ── STORAGE ──────────────────────────────────────
     trades_file: str = "data/trades.csv"
-    state_file: str = "data/runtime_state.json"
+    state_file: str = "data/runtime_state"
     log_file: str = "logs/bot.log"
-
-    # ── DASHBOARD ────────────────────────────────────
     dashboard_host: str = "0.0.0.0"
     dashboard_port: int = 8000
     frontend_dir: str = "frontend"
+    deadman_timeout: int = 30
 
-    class Config:
-        env_file = str(_ENV_FILE)
-        env_file_encoding = "utf-8"
-        extra = "allow"
-
-    # ── HELPERS ──────────────────────────────────────
     @property
     def is_live(self) -> bool:
-        return self.mode.lower() == "live"
-
-    @property
-    def samco_credentials(self) -> dict:
-        return {
-            "user_id": self.samco_user_id,
-            "password": self.samco_password,
-            "yob": self.samco_yob,
-        }
+        return str(self.mode).strip().lower() == "live"
 
 
-@lru_cache
+_settings: Settings | None = None
+
+
 def get_settings() -> Settings:
-    return Settings()
+    global _settings
+    if _settings is not None:
+        return _settings
+
+    env = _load_env()
+    combined = {**env, **os.environ}
+
+    _settings = Settings(
+        samco_user_id=str(combined.get("SAMCO_USER_ID", "")).strip(),
+        samco_password=str(combined.get("SAMCO_PASSWORD", "")).strip(),
+        samco_yob=str(combined.get("SAMCO_YOB", "")).strip(),
+        samco_access_token=str(combined.get("SAMCO_ACCESS_TOKEN", "")).strip(),
+        mode=str(combined.get("MODE", "paper")).strip(),
+        capital=_parse_float(combined.get("CAPITAL", 50000.0), 50000.0),
+        max_daily_loss=_parse_float(combined.get("MAX_DAILY_LOSS", 5000.0), 5000.0),
+        max_trades=_parse_int(combined.get("MAX_TRADES", 1), 1),
+        order_qty=_parse_int(combined.get("ORDER_QTY", 65), 65),
+        stop_loss_pct=_parse_float(combined.get("STOP_LOSS_PCT", 0.45), 0.45),
+        t1_pct=_parse_float(combined.get("T1_PCT", 0.50), 0.50),
+        t2_pct=_parse_float(combined.get("T2_PCT", 1.25), 1.25),
+        trailing_pct=_parse_float(combined.get("TRAILING_PCT", 0.15), 0.15),
+        breakeven_at_pct=_parse_float(combined.get("BREAKEVEN_AT_PCT", 0.25), 0.25),
+        min_entry_premium=_parse_float(combined.get("MIN_ENTRY_PREMIUM", 50.0), 50.0),
+        min_option_volume=_parse_int(combined.get("MIN_OPTION_VOLUME", 500), 500),
+        otm_distance=_parse_int(combined.get("OTM_DISTANCE", 1), 1),
+        max_spread_pct=_parse_float(combined.get("MAX_SPREAD_PCT", 0.04), 0.04),
+        min_dte=_parse_int(combined.get("MIN_DTE", 2), 2),
+        max_dte=_parse_int(combined.get("MAX_DTE", 7), 7),
+        orb_duration_seconds=_parse_int(combined.get("ORB_DURATION_SECONDS", 900), 900),
+        min_orb_range_pct=_parse_float(combined.get("MIN_ORB_RANGE_PCT", 0.0020), 0.0020),
+        max_orb_range_pct=_parse_float(combined.get("MAX_ORB_RANGE_PCT", 0.0080), 0.0080),
+        orb_atr_multiplier=_parse_float(combined.get("ORB_ATR_MULTIPLIER", 1.0), 1.0),
+        breakout_buffer=_parse_float(combined.get("BREAKOUT_BUFFER", 5.0), 5.0),
+        signal_cooldown=_parse_int(combined.get("SIGNAL_COOLDOWN", 86400), 86400),
+        gap_threshold=_parse_float(combined.get("GAP_THRESHOLD", 5.0), 5.0),
+        trend_filter_enabled=_parse_bool(combined.get("TREND_FILTER_ENABLED", False), False),
+        skip_first_candle=_parse_bool(combined.get("SKIP_FIRST_CANDLE", True), True),
+        no_entry_after=str(combined.get("NO_ENTRY_AFTER", "13:30")).strip(),
+        square_off=str(combined.get("SQUARE_OFF", "14:55")).strip(),
+        reconnect_max_attempts=_parse_int(combined.get("RECONNECT_MAX_ATTEMPTS", 5), 5),
+        reconnect_base_delay=_parse_float(combined.get("RECONNECT_BASE_DELAY", 1.0), 1.0),
+        circuit_failure_threshold=_parse_int(combined.get("CIRCUIT_FAILURE_THRESHOLD", 3), 3),
+        circuit_cooldown_seconds=_parse_int(combined.get("CIRCUIT_COOLDOWN_SECONDS", 30), 30),
+        trades_file=str(combined.get("TRADES_FILE", "data/trades.csv")).strip(),
+        state_file=str(combined.get("STATE_FILE", "data/runtime_state")).strip(),
+        log_file=str(combined.get("LOG_FILE", "logs/bot.log")).strip(),
+        dashboard_host=str(combined.get("DASHBOARD_HOST", "0.0.0.0")).strip(),
+        dashboard_port=_parse_int(combined.get("DASHBOARD_PORT", 8000), 8000),
+        frontend_dir=str(combined.get("FRONTEND_DIR", "frontend")).strip(),
+        deadman_timeout=_parse_int(combined.get("DEADMAN_TIMEOUT", 30), 30),
+    )
+
+    return _settings
+  

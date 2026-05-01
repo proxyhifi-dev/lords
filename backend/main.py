@@ -118,24 +118,23 @@ async def startup_status():
     """Get detailed startup synchronization status."""
     from backend.app.core.startup_manager import startup_manager
 
+    positions = getattr(startup_manager, "broker_positions", []) or []
+    orders = getattr(startup_manager, "broker_orders", []) or []
+
+    def _to_dict(record: Any, keys: list[str]) -> dict[str, Any]:
+        if isinstance(record, dict):
+            return {k: record.get(k, None) for k in keys}
+        return {k: getattr(record, k, None) for k in keys}
+
     return {
         "sync_successful": startup_manager.sync_successful,
-        "broker_positions_count": len(startup_manager.broker_positions),
-        "broker_orders_count": len(startup_manager.broker_orders),
+        "broker_positions_count": len(positions),
+        "broker_orders_count": len(orders),
         "positions": [
-            {
-                "symbol": pos.symbol,
-                "quantity": pos.quantity,
-                "pnl": pos.pnl
-            } for pos in startup_manager.broker_positions
+            _to_dict(pos, ["symbol", "quantity", "pnl"]) for pos in positions
         ],
         "open_orders": [
-            {
-                "symbol": order.symbol,
-                "side": order.side,
-                "quantity": order.quantity,
-                "status": order.status
-            } for order in startup_manager.broker_orders
+            _to_dict(order, ["symbol", "side", "quantity", "status"]) for order in orders
         ],
         "timestamp": datetime.now(timezone.utc).isoformat()
     }

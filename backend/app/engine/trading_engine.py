@@ -137,12 +137,15 @@ class TradingEngine:
 
     def _map_signal(self, raw_signal: str) -> str:
         """Map trading signals to option types."""
-        if raw_signal == "LONG":
+        if not raw_signal:
+            raise ValueError("Invalid signal: empty or missing")
+
+        signal = str(raw_signal).strip().upper()
+        if signal in ("LONG", "CALL"):
             return "CALL"
-        elif raw_signal == "SHORT":
+        if signal in ("SHORT", "PUT"):
             return "PUT"
-        else:
-            raise ValueError(f"Invalid signal: {raw_signal}. Expected LONG or SHORT.")
+        raise ValueError(f"Invalid signal: {raw_signal}. Expected LONG, SHORT, CALL or PUT.")
 
     async def run(self):
         logger.info("TradingEngine started")

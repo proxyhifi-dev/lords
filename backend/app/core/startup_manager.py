@@ -36,6 +36,10 @@ class StartupManager:
         self.trading_engine = None
         self.trade_store = None
 
+        # Broker sync metadata
+        self.broker_positions: list[dict] = []
+        self.broker_orders: list[dict] = []
+
     async def perform_safe_startup(self) -> bool:
         try:
             logger.info("🔄 Starting safe startup...")
@@ -78,10 +82,13 @@ class StartupManager:
                 orders = await self.broker.get_orders()
                 state = await self.state_manager.snapshot()
 
+                self.broker_positions = positions or []
+                self.broker_orders = orders or []
+
                 logger.info(
                     "📊 Broker sync → positions=%d orders=%d",
-                    len(positions),
-                    len(orders),
+                    len(self.broker_positions),
+                    len(self.broker_orders),
                 )
 
                 if positions:
