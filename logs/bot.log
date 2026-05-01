@@ -182458,3 +182458,7 @@ RuntimeError: SAMCO login failed: {'serverTime': '30/04/26 09:11:09', 'msgId': '
 2026-04-30 15:17:27  INFO      market_scheduler            Stopping Lords Bot scheduler
 2026-04-30 15:17:27  INFO      trading_engine              TradingEngine cancelled (normal shutdown)
 2026-04-30 15:17:27  INFO      market_scheduler            Scheduler stopped
+2026-04-30 15:24:24  INFO      samco_client                SAMCO login user=DB41588
+2026-04-30 15:24:26  INFO      samco_client                SAMCO login successful
+2026-04-30 21:42:25  INFO      samco_client                SAMCO login user=DB41588
+2026-04-30 21:42:26  INFO      samco_client                SAMCO login successful
