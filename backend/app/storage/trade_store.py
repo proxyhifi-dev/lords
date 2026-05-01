@@ -19,14 +19,20 @@ logger   = get_logger("trade_store")
 
 IST = ZoneInfo("Asia/Kolkata")
 
+# ✅ ENHANCED: added fee breakdown, slippage, quality_score, t1_exit_price, holding_seconds
 FIELDS = [
     "date", "time", "entry_time", "exit_time",
     "signal", "symbol", "strike",
-    "entry", "exit_price", "qty",
-    "pnl", "daily_pnl",
-    "reason", "order_id", "sell_order_id",
+    "entry_price", "entry_ltp", "entry_slippage",
+    "exit_price", "qty",
+    "t1_hit", "t1_exit_price", "t1_pnl",
+    "gross_pnl", "pnl",
+    "brokerage", "stt", "exchange_fee", "gst", "stamp_duty", "total_charges",
+    "daily_pnl", "reason", 
+    "order_id", "sell_order_id",
+    "quality_score", "regime",
+    "holding_seconds",
 ]
-
 
 class TradeStore:
 
@@ -72,23 +78,41 @@ class TradeStore:
     def append_trade(self, trade: dict[str, Any], daily_pnl: float | None = None) -> None:
         with self._lock:
             now = datetime.now(IST)
+            
+            # Extract charges (if present in trade dict)
+            charges = trade.get("charges", {})
 
             row = {
-                "date":       now.date().isoformat(),
-                "time":       now.strftime("%H:%M:%S"),
+                "date": now.date().isoformat(),
+                "time": now.strftime("%H:%M:%S"),
                 "entry_time": trade.get("entry_time", ""),
-                "exit_time":  trade.get("exit_time", ""),
-                "signal":     trade.get("signal", ""),
-                "symbol":     trade.get("symbol", ""),
-                "strike":     trade.get("strike", ""),
-                "entry":      trade.get("entry_price", ""),
+                "exit_time": trade.get("exit_time", ""),
+                "signal": trade.get("signal", ""),
+                "symbol": trade.get("symbol", ""),
+                "strike": trade.get("strike", ""),
+                "entry_price": trade.get("entry_price", ""),
+                "entry_ltp": trade.get("entry_ltp", ""),
+                "entry_slippage": round(trade.get("entry_price", 0) - trade.get("entry_ltp", 0), 2),
                 "exit_price": trade.get("exit_price", ""),
-                "qty":        trade.get("qty", ""),
-                "pnl":        trade.get("pnl", ""),
-                "daily_pnl":  round(daily_pnl or 0, 2),
-                "reason":     trade.get("exit_reason", ""),
-                "order_id":   trade.get("order_id", ""),
+                "qty": trade.get("qty", ""),
+                "t1_hit": trade.get("t1_hit", False),
+                "t1_exit_price": trade.get("t1_exit_price", ""),
+                "t1_pnl": trade.get("t1_pnl", ""),
+                "gross_pnl": trade.get("gross_pnl", ""),
+                "pnl": trade.get("pnl", ""),
+                "brokerage": charges.get("brokerage_total", ""),
+                "stt": charges.get("stt_sell", ""),
+                "exchange_fee": charges.get("exch_txn_total", ""),
+                "gst": charges.get("gst", ""),
+                "stamp_duty": charges.get("stamp_duty", ""),
+                "total_charges": charges.get("total_charges", ""),
+                "daily_pnl": round(daily_pnl or 0, 2),
+                "reason": trade.get("exit_reason", ""),
+                "order_id": trade.get("order_id", ""),
                 "sell_order_id": trade.get("sell_order_id", ""),
+                "quality_score": trade.get("quality_score", ""),
+                "regime": trade.get("regime", ""),
+                "holding_seconds": trade.get("holding_seconds", ""),
             }
 
             self._recent.append(row)
@@ -104,7 +128,7 @@ class TradeStore:
                     writer = csv.DictWriter(fh, fieldnames=FIELDS)
                     writer.writerow(row)
                     fh.flush()
-                    os.fsync(fh.fileno())  # ✅ real disk sync
+                    os.fsync(fh.fileno())
             except Exception as exc:
                 logger.error("TradeStore write failed: %s", exc)
 
@@ -119,7 +143,13 @@ class TradeStore:
             )
 
     def get_all_trades(self) -> list[dict]:
-        return list(self._recent)
+        """Fetch all historical trades from the CSV."""
+        try:
+            with self._file.open(encoding="utf-8") as fh:
+                return list(csv.DictReader(fh))
+        except Exception:
+            # Fallback to in-memory deque if file read fails
+            return list(self._recent)
 
     def get_daily_pnl(self) -> float:
         return self._daily_pnl

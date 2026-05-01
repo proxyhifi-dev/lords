@@ -467,20 +467,29 @@ class TradingEngine:
                 live_pnl = (ltp - entry) * remaining_qty if ltp > 0 else 0.0
                 await self.state_manager.update(live_pnl=round(live_pnl, 2))
 
+                # ✅ FIX: Update max_price
                 if ltp > trade.get("max_price", entry):
                     trade["max_price"] = ltp
                     await self.state_manager.update(active_trade=trade)
+
+                # ✅ NEW: Breakeven SL upgrade (before T1)
+                breakeven_trigger = getattr(settings, "breakeven_at_pct", 0.20)
+                if not t1_booked and ltp >= entry * (1 + breakeven_trigger):
+                    new_sl = max(sl_price, entry * 1.001)
+                    if new_sl > sl_price:
+                        sl_price = round(new_sl, 2)
+                        trade["sl_price"] = sl_price
+                        await self.state_manager.update(active_trade=trade)
+                        logger.info("✅ SL upgraded to breakeven: ₹%.2f (ltp ₹%.2f)", sl_price, ltp)
 
                 trail_sl = round(
                     trade["max_price"] * (1 - settings.trailing_pct), 2,
                 )
 
                 sq_h, sq_m = map(int, settings.square_off.split(":"))
+                now = datetime.now(IST)
 
-                if datetime.now(IST).time() >= dtime(sq_h, sq_m):
-                    await self._exit_trade(trade, "EOD_SQUAREOFF", ltp)
-                    continue
-
+                # ✅ FIX: Check SL/T1/T2 BEFORE EOD (was reversed)
                 if ltp <= sl_price:
                     await self._exit_trade(trade, "STOPLOSS", ltp)
                     continue
@@ -497,6 +506,11 @@ class TradingEngine:
                     if ltp <= trail_sl:
                         await self._exit_remaining(trade, "TRAIL_STOP", ltp)
                         continue
+
+                # EOD check LAST
+                if now.time() >= dtime(sq_h, sq_m):
+                    await self._exit_trade(trade, "EOD_SQUAREOFF", ltp)
+                    continue
 
             except Exception as exc:
                 logger.error("Monitor loop: %s", exc, exc_info=True)

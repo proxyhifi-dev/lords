@@ -7,7 +7,7 @@ from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.config_loader import get_settings
 from backend.app.core.event_bus import EventBus
 from backend.app.engine.state_manager import StateManager
-from backend.app.utils.logger import get_logger
+from backend.app.utils.logger import get_logger, log_event
 
 settings = get_settings()
 logger = get_logger("risk_manager")
@@ -26,75 +26,41 @@ class RiskManager:
 
     async def _evaluate(self, payload: Dict[str, Any]) -> None:
         state = await self.state_manager.snapshot()
+        
         if not state.trading_enabled:
             await self._block("trading_disabled")
             return
 
-        required = ["signal", "symbol", "qty", "stop_loss_price"]
-        missing = [f for f in required if payload.get(f) is None]
-        if missing:
-            await self._block("required_fields_missing", {"missing": missing})
+        # ✅ FIX: Only require 'signal' — scheduler emits {signal, spot_price, size_label, trend_score}
+        if not payload.get("signal"):
+            await self._block("signal_missing")
             return
 
-        qty = int(payload.get("qty", 0))
-        if qty <= 0:
-            await self._block("invalid_qty")
-            return
-
-        try:
-            quote = await self.broker.get_quote(payload["symbol"], exchange=payload.get("exchange", "NFO"))
-            price = self.broker.parse_ltp(quote)
-            bid, ask = self.broker.parse_bid_ask(quote)
-        except Exception as exc:
-            await self._critical_fail_closed(f"broker_quote_failure:{exc}")
-            return
-
-        if price is None or price <= 0:
-            await self._block("invalid_price")
-            return
-
-        volume = self._extract_volume(quote)
-        if volume <= 0:
-            await self._block("volume_missing_or_zero")
-            return
-
-        if bid and ask and ask > 0 and ask >= bid:
-            spread_pct = (ask - bid) / ask
-            if spread_pct > float(getattr(settings, "max_spread_pct", 0.05)):
-                await self._block("spread_too_high", {"spread_pct": spread_pct})
-                return
-
-        lot_size = int(payload.get("lot_size") or 1)
-        stop_loss_price = float(payload["stop_loss_price"])
-        notional = price * qty * lot_size
-        stop_loss_distance = abs(price - stop_loss_price)
-        worst_case_loss = stop_loss_distance * qty * lot_size
-
-        equity = settings.capital + float(getattr(state, "realized_pnl", 0.0)) + float(getattr(state, "unrealized_pnl", 0.0))
-        if equity <= 0:
-            await self._critical_fail_closed("equity_non_positive")
-            return
-
-        max_trade_risk_pct = float(getattr(settings, "max_trade_risk_pct", 0.02))
-        if worst_case_loss / equity > max_trade_risk_pct:
-            await self._block("max_trade_risk_pct_exceeded", {"worst_case_loss": worst_case_loss, "equity": equity})
-            return
-
-        max_portfolio_exposure_pct = float(getattr(settings, "max_portfolio_exposure_pct", 0.50))
-        current_exposure = sum((state.positions or {}).values())
-        if (current_exposure + notional) / equity > max_portfolio_exposure_pct:
-            await self._block("max_portfolio_exposure_pct_exceeded")
-            return
-
+        # Entry time check
         now = datetime.now().time()
         h, m = map(int, str(settings.no_entry_after).split(":"))
         if now > time(h, m):
             await self._block("late_entry")
             return
 
-        payload["computed_notional"] = notional
-        payload["computed_worst_case_loss"] = worst_case_loss
-        payload["computed_entry_price"] = price
+        # Daily loss check (enforce here, not just at exit)
+        if state.daily_pnl <= -settings.max_daily_loss:
+            await self._block("max_daily_loss_hit", {"daily_pnl": state.daily_pnl})
+            logger.critical("🚨 MAX_DAILY_LOSS hit: ₹%.2f", state.daily_pnl)
+            await self.state_manager.update(trading_enabled=False, last_risk_breach="max_daily_loss")
+            return
+
+        # Max trades check
+        if state.trade_count >= settings.max_trades:
+            await self._block("max_trades_hit", {"trade_count": state.trade_count})
+            return
+
+        # Pass through to trading_engine (it will do strike/symbol/qty resolution)
+        logger.info("RISK_APPROVED signal=%s size=%s", 
+                   payload.get("signal"), payload.get("size_label"))
+        
+        log_event("RISK_APPROVED", **payload)
+        
         await self.state_manager.update(signal=None, signal_meta=None)
         await self.event_bus.publish("RISK_APPROVED", payload)
 
@@ -109,6 +75,7 @@ class RiskManager:
         await self.event_bus.publish("RISK_BLOCKED", {"reason": reason, "timestamp": datetime.now().isoformat()})
 
     async def _block(self, reason: str, details: Dict[str, Any] | None = None) -> None:
+        logger.debug("RISK_BLOCKED reason=%s", reason)
         await self.state_manager.update(signal=None, signal_meta=None)
         await self.event_bus.publish("RISK_BLOCKED", {"reason": reason, "details": details, "timestamp": datetime.now().isoformat()})
 

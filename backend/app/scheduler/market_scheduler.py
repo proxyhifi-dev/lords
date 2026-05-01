@@ -477,9 +477,13 @@ class MarketScheduler:
 
         # ── Freeze ORB at 9:30 ───────────────────────────
         if not in_orb and not self._orb_frozen:
-            self._orb_frozen      = True
+            # ✅ FIX: Guard against re-freeze
+            if self._orb_frozen:
+                return
+            
+            self._orb_frozen = True
             self._orb_frozen_time = now.timestamp()
-            atr_val               = self._compute_atr()
+            atr_val = self._compute_atr()
 
             if self._orb_close is not None:
                 try:
@@ -490,25 +494,28 @@ class MarketScheduler:
 
             if state.orb_high is not None and state.orb_low is not None:
                 orb_range = state.orb_high - state.orb_low
+                orb_range_pct = orb_range / state.orb_high  # ✅ FIX: % based
 
-                if orb_range < settings.min_orb_range:
+                # ✅ FIX: Use MIN_ORB_RANGE_PCT from settings
+                min_pct = getattr(settings, "min_orb_range_pct", 0.0020)
+                if orb_range_pct < min_pct:
                     logger.warning(
-                        "ORB range %.1f < min %.1f — trading disabled",
-                        orb_range, settings.min_orb_range)
+                        "ORB range %.2f%% < min %.2f%% — trading disabled",
+                        orb_range_pct * 100, min_pct * 100)
                     await self.state.update(trading_enabled=False)
                     return
 
-                orb_max = getattr(settings, "orb_max_range", 150.0)
-                if orb_range > orb_max:
+                max_pct = getattr(settings, "max_orb_range_pct", 0.0080)
+                if orb_range_pct > max_pct:
                     logger.warning(
-                        "ORB range %.1f > max %.1f (chaotic) — trading disabled",
-                        orb_range, orb_max)
+                        "ORB range %.2f%% > max %.2f%% (chaotic) — trading disabled",
+                        orb_range_pct * 100, max_pct * 100)
                     await self.state.update(trading_enabled=False)
                     return
 
                 logger.info(
-                    "ORB FROZEN high=%.2f low=%.2f range=%.2f ATR=%.2f",
-                    state.orb_high, state.orb_low, orb_range, atr_val,
+                    "ORB FROZEN high=%.2f low=%.2f range=%.2f (%.2f%%) ATR=%.2f",
+                    state.orb_high, state.orb_low, orb_range, orb_range_pct * 100, atr_val,
                 )
 
                 if orb_range < atr_val * settings.orb_atr_multiplier:
