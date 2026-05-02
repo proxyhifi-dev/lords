@@ -10,9 +10,9 @@ import numpy as np
 from datetime import time, datetime
 from zoneinfo import ZoneInfo
 from backend.app.core.config_loader import get_settings
-from backend.app.utils.logger import get_logger
+from backend.app.core.logging_config import setup_file_logging
 
-logger = get_logger("iron_condor_strategy")
+logger = setup_file_logging("iron_condor_strategy")
 IST = ZoneInfo("Asia/Kolkata")
 
 

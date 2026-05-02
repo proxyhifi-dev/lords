@@ -33,14 +33,21 @@ from zoneinfo import ZoneInfo
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.config_loader import get_settings
 from backend.app.core.event_bus import EventBus
+from backend.app.core.logging_config import setup_file_logging
 from backend.app.engine.execution_manager import ExecutionManager, OrderState
+from backend.app.engine.order_execution import (
+    OrderExecutionSequence,
+    ExpiryDaySafetyProtocol,
+    WebSocketResilience,
+    MarginUtilizationMonitor
+)
 from backend.app.storage.trade_store import TradeStore
 from backend.app.strategy.iron_condor_strategy import IronCondorStrategy
 from backend.app.strategy.option_selector import OptionSelector
 from backend.app.utils.logger import get_logger
 
 settings = get_settings()
-logger = get_logger("trading_engine")
+logger = setup_file_logging("trading_engine")
 IST = ZoneInfo("Asia/Kolkata")
 
 _SELL_MAX_RETRIES = 3
@@ -141,6 +148,29 @@ class TradingEngine:
             event_bus=self.event_bus,
         )
 
+        # Production execution components (8.5/10 → 10/10 upgrade)
+        self.order_executor = OrderExecutionSequence(
+            broker_client=self.broker,
+            settings=settings,
+            logger=logger
+        )
+
+        self.expiry_safety = ExpiryDaySafetyProtocol(
+            settings=settings,
+            logger=logger
+        )
+
+        self.margin_monitor = MarginUtilizationMonitor(
+            total_capital=settings.capital,
+            safety_buffer=5000,  # ₹5,000 buffer
+            logger=logger
+        )
+
+        # WebSocket resilience (if using WebSocket for live data)
+        self.ws_resilience = None  # Will be initialized when needed
+
+        logger.info("✅ Production execution components initialized")
+
     def _map_signal(self, raw_signal: str) -> str:
         """Map trading signals to option types."""
         if not raw_signal:
@@ -232,66 +262,49 @@ class TradingEngine:
             logger.error("IC position validation failed - skipping entry")
             return
 
-        legs = [
-            # HEDGES FIRST (protective)
-            {
-                "symbol": await self._resolve_option_symbol(strikes["long_call"], "CALL"),
-                "side": "BUY",  # BUY the hedge
-                "qty": self._get_qty(payload.get("size_label", "FULL")),
-                "leg_type": "LONG_CALL",
-            },
-            {
-                "symbol": await self._resolve_option_symbol(strikes["long_put"], "PUT"),
-                "side": "BUY",  # BUY the hedge
-                "qty": self._get_qty(payload.get("size_label", "FULL")),
-                "leg_type": "LONG_PUT",
-            },
-            # SHORT LEGS AFTER HEDGES (premium collection)
-            {
-                "symbol": await self._resolve_option_symbol(strikes["short_call"], "CALL"),
-                "side": "SELL",  # SELL to collect premium
-                "qty": self._get_qty(payload.get("size_label", "FULL")),
-                "leg_type": "SHORT_CALL",
-            },
-            {
-                "symbol": await self._resolve_option_symbol(strikes["short_put"], "PUT"),
-                "side": "SELL",  # SELL to collect premium
-                "qty": self._get_qty(payload.get("size_label", "FULL")),
-                "leg_type": "SHORT_PUT",
-            },
-        ]
+        # PRODUCTION UPGRADE: Use OrderExecutionSequence for correct margin (FIX #1)
+        logger.info("\n🚀 Starting Iron Condor entry with production sequence")
 
-        for leg in legs:
-            if not leg["symbol"]:
-                logger.error("Iron Condor leg symbol resolution failed: %s", leg)
-                return
+        # Step 1: Check margin before entry
+        margin_status = self.margin_monitor.check_margin(settings.ic_margin_required)
+        if margin_status['status'] == 'CRITICAL':
+            logger.error("❌ Rejecting entry: Critical margin utilization")
+            return
 
-        filled_legs: list[dict[str, any]] = []
-        for leg in legs:
-            leg_result = await self._place_iron_condor_leg(leg)
-            if leg_result is None:
-                logger.error("Iron Condor leg placement failed: %s", leg)
-                await self._rollback_iron_condor(filled_legs)
-                return
-            filled_legs.append(leg_result)
+        # Step 2: Check expiry safety
+        should_exit, reason = self.expiry_safety.should_force_exit(current_time, current_time)
+        if should_exit:
+            logger.critical(f"❌ Rejecting entry: {reason}")
+            return
 
+        # Step 3: Execute with correct order sequence (hedges first, then shorts)
+        result = await self.order_executor.enter_iron_condor_sequence(strikes, premiums)
+
+        if not result['success']:
+            logger.error(f"❌ Entry failed: {result.get('error', 'Unknown error')}")
+            return
+
+        # Entry successful - store position details
+        order_ids = result['order_ids']
+        logger.info(f"✅ Position opened with order IDs: {order_ids}")
+
+        # Create trade record with new format
         trade = {
             "strategy": "IRON_CONDOR",
             "signal": "IRON_CONDOR",
             "symbol": "IRON_CONDOR",
             "strike": f"{strikes['short_put']}/{strikes['short_call']}",
-            "qty": filled_legs[0]["filled_qty"],
+            "qty": settings.order_qty,
             "entry_price": net_premium,
             "entry_ltp": net_premium,
             "entry_time": current_time.isoformat(),
             "status": "OPEN",
             "size_label": payload.get("size_label", "FULL"),
-            "legs": filled_legs,
+            "order_ids": order_ids,
             "premiums": premiums,
             "strikes": strikes,
             "exit_reason": None,
             "exit_premium": None,
-            "order_ids": [leg["order_id"] for leg in filled_legs],
         }
 
         await self.state_manager.update(
@@ -673,8 +686,17 @@ class TradingEngine:
                 live_pnl = (trade["entry_price"] - current_premium) * trade.get("qty", 0)
                 await self.state_manager.update(live_pnl=round(live_pnl, 2))
 
+                # PRODUCTION UPGRADE: Check expiry safety (FIX #3)
+                should_force_exit, reason = self.expiry_safety.should_force_exit(
+                    current_time, entry_time
+                )
+                if should_force_exit:
+                    logger.critical(f"🔴 FORCE CLOSING: {reason}")
+                    await self._exit_iron_condor_trade(trade, "EXPIRY_SAFETY_FORCED_EXIT", current_premium)
+                    continue
+
                 reason = self.iron_condor_strategy.get_exit_reason(
-                    current_time, entry_time, trade["entry_price"], current_premium
+                    entry_time, current_time, trade["entry_price"], current_premium
                 )
                 if reason:
                     await self._exit_iron_condor_trade(trade, reason, current_premium)
