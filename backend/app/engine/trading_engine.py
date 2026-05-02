@@ -226,30 +226,38 @@ class TradingEngine:
             logger.warning("Iron Condor premium too low: ₹%.2f < ₹%.2f", net_premium, self.iron_condor_strategy.min_premium)
             return
 
+        # NEW: VALIDATE RISK BEFORE PLACING LEGS
+        is_valid = await self.risk_manager.validate_iron_condor_position(net_premium, state)
+        if not is_valid:
+            logger.error("IC position validation failed - skipping entry")
+            return
+
         legs = [
-            {
-                "symbol": await self._resolve_option_symbol(strikes["short_call"], "CALL"),
-                "side": "SELL",
-                "qty": self._get_qty(payload.get("size_label", "FULL")),
-                "leg_type": "SHORT_CALL",
-            },
+            # HEDGES FIRST (protective)
             {
                 "symbol": await self._resolve_option_symbol(strikes["long_call"], "CALL"),
-                "side": "BUY",
+                "side": "BUY",  # BUY the hedge
                 "qty": self._get_qty(payload.get("size_label", "FULL")),
                 "leg_type": "LONG_CALL",
             },
             {
-                "symbol": await self._resolve_option_symbol(strikes["short_put"], "PUT"),
-                "side": "SELL",
-                "qty": self._get_qty(payload.get("size_label", "FULL")),
-                "leg_type": "SHORT_PUT",
-            },
-            {
                 "symbol": await self._resolve_option_symbol(strikes["long_put"], "PUT"),
-                "side": "BUY",
+                "side": "BUY",  # BUY the hedge
                 "qty": self._get_qty(payload.get("size_label", "FULL")),
                 "leg_type": "LONG_PUT",
+            },
+            # SHORT LEGS AFTER HEDGES (premium collection)
+            {
+                "symbol": await self._resolve_option_symbol(strikes["short_call"], "CALL"),
+                "side": "SELL",  # SELL to collect premium
+                "qty": self._get_qty(payload.get("size_label", "FULL")),
+                "leg_type": "SHORT_CALL",
+            },
+            {
+                "symbol": await self._resolve_option_symbol(strikes["short_put"], "PUT"),
+                "side": "SELL",  # SELL to collect premium
+                "qty": self._get_qty(payload.get("size_label", "FULL")),
+                "leg_type": "SHORT_PUT",
             },
         ]
 
