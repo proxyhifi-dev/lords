@@ -55,6 +55,27 @@ class Settings:
     max_daily_loss: float = 5000.0
     max_trades: int = 1
     order_qty: int = 65
+    strategy_type: str = "orb"
+
+    # Iron Condor strategy parameters
+    ic_entry_day_start: int = 1
+    ic_entry_day_end: int = 5
+    ic_entry_window_start: str = "09:20"
+    ic_entry_window_end: str = "10:00"
+    ic_target_profit_pct: float = 0.50
+    ic_stop_loss_multiple: float = 1.50
+    ic_min_entry_premium: float = 50.0
+    ic_days_to_expiry: int = 30
+    ic_decay_rate: float = 0.15
+    ic_short_otm_pct: float = 0.03
+    ic_long_otm_pct: float = 0.06
+    ic_strike_rounding: int = 50
+    ic_assumed_iv: float = 0.15
+    ic_platform_charges: float = 100.0
+    ic_stt_rate: float = 0.0015
+    ic_margin_required: float = 40000.0
+    ic_max_loss_per_trade: float = 10000.0
+
     stop_loss_pct: float = 0.45
     t1_pct: float = 0.50
     t2_pct: float = 1.25
@@ -140,6 +161,24 @@ def get_settings() -> Settings:
         max_drawdown_pct=_parse_float(combined.get("MAX_DRAWDOWN_PCT", 0.20), 0.20),
         min_orb_range=_parse_float(combined.get("MIN_ORB_RANGE", 50.0), 50.0),
         min_volume_spike=_parse_float(combined.get("MIN_VOLUME_SPIKE", 1.5), 1.5),
+        strategy_type=str(combined.get("STRATEGY_TYPE", "orb")).strip().lower(),
+        ic_entry_day_start=_parse_int(combined.get("IC_ENTRY_DAY_START", 1), 1),
+        ic_entry_day_end=_parse_int(combined.get("IC_ENTRY_DAY_END", 5), 5),
+        ic_entry_window_start=str(combined.get("IC_ENTRY_WINDOW_START", "09:20")).strip(),
+        ic_entry_window_end=str(combined.get("IC_ENTRY_WINDOW_END", "10:00")).strip(),
+        ic_target_profit_pct=_parse_float(combined.get("IC_TARGET_PROFIT", 0.50), 0.50),
+        ic_stop_loss_multiple=_parse_float(combined.get("IC_STOP_LOSS_MULTIPLE", 1.50), 1.50),
+        ic_min_entry_premium=_parse_float(combined.get("IC_MIN_ENTRY_PREMIUM", 50.0), 50.0),
+        ic_days_to_expiry=_parse_int(combined.get("IC_DAYS_TO_EXPIRY", 30), 30),
+        ic_decay_rate=_parse_float(combined.get("IC_DECAY_RATE", 0.15), 0.15),
+        ic_short_otm_pct=_parse_float(combined.get("IC_SHORT_OTM_PCT", 0.03), 0.03),
+        ic_long_otm_pct=_parse_float(combined.get("IC_LONG_OTM_PCT", 0.06), 0.06),
+        ic_strike_rounding=_parse_int(combined.get("IC_STRIKE_ROUNDING", 50), 50),
+        ic_assumed_iv=_parse_float(combined.get("IC_ASSUMED_IV", 0.15), 0.15),
+        ic_platform_charges=_parse_float(combined.get("IC_PLATFORM_CHARGES", 100.0), 100.0),
+        ic_stt_rate=_parse_float(combined.get("IC_STT_RATE", 0.0015), 0.0015),
+        ic_margin_required=_parse_float(combined.get("IC_MARGIN_REQUIRED", 40000.0), 40000.0),
+        ic_max_loss_per_trade=_parse_float(combined.get("IC_MAX_LOSS_PER_TRADE", 10000.0), 10000.0),
         max_iv_percentile=_parse_float(combined.get("MAX_IV_PERCENTILE", 70.0), 70.0),
         min_dte=_parse_int(combined.get("MIN_DTE", 2), 2),
         max_dte=_parse_int(combined.get("MAX_DTE", 7), 7),

@@ -35,6 +35,7 @@ from backend.app.core.config_loader import get_settings
 from backend.app.core.event_bus import EventBus
 from backend.app.engine.execution_manager import ExecutionManager, OrderState
 from backend.app.storage.trade_store import TradeStore
+from backend.app.strategy.iron_condor_strategy import IronCondorStrategy
 from backend.app.strategy.option_selector import OptionSelector
 from backend.app.utils.logger import get_logger
 
@@ -128,6 +129,11 @@ class TradingEngine:
         self._symbol_cache: dict[str, str] = {}
         self._fatal_lock = asyncio.Lock()
         self._ltp_history: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=20))
+
+        self.iron_condor_strategy: IronCondorStrategy | None = None
+        if settings.strategy_type == "iron_condor":
+            self.iron_condor_strategy = IronCondorStrategy()
+            logger.info("🚀 Iron Condor strategy enabled in TradingEngine")
         self.reconciliation = None
         self.execution_manager = ExecutionManager(
             broker=self.broker,
@@ -145,7 +151,202 @@ class TradingEngine:
             return "CALL"
         if signal in ("SHORT", "PUT"):
             return "PUT"
-        raise ValueError(f"Invalid signal: {raw_signal}. Expected LONG, SHORT, CALL or PUT.")
+        if signal in ("IRON_CONDOR", "IRONCONDOR", "IC"):
+            return "IRON_CONDOR"
+        raise ValueError(
+            f"Invalid signal: {raw_signal}. Expected LONG, SHORT, CALL, PUT or IRON_CONDOR."
+        )
+
+    async def _resolve_option_symbol(self, strike: int, option_type: str) -> str | None:
+        return await self._resolve_symbol(strike, option_type)
+
+    async def _place_iron_condor_leg(self, leg: dict[str, any]) -> dict[str, any] | None:
+        request = {
+            "signal": "IRON_CONDOR",
+            "symbol": leg["symbol"],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "quantity": leg["qty"],
+            "side": leg["side"],
+        }
+        exec_result = await self.execution_manager.execute_order(request)
+        if exec_result.is_uncertain:
+            return None
+        if exec_result.state != OrderState.FILLED:
+            return None
+
+        filled_qty = exec_result.filled_qty
+        if exec_result.order_id and exec_result.order_id.startswith("PAPER-"):
+            filled_qty = leg["qty"]
+
+        return {
+            **leg,
+            "order_id": exec_result.order_id,
+            "fill_price": exec_result.avg_price or 0.0,
+            "filled_qty": filled_qty,
+        }
+
+    async def _rollback_iron_condor(self, legs: list[dict[str, any]]) -> None:
+        for leg in reversed(legs):
+            side = "BUY" if leg["side"] == "SELL" else "SELL"
+            try:
+                await self.execution_manager.execute_order({
+                    "signal": "IRON_CONDOR_ROLLBACK",
+                    "symbol": leg["symbol"],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "quantity": leg["filled_qty"],
+                    "side": side,
+                })
+            except Exception as exc:
+                logger.warning("Rollback leg failed: %s %s qty=%d err=%s", side, leg["symbol"], leg["filled_qty"], exc)
+
+    async def _enter_iron_condor_trade(self, payload: dict[str, any], state) -> None:
+        if not self.iron_condor_strategy:
+            logger.error("Iron Condor strategy helper is unavailable")
+            return
+
+        spot = state.spot_price
+        if spot is None:
+            logger.warning("Cannot enter Iron Condor: spot_price missing")
+            return
+
+        current_time = datetime.now(IST)
+        if not self.iron_condor_strategy.can_enter_cycle(current_time, state):
+            logger.info("Iron Condor entry conditions not met")
+            return
+
+        strikes = self.iron_condor_strategy.calculate_strikes(spot)
+        premiums = {
+            "short_call": self.iron_condor_strategy.estimate_option_premium(spot, strikes["short_call"], "CE", self.iron_condor_strategy.days_to_expiry),
+            "long_call": self.iron_condor_strategy.estimate_option_premium(spot, strikes["long_call"], "CE", self.iron_condor_strategy.days_to_expiry),
+            "short_put": self.iron_condor_strategy.estimate_option_premium(spot, strikes["short_put"], "PE", self.iron_condor_strategy.days_to_expiry),
+            "long_put": self.iron_condor_strategy.estimate_option_premium(spot, strikes["long_put"], "PE", self.iron_condor_strategy.days_to_expiry),
+        }
+        net_premium = (premiums["short_call"] + premiums["short_put"]) - (premiums["long_call"] + premiums["long_put"])
+        if net_premium < self.iron_condor_strategy.min_premium:
+            logger.warning("Iron Condor premium too low: ₹%.2f < ₹%.2f", net_premium, self.iron_condor_strategy.min_premium)
+            return
+
+        legs = [
+            {
+                "symbol": await self._resolve_option_symbol(strikes["short_call"], "CALL"),
+                "side": "SELL",
+                "qty": self._get_qty(payload.get("size_label", "FULL")),
+                "leg_type": "SHORT_CALL",
+            },
+            {
+                "symbol": await self._resolve_option_symbol(strikes["long_call"], "CALL"),
+                "side": "BUY",
+                "qty": self._get_qty(payload.get("size_label", "FULL")),
+                "leg_type": "LONG_CALL",
+            },
+            {
+                "symbol": await self._resolve_option_symbol(strikes["short_put"], "PUT"),
+                "side": "SELL",
+                "qty": self._get_qty(payload.get("size_label", "FULL")),
+                "leg_type": "SHORT_PUT",
+            },
+            {
+                "symbol": await self._resolve_option_symbol(strikes["long_put"], "PUT"),
+                "side": "BUY",
+                "qty": self._get_qty(payload.get("size_label", "FULL")),
+                "leg_type": "LONG_PUT",
+            },
+        ]
+
+        for leg in legs:
+            if not leg["symbol"]:
+                logger.error("Iron Condor leg symbol resolution failed: %s", leg)
+                return
+
+        filled_legs: list[dict[str, any]] = []
+        for leg in legs:
+            leg_result = await self._place_iron_condor_leg(leg)
+            if leg_result is None:
+                logger.error("Iron Condor leg placement failed: %s", leg)
+                await self._rollback_iron_condor(filled_legs)
+                return
+            filled_legs.append(leg_result)
+
+        trade = {
+            "strategy": "IRON_CONDOR",
+            "signal": "IRON_CONDOR",
+            "symbol": "IRON_CONDOR",
+            "strike": f"{strikes['short_put']}/{strikes['short_call']}",
+            "qty": filled_legs[0]["filled_qty"],
+            "entry_price": net_premium,
+            "entry_ltp": net_premium,
+            "entry_time": current_time.isoformat(),
+            "status": "OPEN",
+            "size_label": payload.get("size_label", "FULL"),
+            "legs": filled_legs,
+            "premiums": premiums,
+            "strikes": strikes,
+            "exit_reason": None,
+            "exit_premium": None,
+            "order_ids": [leg["order_id"] for leg in filled_legs],
+        }
+
+        await self.state_manager.update(
+            active_trade=trade,
+            trade_count=state.trade_count + 1,
+        )
+
+        logger.info("✅ IRON_CONDOR position opened with premium=₹%.2f qty=%d", net_premium, trade["qty"])
+        await self.event_bus.publish("TRADE_OPENED", {"trade": trade})
+
+    async def _exit_iron_condor_trade(self, trade: dict[str, any], reason: str, current_premium: float) -> None:
+        if trade.get("status") == "CLOSED":
+            return
+        async with self._trade_lock:
+            state = await self.state_manager.snapshot()
+            if not state.active_trade:
+                logger.warning("🚫 IRON_CONDOR exit skipped: no active trade")
+                return
+
+            logger.info("🔄 IRON_CONDOR exit triggered reason=%s premium=₹%.2f", reason, current_premium)
+
+            for leg in trade.get("legs", []):
+                exit_side = "BUY" if leg["side"] == "SELL" else "SELL"
+                result = await self.execution_manager.execute_order({
+                    "signal": reason,
+                    "symbol": leg["symbol"],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "quantity": leg["filled_qty"],
+                    "side": exit_side,
+                })
+                if result.is_uncertain or result.state != OrderState.FILLED:
+                    logger.error("Iron Condor exit leg failed: %s", leg)
+                    await self._handle_fatal_exception("IRON_CONDOR_EXIT_FAILED", RuntimeError("Iron Condor exit failed"))
+                    return
+
+            pnl = self.iron_condor_strategy.compute_pnl(trade["entry_price"], current_premium, trade["qty"])
+            new_daily = round(state.daily_pnl + pnl["net_pnl"], 2)
+            closed = {
+                **trade,
+                "status": "CLOSED",
+                "exit_time": datetime.now(timezone.utc).isoformat(),
+                "exit_reason": reason,
+                "exit_premium": current_premium,
+                "gross_pnl": pnl["gross_pnl"],
+                "charges": pnl["charges"],
+                "stt": pnl["stt"],
+                "net_pnl": pnl["net_pnl"],
+                "trade_type": "IRON_CONDOR",
+            }
+
+            self.trade_store.append_trade(closed, new_daily)
+
+            await self.state_manager.update(
+                active_trade=None,
+                daily_pnl=new_daily,
+                live_pnl=0.0,
+                consecutive_losses=self._next_consecutive_losses(state.consecutive_losses, pnl["net_pnl"]),
+                last_iron_condor_month=datetime.now(IST).month,
+            )
+
+            await self._enforce_global_risk_stop(new_daily, pnl["net_pnl"], state)
+            logger.info("✅ IRON_CONDOR CLOSED reason=%s net_pnl=₹%.2f", reason, pnl["net_pnl"])
+            await self.event_bus.publish("TRADE_CLOSED", {"trade": closed})
 
     async def run(self):
         logger.info("TradingEngine started")
@@ -215,6 +416,10 @@ class TradingEngine:
             try:
                 signal = self._map_signal(raw_signal)
                 logger.info("🔄 SIGNAL MAPPED: '%s' → '%s'", raw_signal, signal)
+
+                if signal == "IRON_CONDOR":
+                    await self._enter_iron_condor_trade(payload, state)
+                    return
 
                 expiry = OptionSelector.get_expiry_api()
                 dte = self._days_to_expiry(expiry)
@@ -447,6 +652,24 @@ class TradingEngine:
             if not trade:
                 continue
             if trade.get("status") == "CLOSED":
+                continue
+
+            if trade.get("strategy") == "IRON_CONDOR":
+                if not self.iron_condor_strategy:
+                    continue
+                current_time = datetime.now(IST)
+                entry_time = datetime.fromisoformat(trade["entry_time"])
+                current_premium = self.iron_condor_strategy.estimate_current_premium(
+                    trade["entry_price"], entry_time, current_time
+                )
+                live_pnl = (trade["entry_price"] - current_premium) * trade.get("qty", 0)
+                await self.state_manager.update(live_pnl=round(live_pnl, 2))
+
+                reason = self.iron_condor_strategy.get_exit_reason(
+                    current_time, entry_time, trade["entry_price"], current_premium
+                )
+                if reason:
+                    await self._exit_iron_condor_trade(trade, reason, current_premium)
                 continue
 
             try:

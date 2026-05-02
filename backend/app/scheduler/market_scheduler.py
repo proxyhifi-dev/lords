@@ -385,38 +385,54 @@ class MarketScheduler:
         state = await self.state.snapshot()
 
         if state.active_trade:
-            symbol = state.active_trade.get("symbol")
-
-            try:
-                option_quote = await self.broker.get_quote(
-                    symbol_name=symbol,
-                    exchange="NFO",
-                )
-
-                option_ltp = self.broker.parse_ltp(option_quote)
-
-                if option_ltp is not None and option_ltp > 0:
-                    await self.state.update(
-                        spot_price=spot,
-                        active_trade={
-                            **state.active_trade,
-                            "ltp": option_ltp,
-                        },
-                    )
-                else:
-                    logger.warning("⚠️ LTP missing or zero for %s", symbol)
-                    await self.state.update(spot_price=spot)
-
-            except Exception as e:
-                logger.warning("⚠️ Option quote failed: %s", e)
+            if settings.strategy_type == "iron_condor":
                 await self.state.update(spot_price=spot)
+            else:
+                symbol = state.active_trade.get("symbol")
 
+                try:
+                    option_quote = await self.broker.get_quote(
+                        symbol_name=symbol,
+                        exchange="NFO",
+                    )
+
+                    option_ltp = self.broker.parse_ltp(option_quote)
+
+                    if option_ltp is not None and option_ltp > 0:
+                        await self.state.update(
+                            spot_price=spot,
+                            active_trade={
+                                **state.active_trade,
+                                "ltp": option_ltp,
+                            },
+                        )
+                    else:
+                        logger.warning("⚠️ LTP missing or zero for %s", symbol)
+                        await self.state.update(spot_price=spot)
+
+                except Exception as e:
+                    logger.warning("⚠️ Option quote failed: %s", e)
+                    await self.state.update(spot_price=spot)
         else:
             await self.state.update(spot_price=spot)
 
         logger.info("✅ TICK: State updated with spot_price=%.2f", spot)
 
         now   = _now_ist()
+
+        if settings.strategy_type == "iron_condor":
+            if self._iron_condor_can_enter(now, spot, state):
+                payload = {
+                    "signal": "IRON_CONDOR",
+                    "spot_price": spot,
+                    "size_label": "FULL",
+                    "trend_score": 0,
+                }
+                await self.state.update(signal="IRON_CONDOR", signal_meta=payload)
+                await self.event_bus.publish("SIGNAL", payload)
+                self._last_signal_time = now.timestamp()
+                logger.info("✅ IRON_CONDOR entry signal emitted")
+            return
 
         # Capture today's open price — but ONLY during 09:15-09:17 window.
         if self._today_open is None:
@@ -664,6 +680,23 @@ class MarketScheduler:
                 except (TypeError, ValueError):
                     continue
         return None
+
+    def _iron_condor_can_enter(self, now: datetime, spot: float, state) -> bool:
+        if state.active_trade:
+            return False
+        if state.last_iron_condor_month == now.month:
+            return False
+        if now.weekday() >= 5:
+            return False
+        start_h, start_m = map(int, settings.ic_entry_window_start.split(":"))
+        end_h, end_m = map(int, settings.ic_entry_window_end.split(":"))
+        if not (time(start_h, start_m) <= now.time() < time(end_h, end_m)):
+            return False
+        if now.day < settings.ic_entry_day_start or now.day > settings.ic_entry_day_end:
+            return False
+        if self._last_signal_time and now.timestamp() - self._last_signal_time < 60:
+            return False
+        return True
 
     def _iv_percentile(self, current_iv: float) -> float | None:
         if not self._iv_history:

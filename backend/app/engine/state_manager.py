@@ -99,6 +99,7 @@ class RuntimeState:
     cooldown_until: str | None = None
     last_risk_breach: str | None = None
     consecutive_losses: int = 0
+    last_iron_condor_month: int | None = None
 
     # Execution safety
     last_order_failed: bool = False
