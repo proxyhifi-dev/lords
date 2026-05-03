@@ -2,7 +2,7 @@
 Iron Condor Strategy Implementation for Lords Bot
 Monthly premium selling strategy on Nifty options
 
-FULLY CORRECTED VERSION - All bugs fixed, production ready
+FULLY FIXED VERSION - All 5 bugs fixed
 Copy this entire file into: backend/app/strategy/iron_condor_strategy.py
 """
 
@@ -40,7 +40,7 @@ class IronCondorStrategy:
             self.entry_window_start = time(9, 20)
             self.entry_window_end = time(10, 0)
         
-        logger.info("🚀 IronCondorStrategy helper initialized")
+        logger.info("🚀 IronCondorStrategy initialized")
 
     def can_enter_cycle(self, current_time: datetime, state) -> bool:
         """
@@ -60,8 +60,6 @@ class IronCondorStrategy:
         Returns:
             True if all conditions met, False otherwise
         """
-        
-        # ✅ FIXED: Proper validation order
         
         # Check 1: Must be weekday (Monday=0, Sunday=6)
         if current_time.weekday() >= 5:
@@ -95,7 +93,7 @@ class IronCondorStrategy:
 
     def calculate_strikes(self, spot: float) -> dict:
         """
-        Calculate Iron Condor strike prices.
+        Calculate Iron Condor strike prices with validation.
         
         Uses 15-Delta short strikes (3% OTM) and 5-Delta hedge strikes (6% OTM)
         
@@ -105,9 +103,10 @@ class IronCondorStrategy:
         Returns:
             dict with keys: short_call, long_call, short_put, long_put
             All prices rounded to 50-point NSE standard
+            Returns empty dict if validation fails
         """
         
-        # ✅ FIXED: Input validation
+        # Input validation
         if not spot or spot <= 0:
             logger.error(f"❌ Invalid spot price: {spot}")
             return {}
@@ -123,13 +122,39 @@ class IronCondorStrategy:
         short_put = int(round((spot * (1 - short_otm_pct)) / rounding) * rounding)
         long_put = int(round((spot * (1 - long_otm_pct)) / rounding) * rounding)
 
+        # ✅ FIX #1: VALIDATE STRIKE STRUCTURE
+        # Check 1: Call spread must be valid (short < long)
+        if short_call >= long_call:
+            logger.error(f"❌ Invalid call spread: short {short_call} >= long {long_call}")
+            return {}
+        
+        # Check 2: Put spread must be valid (short > long)
+        if short_put <= long_put:
+            logger.error(f"❌ Invalid put spread: short {short_put} <= long {long_put}")
+            return {}
+        
+        # Check 3: Calculate widths
+        call_width = long_call - short_call
+        put_width = short_put - long_put
+        
+        # Check 4: Minimum width requirement (at least 50 points)
+        if call_width < rounding or put_width < rounding:
+            logger.error(f"❌ Insufficient width: call {call_width}, put {put_width} < {rounding}")
+            return {}
+        
+        # All validations passed
+        logger.info(
+            f"✅ Valid IC: Call {short_call}/{long_call} (width {call_width}), "
+            f"Put {short_put}/{long_put} (width {put_width})"
+        )
+        
         result = {
-            'short_call': short_call,    # ✅ FIXED: was 'call'
+            'short_call': short_call,
             'long_call': long_call,
-            'short_put': short_put,      # ✅ FIXED: was 'put'
+            'short_put': short_put,
             'long_put': long_put,
-            'call_width': long_call - short_call,
-            'put_width': short_put - long_put,
+            'call_width': call_width,
+            'put_width': put_width,
         }
         
         logger.debug(f"Strikes: Call {short_call}/{long_call}, Put {short_put}/{long_put}")
@@ -152,7 +177,7 @@ class IronCondorStrategy:
             Estimated premium in rupees (minimum 5)
         """
         
-        # ✅ FIXED: Input validation to prevent crashes
+        # Input validation to prevent crashes
         if not spot or spot <= 0:
             logger.warning(f"⚠️ Invalid spot: {spot}")
             return 0.0
@@ -198,33 +223,58 @@ class IronCondorStrategy:
 
     def estimate_net_premium(self, spot: float, days: int = 30) -> float:
         """
-        Estimate net premium received for Iron Condor.
+        Estimate net premium received for Iron Condor with validation.
         
         Net = (short_call + short_put) - (long_call + long_put)
+        
+        Returns 0.0 if net premium is negative or below minimum threshold.
         
         Args:
             spot: Current spot price
             days: Days to expiry (default 30)
             
         Returns:
-            Net credit collected in rupees
+            Net credit collected in rupees (0.0 if invalid)
         """
         
         # Get calculated strikes
         strikes = self.calculate_strikes(spot)
         if not strikes:
+            logger.warning("Cannot estimate premium: invalid strikes")
             return 0.0
         
         # Estimate premiums for all 4 legs
-        sc_prem = self.estimate_option_premium(spot, strikes['short_call'], "CE", days)
-        lc_prem = self.estimate_option_premium(spot, strikes['long_call'], "CE", days)
-        sp_prem = self.estimate_option_premium(spot, strikes['short_put'], "PE", days)
-        lp_prem = self.estimate_option_premium(spot, strikes['long_put'], "PE", days)
-
-        # Net = shorts collected - hedges paid
+        sc_prem = self.estimate_option_premium(spot, strikes["short_call"], "CE", days)
+        lc_prem = self.estimate_option_premium(spot, strikes["long_call"], "CE", days)
+        sp_prem = self.estimate_option_premium(spot, strikes["short_put"], "PE", days)
+        lp_prem = self.estimate_option_premium(spot, strikes["long_put"], "PE", days)
+        
+        # ✅ FIX #2: VALIDATE INDIVIDUAL PREMIUMS
+        for leg_name, prem in [("SC", sc_prem), ("LC", lc_prem), ("SP", sp_prem), ("LP", lp_prem)]:
+            if prem <= 0:
+                logger.error(f"❌ Invalid {leg_name} premium: ₹{prem}")
+                return 0.0
+        
+        # Calculate net premium
         net = (sc_prem + sp_prem) - (lc_prem + lp_prem)
         
-        logger.debug(f"Net premium: SC={sc_prem:.0f} + SP={sp_prem:.0f} - LC={lc_prem:.0f} - LP={lp_prem:.0f} = {net:.0f}")
+        # ✅ FIX #2a: CHECK FOR NEGATIVE NET
+        if net <= 0:
+            logger.warning(f"❌ Negative net premium: ₹{net:.0f}")
+            logger.warning(f"   SC={sc_prem:.0f} SP={sp_prem:.0f} (short total: {sc_prem + sp_prem:.0f})")
+            logger.warning(f"   LC={lc_prem:.0f} LP={lp_prem:.0f} (long total: {lc_prem + lp_prem:.0f})")
+            return 0.0
+        
+        # ✅ FIX #2b: CHECK MINIMUM PREMIUM
+        min_prem = self.settings.ic_min_entry_premium
+        if net < min_prem:
+            logger.warning(f"⚠️  Low premium: ₹{net:.0f} < minimum ₹{min_prem}")
+            return 0.0
+        
+        logger.info(
+            f"✅ Net premium: SC {sc_prem:.0f} + SP {sp_prem:.0f} - "
+            f"LC {lc_prem:.0f} - LP {lp_prem:.0f} = ₹{net:.0f}"
+        )
         return net
 
     def estimate_current_premium(self, entry_premium: float, entry_time: datetime, current_time: datetime) -> float:
@@ -241,8 +291,6 @@ class IronCondorStrategy:
         Returns:
             Estimated current premium (minimum 0.1)
         """
-        
-        # ✅ FIXED: Changed from hours_passed parameter to datetime objects
         
         # Validate entry premium
         if not entry_premium or entry_premium <= 0:
@@ -273,13 +321,14 @@ class IronCondorStrategy:
     def get_exit_reason(self, entry_time: datetime, current_time: datetime, 
                        entry_premium: float, current_premium: float) -> str | None:
         """
-        Determine exit reason based on current conditions.
+        Determine exit reason based on current conditions with gap protection.
         
         Exit priorities (in order):
-        1. TARGET: Premium decayed to 50% profit
-        2. STOP_LOSS: Premium expanded to 1.5x loss
-        3. THETA_PEAK: 2 PM (peak decay time)
-        4. EOD: 3:25 PM (market close)
+        1. EXTREME_LOSS: Premium expanded 2.5x (gap event) - force exit
+        2. TARGET: Premium decayed to 50% profit
+        3. STOP_LOSS: Premium expanded to 1.5x loss
+        4. THETA_PEAK: 2 PM (peak decay time)
+        5. EOD: 3:25 PM (market close)
         
         Args:
             entry_time: Entry timestamp
@@ -288,19 +337,23 @@ class IronCondorStrategy:
             current_premium: Current estimated premium
             
         Returns:
-            Exit reason string ("TARGET", "STOP_LOSS", "THETA_PEAK", "EOD")
-            or None if position should stay open
+            Exit reason string or None if position should stay open
         """
         
-        # ✅ FIXED: Changed parameters from hours_passed to datetime objects
-        # ✅ FIXED: Added THETA_PEAK exit condition
+        # ✅ FIX #3: EXTREME GAP PROTECTION (CHECK FIRST!)
+        extreme_loss_premium = entry_premium * 2.5  # 2.5x = catastrophic gap
+        if current_premium >= extreme_loss_premium:
+            logger.critical(
+                f"🚨 EXTREME_LOSS: ₹{current_premium:.0f} >= ₹{extreme_loss_premium:.0f} "
+                f"(entry ₹{entry_premium:.0f}) - POSSIBLE GAP EVENT"
+            )
+            logger.critical("   Force exit to limit catastrophic loss")
+            return "EXTREME_LOSS"
         
         # Calculate thresholds
         target_premium = entry_premium * (1 - self.settings.ic_target_profit_pct)      # 50% decay
         stop_loss_premium = entry_premium * self.settings.ic_stop_loss_multiple        # 1.5x loss
 
-        # Check in priority order
-        
         # Exit 1: TARGET HIT (50% profit)
         if current_premium <= target_premium:
             logger.info(f"✅ TARGET: {current_premium:.0f} <= {target_premium:.0f}")
@@ -308,11 +361,10 @@ class IronCondorStrategy:
         
         # Exit 2: STOP LOSS (1.5x premium)
         if current_premium >= stop_loss_premium:
-            logger.info(f"❌ STOP_LOSS: {current_premium:.0f} >= {stop_loss_premium:.0f}")
+            logger.warning(f"❌ STOP_LOSS: {current_premium:.0f} >= {stop_loss_premium:.0f}")
             return "STOP_LOSS"
         
         # Exit 3: THETA PEAK (2 PM - maximum theta decay)
-        # ✅ FIXED: Added this condition
         current_time_obj = current_time.time()
         if current_time_obj >= time(14, 0):
             logger.info(f"⏰ THETA_PEAK: {current_time_obj} >= 14:00")
@@ -350,8 +402,6 @@ class IronCondorStrategy:
             - total_charges: STT + Platform
             - net_pnl: Gross - Total Charges
         """
-        
-        # ✅ FIXED: Simplified STT calculation, removed unused sold_premiums parameter
         
         # Validate inputs
         if not entry_premium or entry_premium <= 0:
@@ -409,36 +459,6 @@ class IronCondorStrategy:
         return result
 
 
-# ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
-# EXAMPLE USAGE (for testing)
-# ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
-
-if __name__ == "__main__":
-    """Example usage - uncomment to test"""
-    
-    # Example: Test strike calculation
-    strategy = IronCondorStrategy()
-    
-    spot = 25000
-    print(f"\n🎯 Testing with Spot = {spot}")
-    
-    # Calculate strikes
-    strikes = strategy.calculate_strikes(spot)
-    print(f"✅ Strikes: {strikes}")
-    
-    # Estimate premiums
-    sc_prem = strategy.estimate_option_premium(spot, strikes['short_call'], "CE", 30)
-    sp_prem = strategy.estimate_option_premium(spot, strikes['short_put'], "PE", 30)
-    print(f"✅ Short Call Premium: ₹{sc_prem:.0f}")
-    print(f"✅ Short Put Premium: ₹{sp_prem:.0f}")
-    
-    # Estimate net premium
-    net = strategy.estimate_net_premium(spot, 30)
-    print(f"✅ Net Premium: ₹{net:.0f}")
-    
-    # Test P&L calculation
-    entry = 300
-    exit = 150
-    qty = 65
-    pnl = strategy.compute_pnl(entry, exit, qty)
-    print(f"✅ Entry ₹{entry} → Exit ₹{exit} → Net P&L ₹{pnl['net_pnl']:.0f}")
+# Properties for backward compatibility
+IronCondorStrategy.days_to_expiry = property(lambda self: self.settings.ic_days_to_expiry)
+IronCondorStrategy.min_premium = property(lambda self: self.settings.ic_min_entry_premium)

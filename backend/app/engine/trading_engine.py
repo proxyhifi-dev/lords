@@ -245,6 +245,12 @@ class TradingEngine:
             return
 
         strikes = self.iron_condor_strategy.calculate_strikes(spot)
+
+        # ✅ FIX #5: VALIDATE STRIKES NOT EMPTY
+        if not strikes:
+            logger.error("❌ Invalid strikes calculated - skipping entry")
+            return
+
         premiums = {
             "short_call": self.iron_condor_strategy.estimate_option_premium(spot, strikes["short_call"], "CE", self.iron_condor_strategy.days_to_expiry),
             "long_call": self.iron_condor_strategy.estimate_option_premium(spot, strikes["long_call"], "CE", self.iron_condor_strategy.days_to_expiry),
@@ -280,12 +286,39 @@ class TradingEngine:
         # Step 3: Execute with correct order sequence (hedges first, then shorts)
         result = await self.order_executor.enter_iron_condor_sequence(strikes, premiums)
 
-        if not result['success']:
-            logger.error(f"❌ Entry failed: {result.get('error', 'Unknown error')}")
+        # ✅ FIX #4: VALIDATE RESULT BEFORE CONTINUING
+        if result.get("status") != "SUCCESS":
+            logger.error(f"❌ IC entry failed: {result}")
+            # Cancel all pending orders immediately
+            try:
+                await self.broker.cancel_all_pending_orders()
+            except Exception as exc:
+                logger.warning(f"Cancel pending orders failed: {exc}")
+            logger.warning("Entry cancelled due to order execution failure")
             return
 
+        # ✅ FIX #4b: CHECK ALL 4 LEGS FILLED
+        filled_legs = result.get("filled_legs", 0)
+        if filled_legs != 4:
+            logger.error(f"❌ Only {filled_legs} of 4 legs filled - position would be unhedged!")
+            logger.error(f"   Filled legs: {result.get('orders', [])}")
+            # Rollback by closing filled orders
+            try:
+                await self._rollback_iron_condor(result.get("orders", []))
+            except Exception as exc:
+                logger.warning(f"Rollback failed: {exc}")
+            logger.warning("Entry rolled back due to partial fill")
+            return
+
+        # ✅ FIX #4c: LOG SUCCESS
+        logger.info(f"✅ All 4 legs successfully filled")
+        logger.info(f"   Spot: ₹{state.spot_price:.0f}")
+        logger.info(f"   Shorts collected: ₹{(premiums['short_call'] + premiums['short_put']):.0f}")
+        logger.info(f"   Longs paid: ₹{(premiums['long_call'] + premiums['long_put']):.0f}")
+        logger.info(f"   Net credit: ₹{net_premium:.0f}")
+
         # Entry successful - store position details
-        order_ids = result['order_ids']
+        order_ids = result.get('order_ids', [])
         logger.info(f"✅ Position opened with order IDs: {order_ids}")
 
         # Create trade record with new format
