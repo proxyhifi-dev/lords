@@ -93,65 +93,50 @@ class RiskManager:
         return 0
 
     async def validate_iron_condor_position(self, net_premium: float, state) -> bool:
-        """Validate Iron Condor position against all risk limits.
-        
-        Checks:
-        1. Minimum ₹40,000 margin available
-        2. Position won't exceed max ₹10,000 loss
-        3. No existing active position
-        4. Daily loss limits respected
-        
-        Args:
-            net_premium: Net credit collected (entry premium)
-            state: RuntimeState snapshot
-            
-        Returns:
-            True if position is safe to place, False otherwise
-        """
-        
-        # Check 1: Minimum ₹40,000 margin required
-        margin_required = settings.ic_margin_required  # ₹40,000
-        equity_available = self.state_manager.capital - self.state_manager.equity_used
-        
-        if equity_available < margin_required:
+        """Validate Iron Condor position against all risk limits."""
+
+        # Check 1: Minimum margin available
+        # FIX: StateManager has no equity_used attribute.
+        # Use settings.capital + state.daily_pnl as current available equity.
+        margin_required = settings.ic_margin_required
+        current_equity = settings.capital + state.daily_pnl
+        if current_equity < margin_required:
             logger.error(
-                f"🚫 INSUFFICIENT IC MARGIN: ₹{equity_available:.0f} < ₹{margin_required:.0f}"
+                "🚫 INSUFFICIENT IC MARGIN: ₹%.0f available < ₹%.0f required",
+                current_equity, margin_required,
             )
             return False
-        
-        logger.info(f"✅ Margin check passed: ₹{equity_available:.0f} available")
-        
-        # Check 2: Entry premium doesn't exceed max loss cap
-        # Max loss per trade is capped at ₹10,000
-        max_loss_allowed = settings.ic_max_loss_per_trade  # ₹10,000
-        
+        logger.info("✅ Margin check passed: ₹%.0f available", current_equity)
+
+        # Check 2: Entry premium vs max loss cap
+        max_loss_allowed = settings.ic_max_loss_per_trade
         if net_premium > max_loss_allowed:
             logger.error(
-                f"🚫 ENTRY PREMIUM TOO HIGH: ₹{net_premium:.0f} > ₹{max_loss_allowed:.0f} max"
+                "🚫 ENTRY PREMIUM TOO HIGH: ₹%.0f > ₹%.0f max",
+                net_premium, max_loss_allowed,
             )
             return False
-        
-        logger.info(f"✅ Premium check passed: ₹{net_premium:.0f} acceptable")
-        
-        # Check 3: No active position already exists
+        logger.info("✅ Premium check passed: ₹%.0f acceptable", net_premium)
+
+        # Check 3: No active position
         if state.active_trade:
-            logger.error(
-                f"🚫 POSITION ALREADY ACTIVE: Cannot open IC while {state.active_trade.get('symbol')} is open"
-            )
+            logger.error("🚫 POSITION ALREADY ACTIVE — cannot open IC")
             return False
-        
         logger.info("✅ No active position: clear to enter")
-        
-        # Check 4: Daily loss limits respected
-        max_daily_loss = settings.MAX_DAILY_LOSS
+
+        # Check 4: Daily loss limits
+        # FIX: settings.max_daily_loss (lowercase), not settings.MAX_DAILY_LOSS
+        max_daily_loss = settings.max_daily_loss
         if state.daily_pnl < -max_daily_loss:
             logger.error(
-                f"🚫 DAILY LOSS LIMIT EXCEEDED: ₹{state.daily_pnl:.0f} < -₹{max_daily_loss:.0f}"
+                "🚫 DAILY LOSS LIMIT EXCEEDED: ₹%.0f < -₹%.0f",
+                state.daily_pnl, max_daily_loss,
             )
             return False
-        
-        logger.info(f"✅ Daily limit check passed: ₹{state.daily_pnl:.0f} / -₹{max_daily_loss:.0f}")
-        
-        # All checks passed
-        logger.info("✅ IC POSITION VALIDATED - SAFE TO PLACE")
+        logger.info(
+            "✅ Daily limit check passed: ₹%.0f / -₹%.0f",
+            state.daily_pnl, max_daily_loss,
+        )
+
+        logger.info("✅ IC POSITION VALIDATED — SAFE TO PLACE")
         return True

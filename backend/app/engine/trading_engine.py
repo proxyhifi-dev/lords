@@ -142,6 +142,14 @@ class TradingEngine:
             self.iron_condor_strategy = IronCondorStrategy()
             logger.info("🚀 Iron Condor strategy enabled in TradingEngine")
         self.reconciliation = None
+        # Bug fix: risk_manager needed by _enter_iron_condor_trade.
+        # Imported lazily inside __init__ to avoid circular import at module level.
+        from backend.app.risk.risk_manager import RiskManager as _RiskManager
+        self.risk_manager = _RiskManager(
+            event_bus=event_bus,
+            state_manager=state_manager,
+            broker=broker,
+        )
         self.execution_manager = ExecutionManager(
             broker=self.broker,
             state_manager=self.state_manager,
@@ -188,7 +196,80 @@ class TradingEngine:
         )
 
     async def _resolve_option_symbol(self, strike: int, option_type: str) -> str | None:
-        return await self._resolve_symbol(strike, option_type)
+        """
+        Resolve SAMCO trading symbol for an Iron Condor leg.
+
+        option_type is already 'CE' or 'PE'. Do NOT pass through
+        OptionSelector.get_option_type() — that function only accepts
+        LONG/SHORT/CALL/PUT and raises ValueError on CE/PE.
+        """
+        key = f"{strike}_{option_type}"
+        if key in self._symbol_cache:
+            return self._symbol_cache[key]
+
+        expiry = OptionSelector.get_expiry_api()
+        logger.info(
+            "🔍 IC SYMBOL LOOKUP: strike=%s type=%s expiry=%s",
+            strike, option_type, expiry,
+        )
+
+        # Attempt 1: specific strike
+        chain = await self.broker.get_option_chain(
+            search_symbol_name=settings.nifty_symbol,
+            exchange="NFO",
+            expiry_date=expiry,
+            strike_price=str(strike),
+            option_type=option_type,
+        )
+        if isinstance(chain, dict) and chain.get("validationErrors"):
+            logger.warning(
+                "SAMCO validation error on IC symbol lookup: %s — retrying full chain",
+                chain.get("validationErrors"),
+            )
+            chain = None
+
+        rows = self._extract_chain_rows(chain) if chain else []
+
+        # Attempt 2: full chain fallback
+        if not rows:
+            chain = await self.broker.get_option_chain(
+                search_symbol_name=settings.nifty_symbol,
+                exchange="NFO",
+                expiry_date=expiry,
+                strike_price="0",
+                option_type=option_type,
+            )
+            if isinstance(chain, dict) and chain.get("validationErrors"):
+                logger.error(
+                    "❌ IC symbol full-chain also failed: %s",
+                    chain.get("validationErrors"),
+                )
+                return None
+            rows = self._extract_chain_rows(chain)
+
+        if not rows:
+            logger.error("❌ IC option chain empty: strike=%s type=%s", strike, option_type)
+            return None
+
+        best_sym, best_diff = None, float("inf")
+        for row in rows:
+            try:
+                diff = abs(float(row.get("strikePrice", 0)) - strike)
+                if diff < best_diff:
+                    best_diff = diff
+                    best_sym = row.get("tradingSymbol")
+            except (TypeError, ValueError):
+                continue
+
+        if best_sym:
+            self._symbol_cache[key] = best_sym
+            logger.info(
+                "✅ IC SYMBOL RESOLVED: %s (snap_diff=%s)",
+                best_sym, best_diff,
+            )
+        else:
+            logger.error("❌ No valid IC symbol near strike=%s type=%s", strike, option_type)
+        return best_sym
 
     async def _place_iron_condor_leg(self, leg: dict[str, any]) -> dict[str, any] | None:
         request = {
@@ -286,28 +367,26 @@ class TradingEngine:
         # Step 3: Execute with correct order sequence (hedges first, then shorts)
         result = await self.order_executor.enter_iron_condor_sequence(strikes, premiums)
 
-        # ✅ FIX #4: VALIDATE RESULT BEFORE CONTINUING
-        if result.get("status") != "SUCCESS":
-            logger.error(f"❌ IC entry failed: {result}")
-            # Cancel all pending orders immediately
+        # FIX: order_execution returns {'success': True/False}, NOT {'status': 'SUCCESS'}
+        if not result.get("success"):
+            logger.error("❌ IC entry failed: %s", result)
             try:
-                await self.broker.cancel_all_pending_orders()
+                await self.broker.cancel_all_open_orders()
             except Exception as exc:
-                logger.warning(f"Cancel pending orders failed: {exc}")
-            logger.warning("Entry cancelled due to order execution failure")
+                logger.warning("Cancel open orders failed after IC entry failure: %s", exc)
             return
 
-        # ✅ FIX #4b: CHECK ALL 4 LEGS FILLED
-        filled_legs = result.get("filled_legs", 0)
-        if filled_legs != 4:
-            logger.error(f"❌ Only {filled_legs} of 4 legs filled - position would be unhedged!")
-            logger.error(f"   Filled legs: {result.get('orders', [])}")
-            # Rollback by closing filled orders
+        # FIX: filled_legs is list of (name, order_id) tuples, not an int
+        filled_legs_list = result.get("filled_legs", [])
+        if len(filled_legs_list) != 4:
+            logger.error(
+                "❌ Only %d of 4 IC legs filled — rolling back. Filled: %s",
+                len(filled_legs_list), filled_legs_list,
+            )
             try:
-                await self._rollback_iron_condor(result.get("orders", []))
+                await self.broker.cancel_all_open_orders()
             except Exception as exc:
-                logger.warning(f"Rollback failed: {exc}")
-            logger.warning("Entry rolled back due to partial fill")
+                logger.warning("Cancel failed after partial IC fill: %s", exc)
             return
 
         # ✅ FIX #4c: LOG SUCCESS
@@ -382,7 +461,7 @@ class TradingEngine:
                 "exit_reason": reason,
                 "exit_premium": current_premium,
                 "gross_pnl": pnl["gross_pnl"],
-                "charges": pnl["charges"],
+                "charges": pnl["total_charges"],  # FIX: key is total_charges, not charges
                 "stt": pnl["stt"],
                 "net_pnl": pnl["net_pnl"],
                 "trade_type": "IRON_CONDOR",

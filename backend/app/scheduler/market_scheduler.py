@@ -1,19 +1,34 @@
 """
-Lords Bot — Market Scheduler  v5.3 (With Auto-Recovery)
-=========================================================
-v5.3 fixes (over v5.2, evidence from 182k log lines):
-  1. _today_open captured ONLY during 09:15-09:17 window
-     (was: captured on first tick after startup → wrong if bot starts mid-day)
-  2. orb_close persisted on EVERY tick during ORB build window, not only at freeze
-     (was: if v5.1 froze ORB before v5.2 deployed orb_close persist, value lost)
-  3. Startup audit: if it's after 09:30 and trend vars missing, log CRITICAL
-  4. Today_open daily reset now also persisted (was: in-memory only)
-  5. ✅ ADVANCED RECOVERY: Auto-recovers `prev_day_close` from live broker quotes
-     if missing (e.g., late startup on a fresh state).
-  6. ✅ TREND AUDIT: Explicit warning in `_trend_score()` if `prev_day_close`
-     is missing so degraded scores are immediately obvious in logs.
+Lords Bot — Market Scheduler  v6.0 (Iron Condor Only)
+======================================================
 
-Full pipeline: poll → ORB build → candle confirm → trend filter → signal → trade.
+All ORB strategy code has been removed. This scheduler runs only the
+Iron Condor strategy (strategy_type=iron_condor in settings/.env).
+
+What was removed:
+  - ORB build/freeze logic (9:15-9:30 window)
+  - 3-component trend filter and score
+  - Breakout candle confirmation
+  - today_open / orb_open / orb_close / prev_day_close state
+  - Volume spike filter (ORB-specific)
+  - Skip-first-candle logic
+  - Candle builder (not needed for IC — IC monitors by spot/premium only)
+  - _compute_atr, _trend_score, _update_candle
+  - _volume_spike_ok, _iv_ok, _iv_percentile (ORB-only filters)
+  - Auto-retrigger (ORB-specific)
+
+What was kept:
+  - All lifecycle (start / stop / _loop / _daily_watcher)
+  - SAMCO tick polling and spot price updates
+  - Dead-man switch
+  - Reconciliation engine wiring
+  - flatten_position (emergency dashboard button)
+  - _iron_condor_can_enter (complete entry gate)
+  - _extract_iv (for future IV-based IC filters)
+  - IV history tracking
+
+To switch back to ORB: restore market_scheduler_ORB_v5.3.py from backup
+and set STRATEGY_TYPE=orb in .env.
 """
 from __future__ import annotations
 
@@ -56,7 +71,7 @@ def _market_open() -> bool:
 class MarketScheduler:
 
     def __init__(self):
-        self.state        = state_manager
+        self.state       = state_manager
         self.trade_store = TradeStore()
         self.broker      = SamcoClient()
         self.event_bus   = EventBus()
@@ -76,111 +91,47 @@ class MarketScheduler:
         self.running = False
         self._tasks: list[asyncio.Task] = []
 
-        # ORB state
-        self._orb_frozen        = False
-        self._orb_frozen_time: float | None = None
-        self._last_signal_time  = 0.0
-        self._last_closed_log   = 0.0
-        self._daily_reset_date  = ""
-        self._last_tick_time = _time.time()
-        self._last_good_quote_time = _time.time()
+        # Timing
+        self._last_signal_time           = 0.0
+        self._last_closed_log            = 0.0
+        self._daily_reset_date           = ""
+        self._last_tick_time             = _time.time()
+        self._last_good_quote_time       = _time.time()
         self._consecutive_quote_failures = 0
-        self._last_broker_error = 0.0
+        self._last_broker_error          = 0.0
 
-        # Candle builder
-        self._current_minute: datetime | None = None
-        self._candle_open:    float | None     = None
-        self._candle_high:    float            = 0.0
-        self._candle_low:     float            = 999_999.0
-        self._candle_close:   float | None     = None
-        self._candle_volume:  int             = 0
-        self._last_index_volume: int | None    = None
-        self._prev_candle = None
-        self._volume_history = deque(maxlen=20)
+        # IV tracking (available for future IC entry filters)
         self._latest_iv: float | None = None
-        self._iv_history = deque(maxlen=20)
+        self._iv_history: deque = deque(maxlen=20)
 
-        # Trend state (v4.0) — now persisted to state for restart safety
-        self._orb_open:       float | None = None
-        self._orb_close:      float | None = None
-        self._today_open:     float | None = None
-        self._prev_day_close: float | None = None
-        self._recent_spots:   list         = []
-        self._day_candles:    list         = []
-
-    # ── Lifecycle ────────────────────────────────────────────
+    # ── Lifecycle ─────────────────────────────────────────────
 
     async def start(self) -> None:
         if self.running:
-            logger.warning("Scheduler already running"); return
+            logger.warning("Scheduler already running")
+            return
 
         logger.info(
-            "Starting Lords Bot v5.3 — mode=%s trend_filter=%s skip_first=%s",
+            "Starting Lords Bot v6.0 (Iron Condor) — mode=%s strategy=%s",
             settings.mode.upper(),
-            settings.trend_filter_enabled,
-            settings.skip_first_candle,
+            settings.strategy_type.upper(),
         )
+
+        if settings.strategy_type != "iron_condor":
+            logger.critical(
+                "🚨 strategy_type=%s but this scheduler is Iron Condor only. "
+                "Set STRATEGY_TYPE=iron_condor in .env to proceed.",
+                settings.strategy_type,
+            )
 
         await self.state.load()
-
-        # Check if ORB was already frozen from previous run
         state = await self.state.snapshot()
         logger.info(
-            "State check: orb_high=%s orb_low=%s spot_price=%s trading_enabled=%s",
-            state.orb_high, state.orb_low, state.spot_price, state.trading_enabled,
+            "State check: spot_price=%s trading_enabled=%s "
+            "active_trade=%s last_ic_month=%s",
+            state.spot_price, state.trading_enabled,
+            bool(state.active_trade), state.last_iron_condor_month,
         )
-        if state.orb_high is not None and state.orb_low is not None:
-            self._orb_frozen = True
-            self._orb_frozen_time = _time.time()  # Approximate
-            logger.info(
-                "ORB restored from state: high=%.2f low=%.2f",
-                state.orb_high, state.orb_low,
-            )
-            # Re-enable trading since ORB was already established
-            await self.state.update(trading_enabled=True)
-            logger.info("Trading re-enabled after ORB restoration")
-        else:
-            logger.info("No ORB found in state, starting fresh")
-
-        # ✅ Restore trend variables from state (fixes silent score=0 after restart)
-        # If the state has these values (from prior session), use them. Otherwise leave None
-        # and let the daily watcher / first tick populate them as normal.
-        restored = []
-        if getattr(state, "orb_open", None) is not None:
-            self._orb_open = state.orb_open
-            restored.append(f"orb_open={self._orb_open:.2f}")
-        if getattr(state, "orb_close", None) is not None:
-            self._orb_close = state.orb_close
-            restored.append(f"orb_close={self._orb_close:.2f}")
-        if getattr(state, "today_open", None) is not None:
-            self._today_open = state.today_open
-            restored.append(f"today_open={self._today_open:.2f}")
-        if getattr(state, "prev_day_close", None) is not None:
-            self._prev_day_close = state.prev_day_close
-            restored.append(f"prev_day_close={self._prev_day_close:.2f}")
-
-        if restored:
-            logger.info("Trend vars restored from state: %s", ", ".join(restored))
-        else:
-            logger.info("No trend vars in state — will populate from market data")
-
-        # ✅ v5.3: If bot started after 09:30, check for missing trend vars
-        # Trend score will degrade if these are missing — log loudly so it's
-        # explainable in audit.
-        now_check = _now_ist()
-        if now_check.time() > time(9, 30) and now_check.weekday() < 5:
-            missing = []
-            if self._prev_day_close is None: missing.append("prev_day_close")
-            if self._today_open is None:     missing.append("today_open")
-            if self._orb_open is None:       missing.append("orb_open")
-            if self._orb_close is None:      missing.append("orb_close")
-            if missing:
-                logger.critical(
-                    "🚨 STARTUP AFTER 09:30 BUT TREND VARS MISSING: %s — "
-                    "trend score components depending on these will be 0. "
-                    "Filter at ±3 will block all signals today.",
-                    ", ".join(missing),
-                )
 
         await self.event_bus.start()
 
@@ -192,52 +143,21 @@ class MarketScheduler:
         self.running = True
         await self.state.update(bot_running=True)
 
-        # Startup reconciliation (runs once immediately in all modes)
         asyncio.create_task(
             self._reconciler.run_once(), name="reconcile-startup")
 
         self._tasks = [
-            asyncio.create_task(self._loop(),
-                                name="market-loop"),
-            asyncio.create_task(self.risk.run(),
-                                name="risk-manager"),
-            asyncio.create_task(self.engine.run(),
-                                name="trading-engine"),
-            asyncio.create_task(self._daily_watcher(),
-                                name="daily-reset"),
-            asyncio.create_task(self._reconciler.run_loop(300),
-                                name="reconciler"),
+            asyncio.create_task(self._loop(),                   name="market-loop"),
+            asyncio.create_task(self.risk.run(),                name="risk-manager"),
+            asyncio.create_task(self.engine.run(),              name="trading-engine"),
+            asyncio.create_task(self._daily_watcher(),          name="daily-reset"),
+            asyncio.create_task(self._reconciler.run_loop(300), name="reconciler"),
         ]
         logger.info("All tasks started (%d tasks)", len(self._tasks))
 
-        # Auto-retrigger: publish after engine/risk listeners are running
-        asyncio.create_task(self._delayed_retrigger(), name="auto-retrigger")
-
-    async def _delayed_retrigger(self) -> None:
-        await asyncio.sleep(0.25)
-        state = await self.state.snapshot()
-        if (self._orb_frozen and state.spot_price and
-            state.orb_high is not None and state.spot_price > state.orb_high
-            and state.trading_enabled):
-            logger.info(
-                "🔄 Auto-retrigger: price %.2f > ORB high %.2f, emitting LONG signal",
-                state.spot_price, state.orb_high,
-            )
-            await self.event_bus.publish("SIGNAL", {
-                "signal": "LONG",
-                "spot_price": state.spot_price,
-                "size_label": "FULL",
-                "trend_score": 0,
-            })
-        else:
-            logger.info(
-                "🚫 Auto-retrigger skipped: frozen=%s spot=%s orb_high=%s enabled=%s",
-                self._orb_frozen, state.spot_price, state.orb_high,
-                state.trading_enabled,
-            )
-
     async def stop(self) -> None:
-        if not self.running: return
+        if not self.running:
+            return
         logger.info("Stopping Lords Bot scheduler")
         self.running = False
         await self.event_bus.stop()
@@ -252,7 +172,7 @@ class MarketScheduler:
         await self.state.update(bot_running=False)
         logger.info("Scheduler stopped")
 
-    # ── Daily reset watcher ──────────────────────────────────
+    # ── Daily reset watcher ───────────────────────────────────
 
     async def _daily_watcher(self) -> None:
         while self.running:
@@ -266,41 +186,20 @@ class MarketScheduler:
                 self._daily_reset_date = today
                 logger.info("=== DAILY RESET ===")
 
-                # Store prev day close BEFORE resetting state
-                state = await self.state.snapshot()
-                if state.spot_price and state.spot_price > 0:
-                    self._prev_day_close = state.spot_price
-                    # ✅ Persist to state so it survives restart
-                    await self.state.update(prev_day_close=self._prev_day_close)
-                    logger.info("Prev day close stored: %.2f", self._prev_day_close)
-
                 await self.state.daily_reset()
                 self.trade_store.daily_reset()
                 self.engine.clear_cache()
 
-                self._orb_frozen       = False
-                self._orb_frozen_time  = None
-                self._orb_open         = None
-                self._orb_close        = None
-                self._today_open       = None
-                self._recent_spots     = []
-                self._day_candles      = []
-                self._current_minute   = None
                 self._last_signal_time = 0.0
-
-                # ✅ Clear persisted trend vars too (fresh day)
-                await self.state.update(
-                    orb_open=None,
-                    orb_close=None,
-                    today_open=None,
-                    # Note: _prev_day_close was just SET above, don't clear it
-                )
+                self._latest_iv        = None
+                self._iv_history.clear()
 
                 logger.info("=== DAILY RESET COMPLETE ===")
 
             await asyncio.sleep(10)
 
-    # ── Main poll loop ───────────────────────────────────────
+    # ── Main poll loop ────────────────────────────────────────
+
     async def _loop(self) -> None:
         logger.info("🔄 Market loop started")
         while self.running:
@@ -309,15 +208,14 @@ class MarketScheduler:
                     delay = _time.time() - self._last_tick_time
                     if delay > 10:
                         logger.error("Scheduler stalled! delay=%.2fs", delay)
-                    data_stale_seconds = _time.time() - self._last_good_quote_time
-                    if data_stale_seconds > settings.deadman_timeout:
+                    data_stale = _time.time() - self._last_good_quote_time
+                    if data_stale > settings.deadman_timeout:
                         logger.critical(
-                            "Dead-man switch: market data stale for %.1fs",
-                            data_stale_seconds,
-                        )
+                            "Dead-man switch: market data stale for %.1fs", data_stale)
                         await self._fail_safe_on_data_loss()
                 else:
-                    self._last_tick_time = _time.time()
+                    # Outside market hours — reset timers so watchdog doesn't fire at open
+                    self._last_tick_time       = _time.time()
                     self._last_good_quote_time = _time.time()
                     self._consecutive_quote_failures = 0
 
@@ -330,7 +228,6 @@ class MarketScheduler:
                         logger.info("Market closed (%s) — polling paused", reason)
                         self._last_closed_log = now_ts
                 else:
-                    logger.info("📊 Market open — calling _tick")
                     await self._tick()
 
             except Exception as exc:
@@ -338,17 +235,18 @@ class MarketScheduler:
 
             await asyncio.sleep(settings.poll_seconds)
 
-    # ── Tick ─────────────────────────────────────────────────
+    # ── Tick ──────────────────────────────────────────────────
 
     async def _tick(self) -> None:
         self._last_tick_time = _time.time()
-        logger.info("🕐 TICK: Starting market data fetch")
+
+        # ── Fetch NIFTY spot ────────────────────────────────
         try:
             index_quote = await asyncio.wait_for(
                 self.broker.get_index_quote(settings.nifty_symbol),
                 timeout=3,
             )
-            self._last_good_quote_time = _time.time()
+            self._last_good_quote_time       = _time.time()
             self._consecutive_quote_failures = 0
         except asyncio.TimeoutError:
             logger.warning("⏰ Broker timeout")
@@ -370,304 +268,113 @@ class MarketScheduler:
 
         logger.info("💰 TICK: spot=%.2f", spot)
 
-        # ✅ ADVANCED RECOVERY: Auto-recover prev_day_close from quote payload if missing!
-        if self._prev_day_close is None and isinstance(index_quote, dict):
-            # Try finding standard broker fields for previous close
-            prev_close_val = index_quote.get("previousClose") or index_quote.get("previous_close") or index_quote.get("close")
-            if prev_close_val:
-                try:
-                    self._prev_day_close = float(prev_close_val)
-                    await self.state.update(prev_day_close=self._prev_day_close)
-                    logger.info("✅ Auto-recovered prev_day_close from broker quote: %.2f (persisted)", self._prev_day_close)
-                except (ValueError, TypeError) as exc:
-                    logger.debug("Failed to parse previousClose from quote payload: %s", exc)
-
-        state = await self.state.snapshot()
-
-        if state.active_trade:
-            if settings.strategy_type == "iron_condor":
-                await self.state.update(spot_price=spot)
-            else:
-                symbol = state.active_trade.get("symbol")
-
-                try:
-                    option_quote = await self.broker.get_quote(
-                        symbol_name=symbol,
-                        exchange="NFO",
-                    )
-
-                    option_ltp = self.broker.parse_ltp(option_quote)
-
-                    if option_ltp is not None and option_ltp > 0:
-                        await self.state.update(
-                            spot_price=spot,
-                            active_trade={
-                                **state.active_trade,
-                                "ltp": option_ltp,
-                            },
-                        )
-                    else:
-                        logger.warning("⚠️ LTP missing or zero for %s", symbol)
-                        await self.state.update(spot_price=spot)
-
-                except Exception as e:
-                    logger.warning("⚠️ Option quote failed: %s", e)
-                    await self.state.update(spot_price=spot)
-        else:
-            await self.state.update(spot_price=spot)
-
-        logger.info("✅ TICK: State updated with spot_price=%.2f", spot)
-
-        now   = _now_ist()
-
-        if settings.strategy_type == "iron_condor":
-            if self._iron_condor_can_enter(now, spot, state):
-                payload = {
-                    "signal": "IRON_CONDOR",
-                    "spot_price": spot,
-                    "size_label": "FULL",
-                    "trend_score": 0,
-                }
-                await self.state.update(signal="IRON_CONDOR", signal_meta=payload)
-                await self.event_bus.publish("SIGNAL", payload)
-                self._last_signal_time = now.timestamp()
-                logger.info("✅ IRON_CONDOR entry signal emitted")
-            return
-
-        # Capture today's open price — but ONLY during 09:15-09:17 window.
-        if self._today_open is None:
-            if time(9, 15) <= now.time() <= time(9, 17):
-                self._today_open = spot
-                try:
-                    await self.state.update(today_open=self._today_open)
-                except Exception as exc:
-                    logger.warning("Failed to persist today_open: %s", exc)
-                logger.info("Today open captured: %.2f (persisted)", spot)
-            elif now.time() > time(9, 17):
-                if not getattr(self, "_warned_today_open_missed", False):
-                    logger.warning(
-                        "Bot started after 09:17 (now=%s) — today_open cannot be "
-                        "captured today. Trend score Component 1 will be 0.",
-                        now.strftime("%H:%M:%S"),
-                    )
-                    self._warned_today_open_missed = True
-
-        raw_volume = int(float(index_quote.get("volume") or 0))
-        if self._last_index_volume is None:
-            current_volume = raw_volume
-        else:
-            current_volume = max(raw_volume - self._last_index_volume, 0)
-        self._last_index_volume = raw_volume
-
+        # Extract IV if the broker provides it
         iv = self._extract_iv(index_quote)
         if iv is not None:
             self._latest_iv = iv
             self._iv_history.append(iv)
 
+        # ── Update spot in state ────────────────────────────
+        # IC trade monitoring (P&L, exit checks) is handled entirely by
+        # trading_engine._monitor_loop. Scheduler only needs to keep
+        # spot_price current so the engine can read it.
+        try:
+            await self.state.update(spot_price=spot)
+        except Exception as exc:
+            logger.error("state.update spot_price failed: %s", exc)
+            return
+
+        logger.info("✅ TICK: spot_price=%.2f", spot)
+
+        # ── Publish tick for any subscribers ────────────────
         await self.event_bus.publish("TICK", {
             "price":  spot,
-            "volume": float(current_volume),
-            "iv":    float(iv or 0.0),
+            "volume": float(index_quote.get("volume") or 0),
+            "iv":     float(iv or 0.0),
         })
 
-        self._recent_spots.append(spot)
-        if len(self._recent_spots) > 10:
-            self._recent_spots.pop(0)
+        # ── IC entry gate ────────────────────────────────────
+        state = await self.state.snapshot()
+        now   = _now_ist()
 
-        completed_candle = self._update_candle(spot, current_volume, now)
-        if completed_candle:
-            self._append_volume_history(completed_candle["volume"])
-            self._day_candles.append(completed_candle)
-            if len(self._day_candles) > 60:
-                self._day_candles.pop(0)
-
-        market_open_today = now.replace(
-            hour=9, minute=15, second=0, microsecond=0)
-        seconds_since_open = (now - market_open_today).total_seconds()
-
-        if seconds_since_open < 0:
-            return  # pre-market
-
-        in_orb = seconds_since_open < settings.orb_duration_seconds
-
-        # ── Build ORB 9:15–9:30 ──────────────────────────
-        if in_orb and not self._orb_frozen:
-            if self._orb_open is None:
-                self._orb_open = spot
-                try:
-                    await self.state.update(orb_open=self._orb_open)
-                except Exception as exc:
-                    logger.warning("Failed to persist orb_open: %s", exc)
-                logger.info("ORB open captured: %.2f (persisted)", spot)
-            high = spot if state.orb_high is None else max(state.orb_high, spot)
-            low  = spot if state.orb_low  is None else min(state.orb_low,  spot)
-            self._orb_close = spot  # rolling close
-
-            # ✅ Persist orb_close on EVERY tick during ORB build window.
-            try:
-                await self.state.update(
-                    orb_high=high,
-                    orb_low=low,
-                    orb_close=self._orb_close,
-                )
-            except Exception as exc:
-                logger.warning("Failed to persist ORB build state: %s", exc)
+        if not self._iron_condor_can_enter(now, spot, state):
             return
-
-        # ── Freeze ORB at 9:30 ───────────────────────────
-        if not in_orb and not self._orb_frozen:
-            # ✅ FIX: Guard against re-freeze
-            if self._orb_frozen:
-                return
-            
-            self._orb_frozen = True
-            self._orb_frozen_time = now.timestamp()
-            atr_val = self._compute_atr()
-
-            if self._orb_close is not None:
-                try:
-                    await self.state.update(orb_close=self._orb_close)
-                except Exception as exc:
-                    logger.warning("Failed to persist final orb_close: %s", exc)
-                logger.info("ORB close captured: %.2f (persisted)", self._orb_close)
-
-            if state.orb_high is not None and state.orb_low is not None:
-                orb_range = state.orb_high - state.orb_low
-                orb_range_pct = orb_range / state.orb_high  # ✅ FIX: % based
-
-                # ✅ FIX: Use MIN_ORB_RANGE_PCT from settings
-                min_pct = getattr(settings, "min_orb_range_pct", 0.0020)
-                if orb_range_pct < min_pct:
-                    logger.warning(
-                        "ORB range %.2f%% < min %.2f%% — trading disabled",
-                        orb_range_pct * 100, min_pct * 100)
-                    await self.state.update(trading_enabled=False)
-                    return
-
-                max_pct = getattr(settings, "max_orb_range_pct", 0.0080)
-                if orb_range_pct > max_pct:
-                    logger.warning(
-                        "ORB range %.2f%% > max %.2f%% (chaotic) — trading disabled",
-                        orb_range_pct * 100, max_pct * 100)
-                    await self.state.update(trading_enabled=False)
-                    return
-
-                logger.info(
-                    "ORB FROZEN high=%.2f low=%.2f range=%.2f (%.2f%%) ATR=%.2f",
-                    state.orb_high, state.orb_low, orb_range, orb_range_pct * 100, atr_val,
-                )
-
-                if orb_range < atr_val * settings.orb_atr_multiplier:
-                    logger.warning(
-                        "Choppy ORB range=%.2f < %.1f×ATR=%.2f — disabled",
-                        orb_range, settings.orb_atr_multiplier, atr_val)
-                    await self.state.update(trading_enabled=False)
-            else:
-                logger.warning(
-                    "Bot started after ORB window — trading disabled today")
-                await self.state.update(trading_enabled=False)
-
-        # ── Post-ORB guards ───────────────────────────────
-        if state.active_trade:        return
-        if state.signal is not None:  return
-        if not state.trading_enabled: return
-        if state.orb_high is None or state.orb_low is None: return
-        if state.orb_high - state.orb_low < settings.min_orb_range: return
-
-        no_h, no_m = map(int, settings.no_entry_after.split(":"))
-        if now.time() >= time(no_h, no_m): return
-
-        now_ts = now.timestamp()
-        if now_ts - self._last_signal_time < settings.signal_cooldown: return
-
-        # ── Candle-close confirmation ─────────────────────
-        if completed_candle is None: return
-
-        # ── Skip first candle after ORB freeze ───────────
-        if settings.skip_first_candle and self._orb_frozen_time is not None:
-            if now.timestamp() - self._orb_frozen_time < 65:
-                return
-
-        bu = state.orb_high + settings.breakout_buffer
-        bd = state.orb_low  - settings.breakout_buffer
-
-        candle_above = completed_candle["close"] > bu
-        candle_below = completed_candle["close"] < bd
-        if not candle_above and not candle_below:
-            self._prev_candle = None
-            return
-
-        if candle_above:
-            if self._prev_candle is None or self._prev_candle["close"] <= bu:
-                self._prev_candle = completed_candle
-                logger.info("⏳ CALL breakout — waiting for confirmation candle")
-                return
-            signal_type = "CALL"
-        else:
-            if self._prev_candle is None or self._prev_candle["close"] >= bd:
-                self._prev_candle = completed_candle
-                logger.info("⏳ PUT breakout — waiting for confirmation candle")
-                return
-            signal_type = "PUT"
-
-        self._prev_candle = None
-
-        if not self._volume_spike_ok(completed_candle.get("volume", 0)):
-            return
-
-        if not self._iv_ok():
-            return
-
-        # ── 3-component trend score ───────────────────────
-        ts = self._trend_score(state.orb_high, state.orb_low)
-
-        if candle_above:
-            signal_type = "CALL"
-            if settings.trend_filter_enabled:
-                if ts < 3:
-                    logger.info(
-                        "TREND FILTER: CALL skipped score=%+d (need +3)", ts)
-                    return
-            elif ts < 0:
-                return
-        else:
-            signal_type = "PUT"
-            if settings.trend_filter_enabled:
-                if ts > -3:
-                    logger.info(
-                        "TREND FILTER: PUT skipped score=%+d (need -3)", ts)
-                    return
-            elif ts > 0:
-                return
-
-        total_min = now.hour * 60 + now.minute
-        if   total_min <= 10 * 60 + 30: size = "FULL"
-        elif total_min <= 12 * 60:      size = "MEDIUM"
-        elif total_min <= 13 * 60 + 30: size = "HALF"
-        else: return
-
-        logger.info(
-            "SIGNAL %s close=%.2f trend=%+d size=%s orb=%.2f/%.2f",
-            signal_type, completed_candle["close"], ts, size,
-            state.orb_high, state.orb_low,
-        )
 
         payload = {
-            "signal":      signal_type,
-            "spot_price":  completed_candle["close"],
-            "size_label":  size,
-            "trend_score": ts,
+            "signal":      "IRON_CONDOR",
+            "spot_price":  spot,
+            "size_label":  "FULL",
+            "trend_score": 0,
         }
-        await self.state.update(signal=signal_type, signal_meta=payload)
-        await self.event_bus.publish("SIGNAL", payload)
-        self._last_signal_time = now_ts
-
-    def _append_volume_history(self, volume: int) -> None:
-        if volume <= 0:
+        try:
+            await self.state.update(signal="IRON_CONDOR", signal_meta=payload)
+        except Exception as exc:
+            logger.error("state.update signal failed: %s", exc)
             return
-        self._volume_history.append(volume)
+
+        await self.event_bus.publish("SIGNAL", payload)
+        self._last_signal_time = now.timestamp()
+        logger.info("✅ IRON_CONDOR entry signal emitted spot=%.2f", spot)
+
+    # ── IC entry gate ─────────────────────────────────────────
+
+    def _iron_condor_can_enter(self, now: datetime, spot: float, state) -> bool:
+        """
+        All conditions that must be true before emitting an IC entry signal.
+
+        Returns True only when every gate passes.
+        Logs the blocking reason at DEBUG so logs stay readable; only
+        the final SIGNAL log is at INFO.
+        """
+        if state.active_trade:
+            logger.debug("IC gate: active trade already open")
+            return False
+
+        if state.last_iron_condor_month == now.month:
+            logger.debug("IC gate: already traded this month (month=%d)", now.month)
+            return False
+
+        if now.weekday() >= 5:
+            logger.debug("IC gate: weekend")
+            return False
+
+        if not (settings.ic_entry_day_start <= now.day <= settings.ic_entry_day_end):
+            logger.debug(
+                "IC gate: not in entry days (%d-%d), today=day %d",
+                settings.ic_entry_day_start, settings.ic_entry_day_end, now.day,
+            )
+            return False
+
+        try:
+            sh, sm = map(int, settings.ic_entry_window_start.split(":"))
+            eh, em = map(int, settings.ic_entry_window_end.split(":"))
+        except Exception:
+            sh, sm, eh, em = 9, 20, 10, 0
+            logger.warning("Failed to parse IC entry window — using defaults 09:20-10:00")
+
+        if not (time(sh, sm) <= now.time() < time(eh, em)):
+            logger.debug(
+                "IC gate: outside time window %02d:%02d-%02d:%02d, now=%s",
+                sh, sm, eh, em, now.strftime("%H:%M:%S"),
+            )
+            return False
+
+        if not state.trading_enabled:
+            logger.debug("IC gate: trading_enabled=False")
+            return False
+
+        # Signal cooldown — prevents rapid re-emission if SIGNAL not consumed yet
+        if self._last_signal_time and now.timestamp() - self._last_signal_time < 60:
+            logger.debug("IC gate: cooldown active (last signal %.0fs ago)",
+                         now.timestamp() - self._last_signal_time)
+            return False
+
+        return True
+
+    # ── Helpers ───────────────────────────────────────────────
 
     def _extract_iv(self, quote: dict) -> float | None:
+        """Extract implied volatility from broker quote payload if present."""
         if not isinstance(quote, dict):
             return None
         for key in ("impliedVolatility", "iv", "implied_volatility", "volatility"):
@@ -681,152 +388,10 @@ class MarketScheduler:
                     continue
         return None
 
-    def _iron_condor_can_enter(self, now: datetime, spot: float, state) -> bool:
-        if state.active_trade:
-            return False
-        if state.last_iron_condor_month == now.month:
-            return False
-        if now.weekday() >= 5:
-            return False
-        start_h, start_m = map(int, settings.ic_entry_window_start.split(":"))
-        end_h, end_m = map(int, settings.ic_entry_window_end.split(":"))
-        if not (time(start_h, start_m) <= now.time() < time(end_h, end_m)):
-            return False
-        if now.day < settings.ic_entry_day_start or now.day > settings.ic_entry_day_end:
-            return False
-        if self._last_signal_time and now.timestamp() - self._last_signal_time < 60:
-            return False
-        return True
-
-    def _iv_percentile(self, current_iv: float) -> float | None:
-        if not self._iv_history:
-            return None
-        rank = sum(1 for iv in self._iv_history if iv <= current_iv)
-        return 100.0 * rank / len(self._iv_history)
-
-    def _volume_spike_ok(self, volume: int) -> bool:
-        if volume <= 0:
-            logger.warning("⚠️ Volume data unavailable — skipping volume filter")
-            return True
-        if len(self._volume_history) < 10:
-            logger.debug("Volume history short (%d candles) — skipping volume spike filter", len(self._volume_history))
-            return True
-        avg_volume = sum(self._volume_history) / len(self._volume_history)
-        spike = volume / avg_volume if avg_volume > 0 else 0.0
-        if spike < settings.min_volume_spike:
-            logger.info(
-                "❌ Volume spike %.2fx < min %.2fx — skipped",
-                spike, settings.min_volume_spike,
-            )
-            return False
-        logger.info("✅ Volume spike %.2fx (avg=%d)", spike, int(avg_volume))
-        return True
-
-    def _iv_ok(self) -> bool:
-        if self._latest_iv is None:
-            logger.debug("IV unavailable — skipping IV filter")
-            return True
-        if len(self._iv_history) < 10:
-            logger.debug("IV history short (%d points) — skipping IV percentile filter", len(self._iv_history))
-            return True
-        percentile = self._iv_percentile(self._latest_iv)
-        if percentile is None:
-            return True
-        if percentile > settings.max_iv_percentile:
-            logger.info(
-                "❌ IV filter blocked: current=%.2f%% percentile > %.2f%%",
-                percentile, settings.max_iv_percentile,
-            )
-            return False
-        logger.info("✅ IV filter passed: current=%.2f%% percentile", percentile)
-        return True
-
-    # ── Candle builder ───────────────────────────────────────
-
-    def _update_candle(self, spot: float, volume: int, now: datetime) -> dict | None:
-        minute_ts = now.replace(second=0, microsecond=0)
-        if self._current_minute is None:
-            self._current_minute = minute_ts
-            self._candle_open = self._candle_high = self._candle_low = self._candle_close = spot
-            self._candle_volume = volume
-            return None
-        if minute_ts > self._current_minute:
-            completed = {
-                "ts":     self._current_minute,
-                "open":   self._candle_open,
-                "high":   self._candle_high,
-                "low":    self._candle_low,
-                "close":  self._candle_close,
-                "volume": self._candle_volume,
-            }
-            self._current_minute = minute_ts
-            self._candle_open = self._candle_high = self._candle_low = self._candle_close = spot
-            self._candle_volume = volume
-            return completed
-        self._candle_high   = max(self._candle_high, spot)
-        self._candle_low    = min(self._candle_low,  spot)
-        self._candle_close  = spot
-        self._candle_volume += volume
-        return None
-
-    def _compute_atr(self) -> float:
-        if len(self._day_candles) < 3:
-            return 15.0
-        return (
-            sum(c["high"] - c["low"] for c in self._day_candles)
-            / len(self._day_candles)
-        )
-
-    def _trend_score(self, orb_high: float, orb_low: float) -> int:
-        """
-        3-component trend score. Range: -3 to +3.
-        All inputs are knowable at signal time — zero lookahead.
-        """
-        # ✅ EXPLICIT WARNING added for missing prev_day_close
-        if self._prev_day_close is None:
-            logger.warning("⚠️ prev_day_close missing — trend degraded today (components 1 and 3 will be 0).")
-
-        score = 0
-        c1 = c2 = c3 = 0  # individual component values for diagnostic logging
-
-        # Component 1: gap direction
-        if self._today_open is not None and self._prev_day_close is not None:
-            if self._today_open > self._prev_day_close:
-                c1 = +1
-            elif self._today_open < self._prev_day_close:
-                c1 = -1
-        score += c1
-
-        # Component 2: ORB candle direction
-        if self._orb_open is not None and self._orb_close is not None:
-            if self._orb_close > self._orb_open:
-                c2 = +1
-            elif self._orb_close < self._orb_open:
-                c2 = -1
-        score += c2
-
-        # Component 3: ORB close vs prev day close
-        if self._orb_close is not None and self._prev_day_close is not None:
-            if self._orb_close > self._prev_day_close:
-                c3 = +1
-            elif self._orb_close < self._prev_day_close:
-                c3 = -1
-        score += c3
-
-        logger.info(
-            "TREND DEBUG | today_open=%s prev_close=%s orb_open=%s orb_close=%s "
-            "| C1(gap)=%+d C2(orb)=%+d C3(close)=%+d | TOTAL=%+d",
-            f"{self._today_open:.2f}" if self._today_open is not None else "MISSING",
-            f"{self._prev_day_close:.2f}" if self._prev_day_close is not None else "MISSING",
-            f"{self._orb_open:.2f}" if self._orb_open is not None else "MISSING",
-            f"{self._orb_close:.2f}" if self._orb_close is not None else "MISSING",
-            c1, c2, c3, score,
-        )
-
-        return score
+    # ── Dead-man switch ───────────────────────────────────────
 
     async def _fail_safe_on_data_loss(self) -> None:
-        """Dead-man switch: retry exit and hard-disable trading."""
+        """Disable trading and attempt emergency flatten when data stream dies."""
         state = await self.state.snapshot()
         if state.trading_enabled:
             await self.state.update(trading_enabled=False)
@@ -838,17 +403,21 @@ class MarketScheduler:
                 result = await self.flatten_position()
                 closed = result.get("status") in {"flattened", "no_active_trade"}
                 if closed:
-                    logger.critical("Dead-man switch exit success attempt=%d", attempt)
+                    logger.critical(
+                        "Dead-man switch exit success attempt=%d", attempt)
                     break
                 await asyncio.sleep(1.0)
             if not closed:
                 logger.critical("Dead-man switch exit failed after retries")
-            await self.state.update(trading_enabled=False, last_risk_breach="deadman_switch")
+            await self.state.update(
+                trading_enabled=False,
+                last_risk_breach="deadman_switch",
+            )
 
-    # ── Manual flatten ───────────────────────────────────────
+    # ── Manual flatten ────────────────────────────────────────
 
     async def flatten_position(self) -> dict:
-        """Emergency flatten — called from dashboard FLATTEN button."""
+        """Emergency flatten — callable from dashboard FLATTEN button."""
         state = await self.state.snapshot()
         if not state.active_trade:
             return {"status": "no_active_trade"}
@@ -867,10 +436,15 @@ class MarketScheduler:
                 return {"status": "error", "message": "no_order_id"}
             await self.state.update(active_trade=None, live_pnl=0.0)
             logger.info("Manual flatten %s qty=%d order=%s", symbol, qty, order_id)
-            return {"status": "flattened", "symbol": symbol, "qty": qty, "order_id": order_id}
+            return {
+                "status":   "flattened",
+                "symbol":   symbol,
+                "qty":      qty,
+                "order_id": order_id,
+            }
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
 
 
-# ── Global scheduler instance ──────────────────────────────
+# ── Global instance ───────────────────────────────────────────
 scheduler = MarketScheduler()
