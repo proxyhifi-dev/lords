@@ -1,33 +1,41 @@
 """
 Lords Bot — SAMCO Client
-Async wrapper with:
-  • Paper mode (no real orders in MODE=paper)
-  • Circuit breaker
-  • Exponential-backoff retry
-  • 1s quote cache, 5s chain cache
-  • Fill confirmation polling
-  • Correct parse_spot (indexDetails.spotPrice)
-  • Correct parse_ltp (quoteDetails nesting)
-  • _map_exchange uses SDK constants
+
+Safe version:
+- Paper mode works without snapi_py_client SDK.
+- Live mode / real data download requires official Samco Python SDK.
+- Clear error if SDK is missing.
+- Windows-safe timezone fallback.
+- Circuit breaker + retry wrapper.
+- Quote / option-chain cache.
+- Market order placement.
+- Fill confirmation polling.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable
-from zoneinfo import ZoneInfo
+
+try:
+    from zoneinfo import ZoneInfo
+
+    IST = ZoneInfo("Asia/Kolkata")
+except Exception:
+    IST = timezone(timedelta(hours=5, minutes=30))
 
 from backend.app.core.circuit_breaker import CircuitBreaker
 from backend.app.core.config_loader import get_settings
 from backend.app.utils.logger import get_logger
 
 settings = get_settings()
-logger   = get_logger("samco_client")
+logger = get_logger("samco_client")
 
 _paper_counter = 0
-IST = ZoneInfo("Asia/Kolkata")
+
 
 def _next_paper_id() -> str:
     global _paper_counter
@@ -35,67 +43,228 @@ def _next_paper_id() -> str:
     return f"PAPER-{_paper_counter:05d}"
 
 
-class SamcoClient:
+class SamcoSdkMissingError(RuntimeError):
+    pass
 
+
+class PaperBridge:
+    """
+    Minimal paper bridge.
+    This prevents imports from crashing when snapi_py_client is absent.
+
+    IMPORTANT:
+    This does NOT provide real Samco data.
+    Real data download still requires official Samco SDK.
+    """
+
+    EXCHANGE_NSE = "NSE"
+    EXCHANGE_NFO = "NFO"
+    EXCHANGE_BSE = "BSE"
+
+    TRANSACTION_TYPE_BUY = "BUY"
+    TRANSACTION_TYPE_SELL = "SELL"
+
+    ORDER_TYPE_MARKET = "MARKET"
+    ORDER_TYPE_LIMIT = "LIMIT"
+    ORDER_TYPE_SL_M = "SL-M"
+
+    PRODUCT_MIS = "MIS"
+    PRODUCT_NRML = "NRML"
+
+    VALIDITY_DAY = "DAY"
+    POSITION_TYPE_NET = "NET"
+
+    def login(self, body: dict | None = None) -> dict:
+        return {"status": "Success", "sessionToken": "PAPER_SESSION"}
+
+    def set_session_token(self, sessionToken: str | None = None) -> dict:
+        return {"status": "Success"}
+
+    def index_quote(self, indexName: str | None = None) -> dict:
+        return {
+            "status": "Success",
+            "indexDetails": [
+                {
+                    "indexName": indexName or "NIFTY 50",
+                    "spotPrice": "25000.00",
+                }
+            ],
+        }
+
+    def get_quote(self, symbol_name: str | None = None, exchange: str | None = None) -> dict:
+        return {
+            "status": "Success",
+            "quoteDetails": {
+                "symbolName": symbol_name or "PAPER",
+                "lastTradedPrice": "100.00",
+                "bestBidPrice": "99.50",
+                "bestAskPrice": "100.50",
+            },
+        }
+
+    def get_option_chain(self, **kwargs) -> dict:
+        return {"status": "Success", "optionChainDetails": []}
+
+    def place_order(self, body: dict | None = None) -> dict:
+        return {"status": "Success", "orderNumber": _next_paper_id(), "body": body or {}}
+
+    def get_order_status(self, orderNumber: str | None = None) -> dict:
+        return {
+            "status": "Success",
+            "orderDetails": {
+                "orderNumber": orderNumber,
+                "orderStatus": "COMPLETE",
+                "averagePrice": "100.00",
+            },
+        }
+
+    def cancel_order(self, orderNumber: str | None = None) -> dict:
+        return {"status": "Success", "orderNumber": orderNumber}
+
+    def get_positions_data(self, position_type: str | None = None) -> list[dict]:
+        return []
+
+    def get_trade_book(self) -> list[dict]:
+        return []
+
+    def get_order_book(self) -> list[dict]:
+        return []
+
+    def get_intraday_candle_data(self, **kwargs) -> dict:
+        # Paper bridge cannot provide real candles.
+        return {
+            "status": "Failed",
+            "statusMessage": "PaperBridge has no real intraday candle data. Install Samco SDK.",
+            "data": [],
+        }
+
+    def get_index_intraday_candle_data(self, **kwargs) -> dict:
+        # Paper bridge cannot provide real candles.
+        return {
+            "status": "Failed",
+            "statusMessage": "PaperBridge has no real index candle data. Install Samco SDK.",
+            "data": [],
+        }
+
+
+class SamcoClient:
     def __init__(self):
         self._session_live = False
-        self._lock   = asyncio.Lock()
+        self._lock = asyncio.Lock()
         self._breaker = CircuitBreaker(
             failure_threshold=settings.circuit_failure_threshold,
             cooldown_seconds=settings.circuit_cooldown_seconds,
         )
-        self._quote_cache: dict = {}
-        self._chain_cache: dict = {}
+        self._quote_cache: dict[str, dict] = {}
+        self._chain_cache: dict[str, dict] = {}
         self._QUOTE_TTL = 1
         self._CHAIN_TTL = 5
         self._samco = None
         self._auth_failed_until = 0.0
         self._last_auth_error = ""
 
-    def _get_bridge(self):
-        if self._samco is None:
-            try:
-                from snapi_py_client.snapi_bridge import StocknoteAPIPythonBridge
-                self._samco = StocknoteAPIPythonBridge()
-            except ImportError as exc:
-                raise RuntimeError("snapi_py_client not installed") from exc
-        return self._samco
+    def _using_placeholder_credentials(self) -> bool:
+        user = str(getattr(settings, "samco_user_id", "") or "")
+        password = str(getattr(settings, "samco_password", "") or "")
+        yob = str(getattr(settings, "samco_yob", "") or "")
 
-    # ── AUTH ──────────────────────────────────────────
+        placeholders = {
+            "",
+            "YOUR_SAMCO_USER_ID",
+            "YOUR_PASSWORD",
+            "YOUR_SAMCO_PASSWORD",
+            "YOUR_YOB",
+            "CHANGE_ME",
+            "None",
+            "none",
+        }
+
+        return user in placeholders or password in placeholders or yob in placeholders
+
+    def _get_bridge(self):
+        """
+        Load official Samco SDK bridge.
+
+        Paper mode:
+            If SDK is missing, use PaperBridge so paper bot does not crash.
+
+        Live mode / real data download:
+            SDK is mandatory. Raise a clear error if missing.
+        """
+
+        if self._samco is not None:
+            return self._samco
+
+        try:
+            from snapi_py_client.snapi_bridge import StocknoteAPIPythonBridge
+
+            self._samco = StocknoteAPIPythonBridge()
+            return self._samco
+
+        except ImportError as exc:
+            if not getattr(settings, "is_live", False):
+                logger.warning(
+                    "snapi_py_client not installed. Using PaperBridge. "
+                    "Paper mode can run, but real Samco data download will not work."
+                )
+                self._samco = PaperBridge()
+                return self._samco
+
+            raise SamcoSdkMissingError(
+                "snapi_py_client is not installed. Real Samco live/data mode requires "
+                "the official Samco Python SDK. Download/install the SDK from Samco, "
+                "then ensure the folder snapi_py_client is importable from this venv."
+            ) from exc
+
+    # AUTH
     async def login(self) -> dict:
         async with self._lock:
             now_ts = time.time()
+
             if now_ts < self._auth_failed_until:
                 wait = int(self._auth_failed_until - now_ts)
-                raise RuntimeError(f"SAMCO login cooldown active ({wait}s): {self._last_auth_error}")
+                raise RuntimeError(
+                    f"SAMCO login cooldown active ({wait}s): {self._last_auth_error}"
+                )
+
+            if self._using_placeholder_credentials() and getattr(settings, "is_live", False):
+                raise RuntimeError(
+                    "SAMCO credentials are placeholders. Update .env before live/data mode."
+                )
 
             logger.info("SAMCO login user=%s", settings.samco_user_id)
+
             body: dict[str, Any] = {
-                "userId":   settings.samco_user_id,
+                "userId": settings.samco_user_id,
                 "password": settings.samco_password,
-                "yob":      settings.samco_yob,
+                "yob": settings.samco_yob,
             }
-            if settings.samco_access_token:
+
+            if getattr(settings, "samco_access_token", ""):
                 body["accessToken"] = settings.samco_access_token
 
             bridge = self._get_bridge()
-            resp   = self._parse_response(await asyncio.to_thread(bridge.login, body=body))
+            resp = self._parse_response(await asyncio.to_thread(bridge.login, body=body))
 
             if resp.get("status") != "Success":
                 msg = str(resp.get("statusMessage") or resp)
                 self._last_auth_error = msg
                 self._session_live = False
-                self._auth_failed_until = time.time() + max(float(settings.reconnect_base_delay), 30.0)
+                self._auth_failed_until = time.time() + max(
+                    float(settings.reconnect_base_delay), 30.0
+                )
                 raise RuntimeError(f"SAMCO login failed: {resp}")
 
             token = resp.get("sessionToken")
             if not token:
-                raise RuntimeError("Login OK but no sessionToken")
+                raise RuntimeError("SAMCO login returned Success but no sessionToken")
 
             await asyncio.to_thread(bridge.set_session_token, sessionToken=token)
+
             self._session_live = True
             self._auth_failed_until = 0.0
             self._last_auth_error = ""
+
             logger.info("SAMCO login successful")
             return resp
 
@@ -107,10 +276,11 @@ class SamcoClient:
         try:
             q = await self.get_index_quote(settings.nifty_symbol)
             return bool(q)
-        except Exception:
+        except Exception as exc:
+            logger.warning("SAMCO healthcheck failed: %s", exc)
             return False
 
-    # ── QUOTES ────────────────────────────────────────
+    # QUOTES
     async def get_index_quote(self, index_name: str) -> dict:
         await self.ensure_session()
         return await self._call_sdk(
@@ -120,23 +290,75 @@ class SamcoClient:
 
     async def get_quote(self, symbol_name: str, exchange: str = "NFO") -> dict:
         await self.ensure_session()
+
         key = f"{symbol_name}_{exchange}"
         cached = self._quote_cache.get(key)
+
         if cached and (time.time() - cached["ts"]) < self._QUOTE_TTL:
             return cached["data"]
-        exch   = self._map_exchange(exchange)
+
+        exch = self._map_exchange(exchange)
+
         result = await self._call_sdk(
-            lambda: self._get_bridge().get_quote(symbol_name=symbol_name, exchange=exch),
+            lambda: self._get_bridge().get_quote(
+                symbol_name=symbol_name,
+                exchange=exch,
+            ),
             "get_quote",
         )
-        if not isinstance(result, dict): result = {}
-        # Debug: log top-level keys once to help diagnose field name issues
-        if result and logger.isEnabledFor(10):  # DEBUG level
-            logger.debug("get_quote(%s) top-level keys: %s", symbol_name, list(result.keys()))
+
+        if not isinstance(result, dict):
+            result = {}
+
         self._quote_cache[key] = {"ts": time.time(), "data": result}
         return result
 
-    # ── OPTION CHAIN ──────────────────────────────────
+    # CANDLES
+    async def get_index_intraday_candles(
+        self,
+        index_name: str,
+        from_date: str,
+        to_date: str,
+    ) -> dict:
+        """
+        Real index intraday candles.
+        Requires Samco SDK. PaperBridge returns empty data.
+        """
+        await self.ensure_session()
+        return await self._call_sdk(
+            lambda: self._get_bridge().get_index_intraday_candle_data(
+                index_name=index_name,
+                from_date=from_date,
+                to_date=to_date,
+            ),
+            "get_index_intraday_candle_data",
+        )
+
+    async def get_intraday_candles(
+        self,
+        symbol_name: str,
+        exchange: str,
+        from_date: str,
+        to_date: str,
+    ) -> dict:
+        """
+        Real symbol intraday candles, including NFO option symbols.
+        Requires Samco SDK.
+        """
+        await self.ensure_session()
+        exch = self._map_exchange(exchange)
+
+        return await self._call_sdk(
+            lambda: self._get_bridge().get_intraday_candle_data(
+                symbol_name=symbol_name,
+                exchange=exch,
+                from_date=from_date,
+                to_date=to_date,
+            ),
+            "get_intraday_candle_data",
+        )
+
+    # OPTION CHAIN
     async def get_option_chain(
         self,
         search_symbol_name: str,
@@ -146,26 +368,33 @@ class SamcoClient:
         option_type: str,
     ) -> dict:
         await self.ensure_session()
-        key = f"{search_symbol_name}_{expiry_date}_{strike_price}_{option_type}"
+
+        key = f"{search_symbol_name}_{exchange}_{expiry_date}_{strike_price}_{option_type}"
         cached = self._chain_cache.get(key)
+
         if cached and (time.time() - cached["ts"]) < self._CHAIN_TTL:
             return cached["data"]
-        exch   = self._map_exchange(exchange)
+
+        exch = self._map_exchange(exchange)
+
         result = await self._call_sdk(
             lambda: self._get_bridge().get_option_chain(
                 search_symbol_name=search_symbol_name,
                 exchange=exch,
                 expiry_date=expiry_date,
-                strike_price=strike_price,
+                strike_price=str(strike_price),
                 option_type=option_type,
             ),
             "get_option_chain",
         )
-        if not isinstance(result, dict): result = {}
+
+        if not isinstance(result, dict):
+            result = {}
+
         self._chain_cache[key] = {"ts": time.time(), "data": result}
         return result
 
-    # ── ORDERS ────────────────────────────────────────
+    # ORDERS
     async def place_order(
         self,
         symbol: str,
@@ -173,189 +402,399 @@ class SamcoClient:
         quantity: int,
         exchange: str = "NFO",
     ) -> dict:
-        # PAPER MODE — simulate order, no real API call
-        if not settings.is_live:
+        side = side.upper()
+
+        if side not in {"BUY", "SELL"}:
+            return {"status": "Failed", "statusMessage": f"Invalid side: {side}"}
+
+        if quantity <= 0:
+            return {"status": "Failed", "statusMessage": f"Invalid quantity: {quantity}"}
+
+        if not getattr(settings, "is_live", False):
             oid = _next_paper_id()
-            logger.info("[PAPER] %s %s qty=%s → %s", side, symbol, quantity, oid)
+            logger.info("[PAPER] %s %s qty=%s -> %s", side, symbol, quantity, oid)
             return {"status": "Success", "orderNumber": oid}
 
         await self.ensure_session()
-        bridge   = self._get_bridge()
-        txn_type = bridge.TRANSACTION_TYPE_BUY if side == "BUY" else bridge.TRANSACTION_TYPE_SELL
-        exch     = self._map_exchange(exchange)
+
+        bridge = self._get_bridge()
+        txn_type = (
+            bridge.TRANSACTION_TYPE_BUY
+            if side == "BUY"
+            else bridge.TRANSACTION_TYPE_SELL
+        )
+        exch = self._map_exchange(exchange)
+
+        body = {
+            "symbolName": symbol,
+            "exchange": exch,
+            "transactionType": txn_type,
+            "orderType": bridge.ORDER_TYPE_MARKET,
+            "quantity": str(quantity),
+            "productType": bridge.PRODUCT_MIS,
+            "orderValidity": bridge.VALIDITY_DAY,
+        }
 
         result = await self._call_sdk(
-            lambda: bridge.place_order(body={
-                "symbolName":      symbol,
-                "exchange":        exch,
-                "transactionType": txn_type,
-                "orderType":       bridge.ORDER_TYPE_MARKET,
-                "quantity":        str(quantity),
-                "productType":     bridge.PRODUCT_MIS,
-                "orderValidity":   bridge.VALIDITY_DAY,
-            }),
+            lambda: bridge.place_order(body=body),
             "place_order",
         )
+
+        if not isinstance(result, dict):
+            result = {}
+
         if result.get("status") != "Success":
-            logger.error("Order rejected side=%s symbol=%s qty=%s resp=%s", side, symbol, quantity, result)
+            logger.error(
+                "Order rejected side=%s symbol=%s qty=%s resp=%s",
+                side,
+                symbol,
+                quantity,
+                result,
+            )
         else:
-            logger.info("Order placed side=%s symbol=%s qty=%s id=%s",
-                        side, symbol, quantity, result.get("orderNumber"))
+            logger.info(
+                "Order placed side=%s symbol=%s qty=%s id=%s",
+                side,
+                symbol,
+                quantity,
+                result.get("orderNumber"),
+            )
+
         return result
 
     async def get_order_status(self, order_id: str) -> dict:
         await self.ensure_session()
+
         result = await self._call_sdk(
             lambda: self._get_bridge().get_order_status(orderNumber=order_id),
             "get_order_status",
         )
+
         return result if isinstance(result, dict) else {}
 
     async def cancel_order(self, order_id: str) -> dict:
-        """Cancel order by order number."""
         await self.ensure_session()
+
         result = await self._call_sdk(
             lambda: self._get_bridge().cancel_order(orderNumber=order_id),
             "cancel_order",
         )
+
         return result if isinstance(result, dict) else {}
 
-    async def confirm_fill(self, order_id: str, requested_qty: int = 0, max_attempts: int = 10, delay: float = 0.5) -> tuple[str, int, float | None]:
-        """Poll until terminal fill state is known."""
-        if order_id.startswith("PAPER-"):
+    async def confirm_fill(
+        self,
+        order_id: str,
+        requested_qty: int = 0,
+        max_attempts: int = 10,
+        delay: float = 0.5,
+    ) -> tuple[str, int, float | None]:
+        """
+        Poll until terminal fill state is known.
+
+        Always returns:
+            (state, filled_qty, avg_price)
+        """
+
+        if str(order_id).startswith("PAPER-"):
             return "FILLED", requested_qty, None
+
         for attempt in range(1, max_attempts + 1):
             try:
                 resp = await self.get_order_status(order_id)
                 data = resp.get("orderDetails") or resp.get("data") or resp
-                if isinstance(data, list): data = data[0] if data else {}
-                status = (data.get("orderStatus") or data.get("status") or "").upper()
-                logger.debug("Fill check #%d order=%s status=%s", attempt, order_id, status)
-                if status in ("COMPLETE", "FILLED", "TRADED"):
+
+                if isinstance(data, list):
+                    data = data[0] if data else {}
+
+                status = str(data.get("orderStatus") or data.get("status") or "").upper()
+
+                logger.debug(
+                    "Fill check attempt=%d order=%s status=%s",
+                    attempt,
+                    order_id,
+                    status,
+                )
+
+                if status in {"COMPLETE", "FILLED", "TRADED", "EXECUTED"}:
                     avg = await self.get_actual_fill_price(order_id)
                     return "FILLED", requested_qty, avg
-                if status in ("REJECTED", "CANCELLED", "CANCELED"):
-                    logger.error("Order %s %s", order_id, status)
-                    return False
+
+                if status in {"REJECTED", "CANCELLED", "CANCELED"}:
+                    logger.error("Order %s terminal status=%s", order_id, status)
+                    return status, 0, None
+
+                if status in {"PARTIAL", "PARTIALLY_FILLED"}:
+                    avg = await self.get_actual_fill_price(order_id)
+                    return "PARTIAL", 0, avg
+
             except Exception as exc:
-                logger.warning("confirm_fill attempt %d error: %s", attempt, exc)
+                logger.warning("confirm_fill attempt=%d error=%s", attempt, exc)
+
             await asyncio.sleep(delay)
+
         logger.error("confirm_fill timeout order=%s", order_id)
         return "UNKNOWN", 0, None
 
+    async def place_order_and_wait_fill(
+        self,
+        symbol: str,
+        side: str,
+        quantity: int,
+        exchange: str = "NFO",
+        max_fill_wait: int = 10,
+    ) -> tuple[str | None, float | None]:
+        resp = await self.place_order(
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            exchange=exchange,
+        )
+
+        order_id = resp.get("orderNumber") or resp.get("orderId") or resp.get("order_id")
+
+        if not order_id:
+            logger.error(
+                "place_order_and_wait_fill no order_id side=%s symbol=%s resp=%s",
+                side,
+                symbol,
+                resp,
+            )
+            return None, None
+
+        fill_state, _, fill_price = await self.confirm_fill(
+            order_id,
+            requested_qty=quantity,
+            max_attempts=max_fill_wait,
+        )
+
+        if fill_state != "FILLED":
+            return str(order_id), None
+
+        return str(order_id), fill_price
+
+    async def place_stop_loss_order(
+        self,
+        symbol: str,
+        quantity: int,
+        trigger_price: float,
+        side: str = "SELL",
+        exchange: str = "NFO",
+    ) -> dict:
+        if not getattr(settings, "is_live", False):
+            oid = _next_paper_id()
+            return {"status": "Success", "orderNumber": oid, "type": "PAPER_SL"}
+
+        await self.ensure_session()
+
+        bridge = self._get_bridge()
+        txn_type = (
+            bridge.TRANSACTION_TYPE_BUY
+            if side.upper() == "BUY"
+            else bridge.TRANSACTION_TYPE_SELL
+        )
+        exch = self._map_exchange(exchange)
+
+        body = {
+            "symbolName": symbol,
+            "exchange": exch,
+            "transactionType": txn_type,
+            "orderType": getattr(bridge, "ORDER_TYPE_SL_M", "SL-M"),
+            "triggerPrice": str(trigger_price),
+            "quantity": str(quantity),
+            "productType": bridge.PRODUCT_MIS,
+            "orderValidity": bridge.VALIDITY_DAY,
+        }
+
+        return await self._call_sdk(
+            lambda: bridge.place_order(body=body),
+            "place_stop_loss_order",
+        )
+
+    # BOOKS / POSITIONS
     async def get_positions(self) -> list[dict]:
-        """Get current positions. NOTE: This may not be available in all SAMCO SDK versions."""
         try:
             await self.ensure_session()
-            # Try to get positions - this method may not exist in all SDK versions
             bridge = self._get_bridge()
+
             result = await self._call_sdk(
-                lambda: bridge.get_positions_data(position_type=bridge.POSITION_TYPE_NET),
+                lambda: bridge.get_positions_data(
+                    position_type=getattr(bridge, "POSITION_TYPE_NET", "NET")
+                ),
                 "get_positions_data",
             )
-            return result if isinstance(result, list) else []
+
+            if isinstance(result, list):
+                return result
+
+            if isinstance(result, dict):
+                data = (
+                    result.get("positionDetails")
+                    or result.get("data")
+                    or result.get("positions")
+                    or []
+                )
+                return data if isinstance(data, list) else []
+
+            return []
+
         except Exception as exc:
-            logger.warning(f"get_positions_data not available or failed: {exc}")
-            # Return empty list - positions will be handled via trade book
+            logger.warning("get_positions failed: %s", exc)
             return []
 
     async def get_trade_book(self) -> list[dict]:
-        """Get trade book for the day."""
         try:
             await self.ensure_session()
+
             result = await self._call_sdk(
                 lambda: self._get_bridge().get_trade_book(),
                 "get_trade_book",
             )
-            return result if isinstance(result, list) else []
+
+            if isinstance(result, list):
+                return result
+
+            if isinstance(result, dict):
+                data = result.get("tradeBookDetails") or result.get("data") or []
+                return data if isinstance(data, list) else []
+
+            return []
+
         except Exception as exc:
-            logger.warning(f"get_trade_book failed: {exc}")
+            logger.warning("get_trade_book failed: %s", exc)
             return []
 
     async def get_orders(self) -> list[dict]:
-        """Get current orders. NOTE: This may not be available in all SAMCO SDK versions."""
         try:
             await self.ensure_session()
-            # Try to get orders - this method may not exist in all SDK versions
+
             result = await self._call_sdk(
                 lambda: self._get_bridge().get_order_book(),
                 "get_order_book",
             )
-            return result if isinstance(result, list) else []
-        except Exception as exc:
-            logger.warning(f"get_order_book not available or failed: {exc}")
-            # Return empty list - orders will be tracked internally
+
+            if isinstance(result, list):
+                return result
+
+            if isinstance(result, dict):
+                data = result.get("orderBookDetails") or result.get("data") or []
+                return data if isinstance(data, list) else []
+
             return []
 
-    # ── PARSE SPOT ────────────────────────────────────
+        except Exception as exc:
+            logger.warning("get_order_book failed: %s", exc)
+            return []
+
+    async def cancel_all_open_orders(self) -> None:
+        orders = await self.get_orders()
+
+        for order in orders:
+            oid = order.get("orderNumber") or order.get("orderId")
+            status = str(order.get("orderStatus") or "").upper()
+
+            if oid and status in {"OPEN", "PENDING", "TRIGGER_PENDING"}:
+                try:
+                    await self.cancel_order(str(oid))
+                except Exception as exc:
+                    logger.error("cancel order failed order_id=%s error=%s", oid, exc)
+
+    async def close_all_positions_market(self) -> None:
+        positions = await self.get_positions()
+
+        for position in positions:
+            sym = position.get("tradingSymbol") or position.get("symbolName")
+            qty = 0
+
+            for key in ("netQty", "netQuantity", "net_qty"):
+                try:
+                    qty = int(float(str(position.get(key, 0)).replace(",", "")))
+                    break
+                except Exception:
+                    continue
+
+            if not sym or qty == 0:
+                continue
+
+            side = "SELL" if qty > 0 else "BUY"
+            await self.place_order(symbol=sym, side=side, quantity=abs(qty))
+
+    # PARSERS
     @staticmethod
     def parse_spot(quote: dict | None) -> float | None:
-        if not quote: return None
+        if not quote:
+            return None
 
         def _f(val):
-            if val is None: return None
+            if val is None:
+                return None
             try:
                 f = float(str(val).replace(",", "").strip())
                 return f if f > 0 else None
             except (TypeError, ValueError):
                 return None
 
-        # Primary: indexDetails[0].spotPrice
         details = quote.get("indexDetails")
         if isinstance(details, list) and details:
-            for k in ("spotPrice", "lastTradedPrice", "lastTradePrice", "indexValue"):
-                v = _f(details[0].get(k))
-                if v: return v
+            for key in ("spotPrice", "lastTradedPrice", "lastTradePrice", "indexValue"):
+                value = _f(details[0].get(key))
+                if value:
+                    return value
 
-        # Flat keys
-        for k in ("spotPrice", "indexValue", "lastTradedPrice", "lastTradePrice", "ltp", "close"):
-            v = _f(quote.get(k))
-            if v: return v
+        for key in ("spotPrice", "indexValue", "lastTradedPrice", "lastTradePrice", "ltp", "close"):
+            value = _f(quote.get(key))
+            if value:
+                return value
 
         return None
 
-    # ── PARSE LTP ─────────────────────────────────────
     @staticmethod
     def parse_ltp(quote: dict | None) -> float | None:
-        if not quote: return None
+        if not quote:
+            return None
 
         def _f(val):
-            if val is None: return None
+            if val is None:
+                return None
             try:
                 f = float(str(val).replace(",", "").strip())
                 return f if f > 0 else None
             except (TypeError, ValueError):
                 return None
 
-        def _extract(d: dict) -> float | None:
-            for k in ("lastTradedPrice", "lastTradePrice", "ltp", "last_price", "close"):
-                v = _f(d.get(k))
-                if v: return v
+        def _extract(data: dict) -> float | None:
+            for key in ("lastTradedPrice", "lastTradePrice", "ltp", "last_price", "close"):
+                value = _f(data.get(key))
+                if value:
+                    return value
             return None
 
-        # Unwrap quoteDetails
         inner = quote.get("quoteDetails")
         if isinstance(inner, dict):
-            v = _extract(inner)
-            if v: return v
-        elif isinstance(inner, list) and inner:
-            v = _extract(inner[0])
-            if v: return v
+            value = _extract(inner)
+            if value:
+                return value
 
-        # Unwrap data
+        if isinstance(inner, list) and inner:
+            value = _extract(inner[0])
+            if value:
+                return value
+
         data = quote.get("data")
         if isinstance(data, dict):
-            v = _extract(data)
-            if v: return v
-        elif isinstance(data, list) and data:
-            v = _extract(data[0])
-            if v: return v
+            value = _extract(data)
+            if value:
+                return value
+
+        if isinstance(data, list) and data:
+            value = _extract(data[0])
+            if value:
+                return value
 
         return _extract(quote)
 
     @staticmethod
     def parse_bid_ask(quote: dict | None) -> tuple[float | None, float | None]:
-        """Extract best bid/ask from quote payload."""
         if not quote:
             return None, None
 
@@ -368,17 +807,20 @@ class SamcoClient:
             except (TypeError, ValueError):
                 return None
 
-        def _extract(d: dict) -> tuple[float | None, float | None]:
+        def _extract(data: dict) -> tuple[float | None, float | None]:
             bid = None
             ask = None
+
             for key in ("bestBidPrice", "bidPrice", "best_bid", "buyPrice"):
-                bid = _f(d.get(key))
+                bid = _f(data.get(key))
                 if bid:
                     break
+
             for key in ("bestAskPrice", "askPrice", "best_ask", "sellPrice"):
-                ask = _f(d.get(key))
+                ask = _f(data.get(key))
                 if ask:
                     break
+
             return bid, ask
 
         inner = quote.get("quoteDetails")
@@ -396,156 +838,116 @@ class SamcoClient:
         return _extract(quote)
 
     async def get_actual_fill_price(self, order_id: str) -> float | None:
-        """
-        Fetch average fill price from tradebook/order status.
-        Paper orders return None (caller uses LTP fallback).
-        """
-        if order_id.startswith("PAPER-"):
+        if str(order_id).startswith("PAPER-"):
             return None
 
         try:
             trades = await self.get_trade_book()
-            for t in trades:
-                if str(t.get("orderNumber") or t.get("orderId") or "") == str(order_id):
-                    for key in ("avgFillPrice", "averagePrice", "price", "fillPrice", "tradedPrice", "lastTradedPrice"):
-                        val = t.get(key)
-                        if val is not None:
-                            try:
-                                p = float(str(val).replace(",", "").strip())
-                                if p > 0:
-                                    return p
-                            except (ValueError, TypeError):
-                                continue
+
+            for trade in trades:
+                if str(trade.get("orderNumber") or trade.get("orderId") or "") == str(order_id):
+                    for key in (
+                        "avgFillPrice",
+                        "averagePrice",
+                        "price",
+                        "fillPrice",
+                        "tradedPrice",
+                        "lastTradedPrice",
+                    ):
+                        val = trade.get(key)
+                        if val is None:
+                            continue
+
+                        try:
+                            price = float(str(val).replace(",", "").strip())
+                            if price > 0:
+                                return price
+                        except (ValueError, TypeError):
+                            continue
+
         except Exception as exc:
-            logger.warning("get_actual_fill_price tradebook failed order=%s err=%s", order_id, exc)
+            logger.warning(
+                "get_actual_fill_price tradebook failed order=%s err=%s",
+                order_id,
+                exc,
+            )
 
         try:
             resp = await self.get_order_status(order_id)
             data = resp.get("orderDetails") or resp.get("data") or resp
+
             if isinstance(data, list):
                 data = data[0] if data else {}
+
             for key in ("avgFillPrice", "averagePrice", "price", "filledPrice"):
                 val = data.get(key)
-                if val is not None:
-                    try:
-                        p = float(str(val).replace(",", "").strip())
-                        if p > 0:
-                            return p
-                    except (ValueError, TypeError):
-                        continue
+                if val is None:
+                    continue
+
+                try:
+                    price = float(str(val).replace(",", "").strip())
+                    if price > 0:
+                        return price
+                except (ValueError, TypeError):
+                    continue
+
         except Exception as exc:
-            logger.warning("get_actual_fill_price status failed order=%s err=%s", order_id, exc)
+            logger.warning(
+                "get_actual_fill_price status failed order=%s err=%s",
+                order_id,
+                exc,
+            )
+
         return None
 
-    async def place_order_and_wait_fill(
-        self,
-        symbol: str,
-        side: str,
-        quantity: int,
-        exchange: str = "NFO",
-        max_fill_wait: int = 10,
-    ) -> tuple[str | None, float | None]:
-        """Place order and wait for fill confirmation."""
-        resp = await self.place_order(symbol=symbol, side=side, quantity=quantity, exchange=exchange)
-        order_id = resp.get("orderNumber") or resp.get("orderId") or resp.get("order_id")
-        if not order_id:
-            logger.error("place_order_and_wait_fill no order_id side=%s symbol=%s resp=%s", side, symbol, resp)
-            return None, None
-
-        fill_state, _, fill_price = await self.confirm_fill(order_id, requested_qty=quantity, max_attempts=max_fill_wait)
-        if fill_state != "FILLED":
-            return order_id, None
-        return order_id, fill_price
-
-    async def place_stop_loss_order(self, symbol: str, quantity: int, trigger_price: float, side: str = "SELL", exchange: str = "NFO") -> dict:
-        """Place broker-level stop-loss order (fail-closed caller must verify acceptance)."""
-        if not settings.is_live:
-            oid = _next_paper_id()
-            return {"status": "Success", "orderNumber": oid, "type": "PAPER_SL"}
-        await self.ensure_session()
-        bridge = self._get_bridge()
-        txn_type = bridge.TRANSACTION_TYPE_BUY if side == "BUY" else bridge.TRANSACTION_TYPE_SELL
-        exch = self._map_exchange(exchange)
-        return await self._call_sdk(
-            lambda: bridge.place_order(body={
-                "symbolName": symbol,
-                "exchange": exch,
-                "transactionType": txn_type,
-                "orderType": getattr(bridge, "ORDER_TYPE_SL_M", "SL-M"),
-                "triggerPrice": str(trigger_price),
-                "quantity": str(quantity),
-                "productType": bridge.PRODUCT_MIS,
-                "orderValidity": bridge.VALIDITY_DAY,
-            }),
-            "place_stop_loss_order",
-        )
-
-    async def cancel_all_open_orders(self) -> None:
-        orders = await self.get_orders()
-        for o in orders:
-            oid = o.get("orderNumber") or o.get("orderId")
-            status = str(o.get("orderStatus") or "").upper()
-            if oid and status in {"OPEN", "PENDING", "TRIGGER_PENDING"}:
-                try:
-                    await self.cancel_order(str(oid))
-                except Exception as exc:
-                    logger.error("cancel order failed order_id=%s error=%s", oid, exc)
-
-    async def close_all_positions_market(self) -> None:
-        positions = await self.get_positions()
-        for p in positions:
-            sym = p.get("tradingSymbol") or p.get("symbolName")
-            qty = 0
-            for key in ("netQty", "netQuantity", "net_qty"):
-                try:
-                    qty = int(float(str(p.get(key, 0)).replace(",", "")))
-                    break
-                except Exception:
-                    continue
-            if not sym or qty == 0:
-                continue
-            side = "SELL" if qty > 0 else "BUY"
-            await self.place_order(symbol=sym, side=side, quantity=abs(qty))
-
-    # ── EXCHANGE MAPPER ───────────────────────────────
+    # HELPERS
     def _map_exchange(self, exchange: str) -> str:
         bridge = self._get_bridge()
+
         mapping = {
             "NSE": getattr(bridge, "EXCHANGE_NSE", "NSE"),
             "NFO": getattr(bridge, "EXCHANGE_NFO", "NFO"),
             "BSE": getattr(bridge, "EXCHANGE_BSE", "BSE"),
         }
-        return mapping.get(exchange.upper(), exchange.upper())
 
-    # ── SDK WRAPPER ───────────────────────────────────
-    async def _call_sdk(self, fn: Callable[[], Any], api_name: str) -> dict:
+        return mapping.get(str(exchange).upper(), str(exchange).upper())
+
+    async def _call_sdk(self, fn: Callable[[], Any], api_name: str) -> dict | list:
         if not self._breaker.allow_request():
             raise RuntimeError(f"Circuit breaker OPEN for {api_name}")
 
-        attempts = settings.reconnect_max_attempts
-        delay    = float(settings.reconnect_base_delay)
+        attempts = int(settings.reconnect_max_attempts)
+        delay = float(settings.reconnect_base_delay)
 
         for attempt in range(1, attempts + 1):
             try:
                 result = await asyncio.to_thread(fn)
-                resp   = self._parse_response(result)
+                resp = self._parse_response(result)
                 self._breaker.record_success()
 
-                # Auto re-login on session expiry
                 if isinstance(resp, dict) and resp.get("status") == "SessionExpired":
-                    logger.warning("Session expired — re-logging in")
+                    logger.warning("Session expired. Re-logging in.")
                     self._session_live = False
                     await self.login()
+
                     result = await asyncio.to_thread(fn)
-                    resp   = self._parse_response(result)
+                    resp = self._parse_response(result)
 
                 return resp
 
             except RuntimeError:
                 raise
+
             except Exception as exc:
                 self._breaker.record_failure()
-                logger.error("SAMCO %s attempt=%d/%d error=%s", api_name, attempt, attempts, exc)
+                logger.error(
+                    "SAMCO %s attempt=%d/%d error=%s",
+                    api_name,
+                    attempt,
+                    attempts,
+                    exc,
+                )
+
                 if attempt < attempts:
                     await asyncio.sleep(delay)
                     delay = min(delay * 2, 60.0)
@@ -554,54 +956,51 @@ class SamcoClient:
 
     @staticmethod
     def _parse_response(result: Any) -> dict | list:
-        if result is None: return {}
-        if isinstance(result, (dict, list)): return result
+        if result is None:
+            return {}
+
+        if isinstance(result, (dict, list)):
+            return result
+
         if isinstance(result, str):
             result = result.strip()
-            if not result: return {}
-            try: return json.loads(result)
-            except json.JSONDecodeError: return {}
+            if not result:
+                return {}
+
+            try:
+                return json.loads(result)
+            except json.JSONDecodeError:
+                return {}
+
         return {}
 
 
-# ── Weekly expiry helpers ─────────────────────────────
-#
-# NSE EXPIRY DAY CHANGE (SEBI Circular, effective Sep 2 2025):
-#   Before Sep 2 2025 : NIFTY weekly expiry = THURSDAY
-#   From   Sep 2 2025 : NIFTY weekly expiry = TUESDAY
-#
-# Bug before fix: get_weekly_expiry() always returned Thursday.
-# On Apr 15 2026 (Wednesday) it returned Apr 16 (Thursday) →
-# SAMCO returned "Option chain empty" because that contract doesn't exist.
-# Correct answer: Apr 21 2026 (Tuesday).
-
-_EXPIRY_CHANGE_DATE = date(2025, 9, 2)   # NSE changed to Tuesday on this date
+_EXPIRY_CHANGE_DATE = date(2025, 9, 2)
 
 
-def get_weekly_expiry() -> date:
+def get_weekly_expiry(base_date: date | None = None) -> date:
     """
-    Returns the next NIFTY weekly expiry date.
-    Accounts for the NSE rule change on Sep 2 2025:
-      - Before Sep 2 2025 → Thursday (weekday=3)
-      - From   Sep 2 2025 → Tuesday  (weekday=1)
+    NIFTY weekly expiry helper.
+
+    Before 2025-09-02:
+        Thursday
+
+    From 2025-09-02:
+        Tuesday
     """
-    import datetime as _dt
-    now_dt = _dt.datetime.now(IST)
-    today = now_dt.date()
-    now   = now_dt.time()
 
-    # Choose target weekday based on NSE rule
-    target = 1 if today >= _EXPIRY_CHANGE_DATE else 3   # Tue=1, Thu=3
+    today = base_date or datetime.now(IST).date()
+    now = datetime.now(IST).time()
 
-    days = (target - today.weekday()) % 7
+    target_weekday = 1 if today >= _EXPIRY_CHANGE_DATE else 3
 
-    # If today IS the expiry day but market has closed → next week
-    if days == 0 and now >= _dt.time(15, 30):
+    days = (target_weekday - today.weekday()) % 7
+
+    if base_date is None and days == 0 and now >= datetime.strptime("15:30", "%H:%M").time():
         days = 7
 
     return today + timedelta(days=days)
 
 
-def get_expiry_api() -> str:
-    """SAMCO expects: YYYY-MM-DD format"""
-    return get_weekly_expiry().strftime("%Y-%m-%d")
+def get_expiry_api(base_date: date | None = None) -> str:
+    return get_weekly_expiry(base_date).strftime("%Y-%m-%d")

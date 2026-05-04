@@ -8,74 +8,171 @@ from typing import Any
 _ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
 
 
+def _strip_value(value: Any) -> str:
+    """
+    Clean .env values:
+    - trims spaces
+    - removes matching quotes
+    - supports inline comments for simple values
+    """
+    if value is None:
+        return ""
+
+    text = str(value).strip()
+
+    if (
+        (text.startswith('"') and text.endswith('"'))
+        or (text.startswith("'") and text.endswith("'"))
+    ):
+        text = text[1:-1].strip()
+
+    # Remove inline comments only when a space exists before "#"
+    # Example: MODE=paper # safe mode
+    if " #" in text:
+        text = text.split(" #", 1)[0].strip()
+
+    return text
+
+
 def _parse_bool(value: Any, default: bool = False) -> bool:
     if value is None:
         return default
+
     if isinstance(value, bool):
         return value
-    text = str(value).strip().lower()
-    return text in ("1", "true", "yes", "on")
+
+    text = _strip_value(value).lower()
+
+    if text in ("1", "true", "yes", "on", "y"):
+        return True
+
+    if text in ("0", "false", "no", "off", "n"):
+        return False
+
+    return default
 
 
 def _parse_int(value: Any, default: int = 0) -> int:
     try:
-        return int(float(str(value).strip()))
+        return int(float(_strip_value(value)))
     except (TypeError, ValueError):
         return default
 
 
 def _parse_float(value: Any, default: float = 0.0) -> float:
     try:
-        return float(str(value).strip())
+        return float(_strip_value(value))
     except (TypeError, ValueError):
         return default
 
 
 def _load_env() -> dict[str, str]:
-    env = {}
-    if _ENV_PATH.exists():
-        for line in _ENV_PATH.read_text(encoding="utf-8").splitlines():
-            if not line or line.startswith("#"):
-                continue
-            if "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            env[key.strip()] = value.strip()
+    """
+    Lightweight .env loader.
+
+    Important:
+    - This loader intentionally lets .env override current OS env below.
+    - This avoids old Windows/session placeholder values overriding your .env.
+    """
+
+    env: dict[str, str] = {}
+
+    if not _ENV_PATH.exists():
+        return env
+
+    for raw_line in _ENV_PATH.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+
+        if not line:
+            continue
+
+        if line.startswith("#"):
+            continue
+
+        if "=" not in line:
+            continue
+
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = _strip_value(value)
+
+        if key:
+            env[key] = value
+
     return env
+
+
+def _get(
+    combined: dict[str, Any],
+    *keys: str,
+    default: Any = None,
+) -> Any:
+    """
+    Return the first non-empty value from aliases.
+
+    Example:
+    _get(combined, "IC_TARGET_PROFIT_PCT", "IC_TARGET_PROFIT", default=0.13)
+    """
+
+    for key in keys:
+        value = combined.get(key)
+
+        if value is not None and str(value).strip() != "":
+            return value
+
+    return default
 
 
 @dataclass
 class Settings:
+    # Samco
     samco_user_id: str = ""
     samco_password: str = ""
     samco_yob: str = ""
     samco_access_token: str = ""
+
+    # App
     mode: str = "paper"
     capital: float = 50000.0
-    max_daily_loss: float = 5000.0
+    max_daily_loss: float = 3000.0
     max_trades: int = 1
-    order_qty: int = 65
-    strategy_type: str = "orb"
+    order_qty: int = 50
+    strategy_type: str = "iron_condor"
 
-    # Iron Condor strategy parameters
+    # Iron Condor enable
+    iron_condor_enabled: bool = True
+
+    # Iron Condor best paper config
     ic_entry_day_start: int = 1
     ic_entry_day_end: int = 5
-    ic_entry_window_start: str = "09:20"
-    ic_entry_window_end: str = "10:00"
-    ic_target_profit_pct: float = 0.50
-    ic_stop_loss_multiple: float = 1.50
-    ic_min_entry_premium: float = 50.0
+    ic_entry_window_start: str = "10:00"
+    ic_entry_window_end: str = "10:05"
+    ic_exit_time: str = "15:00"
+
+    ic_target_profit_pct: float = 0.13
+    ic_stop_loss_multiple: float = 2.10
+
+    ic_short_distance: int = 600
+    ic_wing_width: int = 300
+    ic_strike_rounding: int = 50
+
+    ic_skip_gap_pct: float = 0.007
+    ic_skip_open_range_pct: float = 0.007
+
+    ic_min_entry_premium: float = 80.0
+    ic_margin_required: float = 40000.0
+    ic_max_loss_per_trade: float = 3000.0
+
+    # Iron Condor optional/legacy params
     ic_days_to_expiry: int = 30
     ic_decay_rate: float = 0.15
-    ic_short_otm_pct: float = 0.03
-    ic_long_otm_pct: float = 0.06
-    ic_strike_rounding: int = 50
+    ic_short_otm_pct: float = 0.024
+    ic_long_otm_pct: float = 0.036
     ic_assumed_iv: float = 0.15
     ic_platform_charges: float = 100.0
     ic_stt_rate: float = 0.0015
-    ic_margin_required: float = 40000.0
-    ic_max_loss_per_trade: float = 10000.0
 
+    # ORB / old strategy parameters
     stop_loss_pct: float = 0.45
     t1_pct: float = 0.50
     t2_pct: float = 1.25
@@ -99,115 +196,343 @@ class Settings:
     min_orb_range: float = 50.0
     min_volume_spike: float = 1.5
     max_iv_percentile: float = 70.0
+
+    # Market
     nifty_symbol: str = "NIFTY 50"
     nifty_exchange: str = "NSE"
     poll_seconds: int = 1
+
+    # Scheduler / guards
     signal_cooldown: int = 86400
     gap_threshold: float = 5.0
     trend_filter_enabled: bool = False
     skip_first_candle: bool = True
-    no_entry_after: str = "13:30"
+    no_entry_after: str = "11:30"
     square_off: str = "14:55"
+
+    # Infra
     reconnect_max_attempts: int = 5
     reconnect_base_delay: float = 1.0
     circuit_failure_threshold: int = 3
     circuit_cooldown_seconds: int = 30
+    deadman_timeout: int = 30
+
+    # Files
     trades_file: str = "data/trades.csv"
-    state_file: str = "data/runtime_state"
+    state_file: str = "data/runtime_state.json"
     log_file: str = "logs/bot.log"
+
+    # Dashboard
     dashboard_host: str = "0.0.0.0"
     dashboard_port: int = 8000
     frontend_dir: str = "frontend"
-    deadman_timeout: int = 30
 
     @property
     def is_live(self) -> bool:
         return str(self.mode).strip().lower() == "live"
 
+    @property
+    def is_paper(self) -> bool:
+        return not self.is_live
+
+    @property
+    def ic_target_profit(self) -> float:
+        """
+        Compatibility alias.
+
+        Some files may call:
+            settings.ic_target_profit
+
+        Existing config field is:
+            settings.ic_target_profit_pct
+        """
+        return self.ic_target_profit_pct
+
+    @property
+    def ic_long_distance(self) -> int:
+        """
+        Long strike distance from spot approximation.
+
+        If short distance = 600 and wing width = 300:
+            long distance = 900
+        """
+        return self.ic_short_distance + self.ic_wing_width
+
 
 _settings: Settings | None = None
 
 
+def reset_settings_cache() -> None:
+    """
+    Useful for tests or when changing .env during the same Python process.
+    """
+    global _settings
+    _settings = None
+
+
 def get_settings() -> Settings:
     global _settings
+
     if _settings is not None:
         return _settings
 
     env = _load_env()
-    combined = {**env, **os.environ}
+
+    # IMPORTANT:
+    # OS env first, .env second.
+    # This makes .env behave like override=True for your local bot.
+    combined: dict[str, Any] = {**os.environ, **env}
 
     _settings = Settings(
-        samco_user_id=str(combined.get("SAMCO_USER_ID", "")).strip(),
-        samco_password=str(combined.get("SAMCO_PASSWORD", "")).strip(),
-        samco_yob=str(combined.get("SAMCO_YOB", "")).strip(),
-        samco_access_token=str(combined.get("SAMCO_ACCESS_TOKEN", "")).strip(),
-        mode=str(combined.get("MODE", "paper")).strip(),
-        capital=_parse_float(combined.get("CAPITAL", 50000.0), 50000.0),
-        max_daily_loss=_parse_float(combined.get("MAX_DAILY_LOSS", 5000.0), 5000.0),
-        max_trades=_parse_int(combined.get("MAX_TRADES", 1), 1),
-        order_qty=_parse_int(combined.get("ORDER_QTY", 65), 65),
-        stop_loss_pct=_parse_float(combined.get("STOP_LOSS_PCT", 0.45), 0.45),
-        t1_pct=_parse_float(combined.get("T1_PCT", 0.50), 0.50),
-        t2_pct=_parse_float(combined.get("T2_PCT", 1.25), 1.25),
-        trailing_pct=_parse_float(combined.get("TRAILING_PCT", 0.15), 0.15),
-        breakeven_at_pct=_parse_float(combined.get("BREAKEVEN_AT_PCT", 0.25), 0.25),
-        min_entry_premium=_parse_float(combined.get("MIN_ENTRY_PREMIUM", 50.0), 50.0),
-        min_option_volume=_parse_int(combined.get("MIN_OPTION_VOLUME", 500), 500),
-        otm_distance=_parse_int(combined.get("OTM_DISTANCE", 1), 1),
-        max_spread_pct=_parse_float(combined.get("MAX_SPREAD_PCT", 0.04), 0.04),
-        max_breakout_extension_pct=_parse_float(combined.get("MAX_BREAKOUT_EXTENSION_PCT", 0.05), 0.05),
-        max_option_spike_pct=_parse_float(combined.get("MAX_OPTION_SPIKE_PCT", 0.20), 0.20),
-        max_consecutive_losses=_parse_int(combined.get("MAX_CONSECUTIVE_LOSSES", 3), 3),
-        max_drawdown_pct=_parse_float(combined.get("MAX_DRAWDOWN_PCT", 0.20), 0.20),
-        min_orb_range=_parse_float(combined.get("MIN_ORB_RANGE", 50.0), 50.0),
-        min_volume_spike=_parse_float(combined.get("MIN_VOLUME_SPIKE", 1.5), 1.5),
-        strategy_type=str(combined.get("STRATEGY_TYPE", "orb")).strip().lower(),
-        ic_entry_day_start=_parse_int(combined.get("IC_ENTRY_DAY_START", 1), 1),
-        ic_entry_day_end=_parse_int(combined.get("IC_ENTRY_DAY_END", 5), 5),
-        ic_entry_window_start=str(combined.get("IC_ENTRY_WINDOW_START", "09:20")).strip(),
-        ic_entry_window_end=str(combined.get("IC_ENTRY_WINDOW_END", "10:00")).strip(),
-        ic_target_profit_pct=_parse_float(combined.get("IC_TARGET_PROFIT", 0.50), 0.50),
-        ic_stop_loss_multiple=_parse_float(combined.get("IC_STOP_LOSS_MULTIPLE", 1.50), 1.50),
-        ic_min_entry_premium=_parse_float(combined.get("IC_MIN_ENTRY_PREMIUM", 50.0), 50.0),
-        ic_days_to_expiry=_parse_int(combined.get("IC_DAYS_TO_EXPIRY", 30), 30),
-        ic_decay_rate=_parse_float(combined.get("IC_DECAY_RATE", 0.15), 0.15),
-        ic_short_otm_pct=_parse_float(combined.get("IC_SHORT_OTM_PCT", 0.03), 0.03),
-        ic_long_otm_pct=_parse_float(combined.get("IC_LONG_OTM_PCT", 0.06), 0.06),
-        ic_strike_rounding=_parse_int(combined.get("IC_STRIKE_ROUNDING", 50), 50),
-        ic_assumed_iv=_parse_float(combined.get("IC_ASSUMED_IV", 0.15), 0.15),
-        ic_platform_charges=_parse_float(combined.get("IC_PLATFORM_CHARGES", 100.0), 100.0),
-        ic_stt_rate=_parse_float(combined.get("IC_STT_RATE", 0.0015), 0.0015),
-        ic_margin_required=_parse_float(combined.get("IC_MARGIN_REQUIRED", 40000.0), 40000.0),
-        ic_max_loss_per_trade=_parse_float(combined.get("IC_MAX_LOSS_PER_TRADE", 10000.0), 10000.0),
-        max_iv_percentile=_parse_float(combined.get("MAX_IV_PERCENTILE", 70.0), 70.0),
-        min_dte=_parse_int(combined.get("MIN_DTE", 2), 2),
-        max_dte=_parse_int(combined.get("MAX_DTE", 7), 7),
-        orb_duration_seconds=_parse_int(combined.get("ORB_DURATION_SECONDS", 900), 900),
-        min_orb_range_pct=_parse_float(combined.get("MIN_ORB_RANGE_PCT", 0.0020), 0.0020),
-        max_orb_range_pct=_parse_float(combined.get("MAX_ORB_RANGE_PCT", 0.0080), 0.0080),
-        orb_atr_multiplier=_parse_float(combined.get("ORB_ATR_MULTIPLIER", 1.0), 1.0),
-        breakout_buffer=_parse_float(combined.get("BREAKOUT_BUFFER", 5.0), 5.0),
-        nifty_symbol=str(combined.get("NIFTY_SYMBOL", "NIFTY 50")).strip(),
-        nifty_exchange=str(combined.get("NIFTY_EXCHANGE", "NSE")).strip(),
-        poll_seconds=_parse_int(combined.get("POLL_SECONDS", 1), 1),
-        signal_cooldown=_parse_int(combined.get("SIGNAL_COOLDOWN", 86400), 86400),
-        gap_threshold=_parse_float(combined.get("GAP_THRESHOLD", 5.0), 5.0),
-        trend_filter_enabled=_parse_bool(combined.get("TREND_FILTER_ENABLED", False), False),
-        skip_first_candle=_parse_bool(combined.get("SKIP_FIRST_CANDLE", True), True),
-        no_entry_after=str(combined.get("NO_ENTRY_AFTER", "11:30")).strip(),
-        square_off=str(combined.get("SQUARE_OFF", "14:55")).strip(),
-        reconnect_max_attempts=_parse_int(combined.get("RECONNECT_MAX_ATTEMPTS", 5), 5),
-        reconnect_base_delay=_parse_float(combined.get("RECONNECT_BASE_DELAY", 1.0), 1.0),
-        circuit_failure_threshold=_parse_int(combined.get("CIRCUIT_FAILURE_THRESHOLD", 3), 3),
-        circuit_cooldown_seconds=_parse_int(combined.get("CIRCUIT_COOLDOWN_SECONDS", 30), 30),
-        trades_file=str(combined.get("TRADES_FILE", "data/trades.csv")).strip(),
-        state_file=str(combined.get("STATE_FILE", "data/runtime_state")).strip(),
-        log_file=str(combined.get("LOG_FILE", "logs/bot.log")).strip(),
-        dashboard_host=str(combined.get("DASHBOARD_HOST", "0.0.0.0")).strip(),
-        dashboard_port=_parse_int(combined.get("DASHBOARD_PORT", 8000), 8000),
-        frontend_dir=str(combined.get("FRONTEND_DIR", "frontend")).strip(),
-        deadman_timeout=_parse_int(combined.get("DEADMAN_TIMEOUT", 30), 30),
+        # Samco
+        samco_user_id=_strip_value(_get(combined, "SAMCO_USER_ID", default="")),
+        samco_password=_strip_value(_get(combined, "SAMCO_PASSWORD", default="")),
+        samco_yob=_strip_value(_get(combined, "SAMCO_YOB", default="")),
+        samco_access_token=_strip_value(_get(combined, "SAMCO_ACCESS_TOKEN", default="")),
+
+        # App
+        mode=_strip_value(_get(combined, "MODE", default="paper")).lower(),
+        capital=_parse_float(_get(combined, "CAPITAL", default=50000.0), 50000.0),
+        max_daily_loss=_parse_float(_get(combined, "MAX_DAILY_LOSS", default=3000.0), 3000.0),
+        max_trades=_parse_int(_get(combined, "MAX_TRADES", default=1), 1),
+        order_qty=_parse_int(_get(combined, "ORDER_QTY", default=50), 50),
+        strategy_type=_strip_value(_get(combined, "STRATEGY_TYPE", default="iron_condor")).lower(),
+
+        # Iron Condor enable
+        iron_condor_enabled=_parse_bool(
+            _get(combined, "IRON_CONDOR_ENABLED", default=True),
+            True,
+        ),
+
+        # Iron Condor timing
+        ic_entry_day_start=_parse_int(_get(combined, "IC_ENTRY_DAY_START", default=1), 1),
+        ic_entry_day_end=_parse_int(_get(combined, "IC_ENTRY_DAY_END", default=5), 5),
+        ic_entry_window_start=_strip_value(
+            _get(combined, "IC_ENTRY_WINDOW_START", default="10:00")
+        ),
+        ic_entry_window_end=_strip_value(
+            _get(combined, "IC_ENTRY_WINDOW_END", default="10:05")
+        ),
+        ic_exit_time=_strip_value(
+            _get(combined, "IC_EXIT_TIME", "SQUARE_OFF", default="15:00")
+        ),
+
+        # Iron Condor P&L controls
+        ic_target_profit_pct=_parse_float(
+            _get(
+                combined,
+                "IC_TARGET_PROFIT_PCT",
+                "IC_TARGET_PROFIT",
+                default=0.13,
+            ),
+            0.13,
+        ),
+        ic_stop_loss_multiple=_parse_float(
+            _get(combined, "IC_STOP_LOSS_MULTIPLE", default=2.10),
+            2.10,
+        ),
+
+        # Iron Condor strikes
+        ic_short_distance=_parse_int(
+            _get(combined, "IC_SHORT_DISTANCE", default=600),
+            600,
+        ),
+        ic_wing_width=_parse_int(
+            _get(combined, "IC_WING_WIDTH", default=300),
+            300,
+        ),
+        ic_strike_rounding=_parse_int(
+            _get(combined, "IC_STRIKE_ROUNDING", default=50),
+            50,
+        ),
+
+        # Iron Condor day filters
+        ic_skip_gap_pct=_parse_float(
+            _get(combined, "IC_SKIP_GAP_PCT", default=0.007),
+            0.007,
+        ),
+        ic_skip_open_range_pct=_parse_float(
+            _get(combined, "IC_SKIP_OPEN_RANGE_PCT", default=0.007),
+            0.007,
+        ),
+
+        # Iron Condor risk / margin
+        ic_min_entry_premium=_parse_float(
+            _get(combined, "IC_MIN_ENTRY_PREMIUM", default=80.0),
+            80.0,
+        ),
+        ic_margin_required=_parse_float(
+            _get(combined, "IC_MARGIN_REQUIRED", default=40000.0),
+            40000.0,
+        ),
+        ic_max_loss_per_trade=_parse_float(
+            _get(combined, "IC_MAX_LOSS_PER_TRADE", default=3000.0),
+            3000.0,
+        ),
+
+        # Iron Condor optional / legacy
+        ic_days_to_expiry=_parse_int(
+            _get(combined, "IC_DAYS_TO_EXPIRY", default=30),
+            30,
+        ),
+        ic_decay_rate=_parse_float(
+            _get(combined, "IC_DECAY_RATE", default=0.15),
+            0.15,
+        ),
+        ic_short_otm_pct=_parse_float(
+            _get(combined, "IC_SHORT_OTM_PCT", default=0.024),
+            0.024,
+        ),
+        ic_long_otm_pct=_parse_float(
+            _get(combined, "IC_LONG_OTM_PCT", default=0.036),
+            0.036,
+        ),
+        ic_assumed_iv=_parse_float(
+            _get(combined, "IC_ASSUMED_IV", default=0.15),
+            0.15,
+        ),
+        ic_platform_charges=_parse_float(
+            _get(combined, "IC_PLATFORM_CHARGES", default=100.0),
+            100.0,
+        ),
+        ic_stt_rate=_parse_float(
+            _get(combined, "IC_STT_RATE", default=0.0015),
+            0.0015,
+        ),
+
+        # ORB / old strategy
+        stop_loss_pct=_parse_float(_get(combined, "STOP_LOSS_PCT", default=0.45), 0.45),
+        t1_pct=_parse_float(_get(combined, "T1_PCT", default=0.50), 0.50),
+        t2_pct=_parse_float(_get(combined, "T2_PCT", default=1.25), 1.25),
+        trailing_pct=_parse_float(_get(combined, "TRAILING_PCT", default=0.15), 0.15),
+        breakeven_at_pct=_parse_float(
+            _get(combined, "BREAKEVEN_AT_PCT", default=0.25),
+            0.25,
+        ),
+        min_entry_premium=_parse_float(
+            _get(combined, "MIN_ENTRY_PREMIUM", default=50.0),
+            50.0,
+        ),
+        min_option_volume=_parse_int(
+            _get(combined, "MIN_OPTION_VOLUME", default=500),
+            500,
+        ),
+        otm_distance=_parse_int(_get(combined, "OTM_DISTANCE", default=1), 1),
+        max_spread_pct=_parse_float(
+            _get(combined, "MAX_SPREAD_PCT", default=0.04),
+            0.04,
+        ),
+        min_dte=_parse_int(_get(combined, "MIN_DTE", default=2), 2),
+        max_dte=_parse_int(_get(combined, "MAX_DTE", default=7), 7),
+        orb_duration_seconds=_parse_int(
+            _get(combined, "ORB_DURATION_SECONDS", default=900),
+            900,
+        ),
+        min_orb_range_pct=_parse_float(
+            _get(combined, "MIN_ORB_RANGE_PCT", default=0.0020),
+            0.0020,
+        ),
+        max_orb_range_pct=_parse_float(
+            _get(combined, "MAX_ORB_RANGE_PCT", default=0.0080),
+            0.0080,
+        ),
+        orb_atr_multiplier=_parse_float(
+            _get(combined, "ORB_ATR_MULTIPLIER", default=1.0),
+            1.0,
+        ),
+        breakout_buffer=_parse_float(
+            _get(combined, "BREAKOUT_BUFFER", default=5.0),
+            5.0,
+        ),
+        max_breakout_extension_pct=_parse_float(
+            _get(combined, "MAX_BREAKOUT_EXTENSION_PCT", default=0.05),
+            0.05,
+        ),
+        max_option_spike_pct=_parse_float(
+            _get(combined, "MAX_OPTION_SPIKE_PCT", default=0.20),
+            0.20,
+        ),
+        max_consecutive_losses=_parse_int(
+            _get(combined, "MAX_CONSECUTIVE_LOSSES", default=3),
+            3,
+        ),
+        max_drawdown_pct=_parse_float(
+            _get(combined, "MAX_DRAWDOWN_PCT", default=0.20),
+            0.20,
+        ),
+        min_orb_range=_parse_float(
+            _get(combined, "MIN_ORB_RANGE", default=50.0),
+            50.0,
+        ),
+        min_volume_spike=_parse_float(
+            _get(combined, "MIN_VOLUME_SPIKE", default=1.5),
+            1.5,
+        ),
+        max_iv_percentile=_parse_float(
+            _get(combined, "MAX_IV_PERCENTILE", default=70.0),
+            70.0,
+        ),
+
+        # Market
+        nifty_symbol=_strip_value(_get(combined, "NIFTY_SYMBOL", default="NIFTY 50")),
+        nifty_exchange=_strip_value(_get(combined, "NIFTY_EXCHANGE", default="NSE")),
+        poll_seconds=_parse_int(_get(combined, "POLL_SECONDS", default=1), 1),
+
+        # Scheduler / guards
+        signal_cooldown=_parse_int(
+            _get(combined, "SIGNAL_COOLDOWN", default=86400),
+            86400,
+        ),
+        gap_threshold=_parse_float(_get(combined, "GAP_THRESHOLD", default=5.0), 5.0),
+        trend_filter_enabled=_parse_bool(
+            _get(combined, "TREND_FILTER_ENABLED", default=False),
+            False,
+        ),
+        skip_first_candle=_parse_bool(
+            _get(combined, "SKIP_FIRST_CANDLE", default=True),
+            True,
+        ),
+        no_entry_after=_strip_value(_get(combined, "NO_ENTRY_AFTER", default="11:30")),
+        square_off=_strip_value(_get(combined, "SQUARE_OFF", default="14:55")),
+
+        # Infra
+        reconnect_max_attempts=_parse_int(
+            _get(combined, "RECONNECT_MAX_ATTEMPTS", default=5),
+            5,
+        ),
+        reconnect_base_delay=_parse_float(
+            _get(combined, "RECONNECT_BASE_DELAY", default=1.0),
+            1.0,
+        ),
+        circuit_failure_threshold=_parse_int(
+            _get(combined, "CIRCUIT_FAILURE_THRESHOLD", default=3),
+            3,
+        ),
+        circuit_cooldown_seconds=_parse_int(
+            _get(combined, "CIRCUIT_COOLDOWN_SECONDS", default=30),
+            30,
+        ),
+        deadman_timeout=_parse_int(
+            _get(combined, "DEADMAN_TIMEOUT", default=30),
+            30,
+        ),
+
+        # Files
+        trades_file=_strip_value(_get(combined, "TRADES_FILE", default="data/trades.csv")),
+        state_file=_strip_value(
+            _get(combined, "STATE_FILE", default="data/runtime_state.json")
+        ),
+        log_file=_strip_value(_get(combined, "LOG_FILE", default="logs/bot.log")),
+
+        # Dashboard
+        dashboard_host=_strip_value(
+            _get(combined, "DASHBOARD_HOST", default="0.0.0.0")
+        ),
+        dashboard_port=_parse_int(
+            _get(combined, "DASHBOARD_PORT", default=8000),
+            8000,
+        ),
+        frontend_dir=_strip_value(_get(combined, "FRONTEND_DIR", default="frontend")),
     )
 
     return _settings
-  
