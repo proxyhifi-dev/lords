@@ -15,7 +15,10 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
-import redis.asyncio as redis
+try:
+    import redis.asyncio as redis
+except Exception:  # optional dependency in local/test environments
+    redis = None
 
 from backend.app.core.config_loader import get_settings
 from backend.app.utils.logger import get_logger
@@ -115,7 +118,7 @@ class StateManager:
     def __init__(self):
         self._db_path     = Path(settings.state_file).with_suffix(".db")
         self._backup_path = self._db_path.with_suffix(".db.backup")
-        self._redis: Optional[redis.Redis] = None
+        self._redis: Optional[Any] = None
         self._lock  = asyncio.Lock()
         self._cache: Dict[str, Any] = {}
         self._init_database()
@@ -144,7 +147,7 @@ class StateManager:
             raise
 
     def _init_redis(self):
-        if os.getenv("USE_REDIS") != "true":
+        if os.getenv("USE_REDIS") != "true" or redis is None:
             logger.info("🚫 Redis disabled (USE_REDIS=%s)", os.getenv("USE_REDIS"))
             return
         try:

@@ -6,7 +6,7 @@ FULLY FIXED VERSION - All 5 bugs fixed
 Copy this entire file into: backend/app/strategy/iron_condor_strategy.py
 """
 
-import numpy as np
+import math
 from datetime import time, datetime
 from zoneinfo import ZoneInfo
 from backend.app.core.config_loader import get_settings
@@ -203,7 +203,7 @@ class IronCondorStrategy:
 
         # For OTM options: use time value model
         base_vol = self.settings.ic_assumed_iv              # 0.15 = 15% IV
-        sqrt_t = np.sqrt(days / 365)
+        sqrt_t = math.sqrt(days / 365)
 
         # Time value ≈ spot × vol × sqrt(T)
         time_val = spot * base_vol * sqrt_t

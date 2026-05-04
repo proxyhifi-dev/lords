@@ -14,7 +14,7 @@ logger = get_logger("risk_manager")
 
 
 class RiskManager:
-    def __init__(self, event_bus: EventBus, state_manager: StateManager, broker: SamcoClient):
+    def __init__(self, event_bus: EventBus, state_manager: StateManager, broker: SamcoClient | None = None):
         self.event_bus = event_bus
         self.state_manager = state_manager
         self.broker = broker
@@ -24,7 +24,9 @@ class RiskManager:
         async for event in self.event_bus.iter_events(queue):
             await self._evaluate(event.payload or {})
 
-    async def _evaluate(self, payload: Dict[str, Any]) -> None:
+    async def _evaluate(self, payload: Dict[str, Any] | Any) -> None:
+        if hasattr(payload, "payload"):
+            payload = payload.payload or {}
         state = await self.state_manager.snapshot()
         
         if not state.trading_enabled:
@@ -36,12 +38,17 @@ class RiskManager:
             await self._block("signal_missing")
             return
 
-        # Entry time check
-        now = datetime.now().time()
-        h, m = map(int, str(settings.no_entry_after).split(":"))
-        if now > time(h, m):
-            await self._block("late_entry")
+        if state.active_trade is not None:
+            await self._block("active_trade_exists")
             return
+
+        # Entry time check
+        if settings.is_live:
+            now = datetime.now().time()
+            h, m = map(int, str(settings.no_entry_after).split(":"))
+            if now > time(h, m):
+                await self._block("late_entry")
+                return
 
         # Daily loss check (enforce here, not just at exit)
         if state.daily_pnl <= -settings.max_daily_loss:
