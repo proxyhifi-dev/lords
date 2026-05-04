@@ -238,6 +238,35 @@ async def flatten():
     return await scheduler.flatten_position()
 
 
+@app.get("/api/reconciliation")
+async def reconciliation_status():
+    """Run one reconciliation cycle and return detailed result."""
+    from backend.app.scheduler.market_scheduler import scheduler
+    result = await scheduler._reconciler.run_once()
+    return {"status": "ok", "reconciliation": result}
+
+
+@app.post("/api/reconcile")
+async def reconcile_now():
+    """Manual reconcile trigger (alias for dashboard/actions compatibility)."""
+    from backend.app.scheduler.market_scheduler import scheduler
+    result = await scheduler._reconciler.run_once()
+    return {"status": "ok", "reconciliation": result}
+
+
+@app.post("/api/emergency-flatten")
+async def emergency_flatten():
+    """Emergency flatten alias endpoint used by strict ops runbooks."""
+    from backend.app.scheduler.market_scheduler import scheduler
+    flatten_result = await scheduler.flatten_position()
+    reconcile_result = await scheduler._reconciler.run_once()
+    return {
+        "status": "ok",
+        "flatten": flatten_result,
+        "reconciliation": reconcile_result,
+    }
+
+
 # ── Iron Condor stats endpoint ────────────────────────────────────────────────
 
 @app.get("/api/iron-condor/stats")
