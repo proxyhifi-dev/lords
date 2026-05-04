@@ -1,12 +1,15 @@
 .env
+.env.*
+!.env.example
 *.log
 *.db
 *.db.backup
 __pycache__/
 *.pyc
-data/
+.pytest_cache/
+data/runtime*
 logs/
 backend/logs/
-.pytest_cache/
 node_modules/
 dist/
+.DS_Store

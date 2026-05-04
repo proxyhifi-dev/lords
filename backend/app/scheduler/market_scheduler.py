@@ -103,6 +103,35 @@ class MarketScheduler:
         # IV tracking (available for future IC entry filters)
         self._latest_iv: float | None = None
         self._iv_history: deque = deque(maxlen=20)
+        self._candle_open: float | None = None
+        self._candle_high: float | None = None
+        self._candle_low: float | None = None
+        self._candle_start_minute: datetime | None = None
+        self._last_spot: float | None = None
+
+    def _update_candle(self, spot: float, ts: datetime):
+        minute_ts = ts.replace(second=0, microsecond=0)
+        if self._candle_start_minute is None:
+            self._candle_start_minute = minute_ts
+            self._candle_open = self._candle_high = self._candle_low = spot
+            self._last_spot = spot
+            return None
+        if minute_ts == self._candle_start_minute:
+            self._candle_high = max(self._candle_high or spot, spot)
+            self._candle_low = min(self._candle_low or spot, spot)
+            self._last_spot = spot
+            return None
+        candle = {
+            "ts": self._candle_start_minute,
+            "open": self._candle_open,
+            "high": self._candle_high,
+            "low": self._candle_low,
+            "close": self._last_spot if self._last_spot is not None else spot,
+        }
+        self._candle_start_minute = minute_ts
+        self._candle_open = self._candle_high = self._candle_low = spot
+        self._last_spot = spot
+        return candle
 
     # ── Lifecycle ─────────────────────────────────────────────
 
