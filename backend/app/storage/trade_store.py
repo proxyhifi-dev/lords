@@ -80,7 +80,13 @@ class TradeStore:
             now = datetime.now(IST)
             
             # Extract charges (if present in trade dict)
-            charges = trade.get("charges", {})
+            charges_raw = trade.get("charges", {})
+            if isinstance(charges_raw, (int, float)):
+                charges = {"total_charges": float(charges_raw)}
+            elif isinstance(charges_raw, dict):
+                charges = charges_raw
+            else:
+                charges = {}
 
             row = {
                 "date": now.date().isoformat(),

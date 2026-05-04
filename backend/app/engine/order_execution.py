@@ -110,7 +110,7 @@ class OrderExecutionSequence:
                 opt_type="PE",
                 qty=self.settings.order_qty,
                 order_type="LIMIT",
-                price=premiums.get('long_put', None)
+                price=premiums.get('short_put', None)
             )
 
             if not lp_order['success']:
@@ -162,7 +162,7 @@ class OrderExecutionSequence:
                 opt_type="PE",
                 qty=self.settings.order_qty,
                 order_type="LIMIT",
-                price=premiums.get('long_put', None)
+                price=premiums.get('short_put', None)
             )
 
             if not sp_order['success']:

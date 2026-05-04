@@ -108,7 +108,7 @@ class SamcoClient:
             q = await self.get_index_quote(settings.nifty_symbol)
             return bool(q)
         except Exception:
-            return "FAILED", 0, None
+            return False
 
     # ── QUOTES ────────────────────────────────────────
     async def get_index_quote(self, index_name: str) -> dict:
