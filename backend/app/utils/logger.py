@@ -24,10 +24,17 @@ def configure_logging() -> None:
     
     # Reduce tick spam: set market_scheduler to WARNING
     fmt = "%(asctime)s  %(levelname)-8s  %(name)-26s  %(message)s"
+    stream = sys.stdout
+    if hasattr(sys.stdout, "buffer"):
+        import io
+        stream = io.TextIOWrapper(
+            sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True
+        )
+
     logging.basicConfig(
         level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S",
         handlers=[
-            logging.StreamHandler(sys.stdout),
+            logging.StreamHandler(stream),
             logging.FileHandler(settings.log_file, encoding="utf-8"),
         ],
     )
