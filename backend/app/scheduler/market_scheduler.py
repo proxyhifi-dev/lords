@@ -1,35 +1,3 @@
-"""
-Lords Bot — Market Scheduler  v6.0 (Iron Condor Only)
-======================================================
-
-All ORB strategy code has been removed. This scheduler runs only the
-Iron Condor strategy (strategy_type=iron_condor in settings/.env).
-
-What was removed:
-  - ORB build/freeze logic (9:15-9:30 window)
-  - 3-component trend filter and score
-  - Breakout candle confirmation
-  - today_open / orb_open / orb_close / prev_day_close state
-  - Volume spike filter (ORB-specific)
-  - Skip-first-candle logic
-  - Candle builder (not needed for IC — IC monitors by spot/premium only)
-  - _compute_atr, _trend_score, _update_candle
-  - _volume_spike_ok, _iv_ok, _iv_percentile (ORB-only filters)
-  - Auto-retrigger (ORB-specific)
-
-What was kept:
-  - All lifecycle (start / stop / _loop / _daily_watcher)
-  - SAMCO tick polling and spot price updates
-  - Dead-man switch
-  - Reconciliation engine wiring
-  - flatten_position (emergency dashboard button)
-  - _iron_condor_can_enter (complete entry gate)
-  - _extract_iv (for future IV-based IC filters)
-  - IV history tracking
-
-To switch back to ORB: restore market_scheduler_ORB_v5.3.py from backup
-and set STRATEGY_TYPE=orb in .env.
-"""
 from __future__ import annotations
 
 import asyncio
@@ -49,9 +17,9 @@ from backend.app.storage.trade_store import TradeStore
 from backend.app.utils.logger import get_logger
 
 settings = get_settings()
-logger   = get_logger("market_scheduler")
+logger = get_logger("market_scheduler")
 
-_MARKET_OPEN  = time(9, 15)
+_MARKET_OPEN = time(9, 15)
 _MARKET_CLOSE = time(15, 30)
 _LOG_INTERVAL = 60
 IST = ZoneInfo("Asia/Kolkata")
@@ -69,14 +37,13 @@ def _market_open() -> bool:
 
 
 class MarketScheduler:
-
     def __init__(self):
-        self.state       = state_manager
+        self.state = state_manager
         self.trade_store = TradeStore()
-        self.broker      = SamcoClient()
-        self.event_bus   = EventBus()
-        self.risk        = RiskManager(self.event_bus, self.state, self.broker)
-        self.engine      = TradingEngine(
+        self.broker = SamcoClient()
+        self.event_bus = EventBus()
+        self.risk = RiskManager(self.event_bus, self.state, self.broker)
+        self.engine = TradingEngine(
             event_bus=self.event_bus,
             state_manager=self.state,
             trade_store=self.trade_store,
@@ -91,75 +58,55 @@ class MarketScheduler:
         self.running = False
         self._tasks: list[asyncio.Task] = []
 
-        # Timing
-        self._last_signal_time           = 0.0
-        self._last_closed_log            = 0.0
-        self._daily_reset_date           = ""
-        self._last_tick_time             = _time.time()
-        self._last_good_quote_time       = _time.time()
+        self._last_signal_time = 0.0
+        self._last_closed_log = 0.0
+        self._daily_reset_date = ""
+        self._last_tick_time = _time.time()
+        self._last_good_quote_time = _time.time()
         self._consecutive_quote_failures = 0
-        self._last_broker_error          = 0.0
+        self._last_broker_error = 0.0
 
-        # IV tracking (available for future IC entry filters)
         self._latest_iv: float | None = None
         self._iv_history: deque = deque(maxlen=20)
-        self._candle_open: float | None = None
-        self._candle_high: float | None = None
-        self._candle_low: float | None = None
-        self._candle_start_minute: datetime | None = None
-        self._last_spot: float | None = None
 
-    def _update_candle(self, spot: float, ts: datetime):
-        minute_ts = ts.replace(second=0, microsecond=0)
-        if self._candle_start_minute is None:
-            self._candle_start_minute = minute_ts
-            self._candle_open = self._candle_high = self._candle_low = spot
-            self._last_spot = spot
-            return None
-        if minute_ts == self._candle_start_minute:
-            self._candle_high = max(self._candle_high or spot, spot)
-            self._candle_low = min(self._candle_low or spot, spot)
-            self._last_spot = spot
-            return None
-        candle = {
-            "ts": self._candle_start_minute,
-            "open": self._candle_open,
-            "high": self._candle_high,
-            "low": self._candle_low,
-            "close": self._last_spot if self._last_spot is not None else spot,
-        }
-        self._candle_start_minute = minute_ts
-        self._candle_open = self._candle_high = self._candle_low = spot
-        self._last_spot = spot
-        return candle
+    def _track_task(self, task: asyncio.Task, name: str) -> asyncio.Task:
+        def _done_callback(done_task: asyncio.Task) -> None:
+            try:
+                exc = done_task.exception()
+                if exc:
+                    logger.error("Task crashed: %s err=%s", name, exc, exc_info=True)
+                else:
+                    logger.warning("Task finished unexpectedly: %s", name)
+            except asyncio.CancelledError:
+                logger.info("Task cancelled: %s", name)
+            except Exception as callback_exc:
+                logger.error("Task callback failed for %s: %s", name, callback_exc, exc_info=True)
 
-    # ── Lifecycle ─────────────────────────────────────────────
+        task.add_done_callback(_done_callback)
+        return task
 
     async def start(self) -> None:
         if self.running:
             logger.warning("Scheduler already running")
             return
 
+        logger.info("SCHEDULER START CALLED")
         logger.info(
-            "Starting Lords Bot v6.0 (Iron Condor) — mode=%s strategy=%s",
+            "Starting Lords Bot (Iron Condor) — mode=%s strategy=%s",
             settings.mode.upper(),
             settings.strategy_type.upper(),
         )
 
-        if settings.strategy_type != "iron_condor":
-            logger.critical(
-                "🚨 strategy_type=%s but this scheduler is Iron Condor only. "
-                "Set STRATEGY_TYPE=iron_condor in .env to proceed.",
-                settings.strategy_type,
-            )
-
         await self.state.load()
         state = await self.state.snapshot()
         logger.info(
-            "State check: spot_price=%s trading_enabled=%s "
-            "active_trade=%s last_ic_month=%s",
-            state.spot_price, state.trading_enabled,
-            bool(state.active_trade), state.last_iron_condor_month,
+            "State check: spot_price=%s trading_enabled=%s active_trade=%s "
+            "last_ic_month=%s last_trade_date=%s",
+            state.spot_price,
+            state.trading_enabled,
+            bool(state.active_trade),
+            getattr(state, "last_iron_condor_month", None),
+            getattr(state, "last_trade_date", None),
         )
 
         await self.event_bus.start()
@@ -167,51 +114,59 @@ class MarketScheduler:
         try:
             await self.broker.login()
         except Exception as exc:
-            logger.error("SAMCO login failed: %s — running offline", exc)
+            logger.error("SAMCO login failed in scheduler.start(): %s", exc, exc_info=True)
+            raise
 
         self.running = True
         await self.state.update(bot_running=True)
 
-        asyncio.create_task(
-            self._reconciler.run_once(), name="reconcile-startup")
+        startup_reconcile = asyncio.create_task(
+            self._reconciler.run_once(),
+            name="reconcile-startup",
+        )
+        self._track_task(startup_reconcile, "reconcile-startup")
 
         self._tasks = [
-            asyncio.create_task(self._loop(),                   name="market-loop"),
-            asyncio.create_task(self.risk.run(),                name="risk-manager"),
-            asyncio.create_task(self.engine.run(),              name="trading-engine"),
-            asyncio.create_task(self._daily_watcher(),          name="daily-reset"),
-            asyncio.create_task(self._reconciler.run_loop(300), name="reconciler"),
+            self._track_task(asyncio.create_task(self._loop(), name="market-loop"), "market-loop"),
+            self._track_task(asyncio.create_task(self.risk.run(), name="risk-manager"), "risk-manager"),
+            self._track_task(asyncio.create_task(self.engine.run(), name="trading-engine"), "trading-engine"),
+            self._track_task(asyncio.create_task(self._daily_watcher(), name="daily-reset"), "daily-reset"),
+            self._track_task(asyncio.create_task(self._reconciler.run_loop(300), name="reconciler"), "reconciler"),
         ]
-        logger.info("All tasks started (%d tasks)", len(self._tasks))
+
+        logger.info("All scheduler tasks started (%d tasks)", len(self._tasks))
 
     async def stop(self) -> None:
         if not self.running:
             return
+
         logger.info("Stopping Lords Bot scheduler")
         self.running = False
         await self.event_bus.stop()
-        for t in self._tasks:
-            if not t.done():
-                t.cancel()
+
+        for task in self._tasks:
+            if not task.done():
+                task.cancel()
                 try:
-                    await t
+                    await task
                 except asyncio.CancelledError:
                     pass
+
         self._tasks.clear()
         await self.state.update(bot_running=False)
         logger.info("Scheduler stopped")
 
-    # ── Daily reset watcher ───────────────────────────────────
-
     async def _daily_watcher(self) -> None:
+        logger.info("DAILY WATCHER TASK STARTED")
         while self.running:
-            now   = _now_ist()
+            now = _now_ist()
             today = now.date().isoformat()
 
-            if (now.time() >= time(9, 14) and
-                    now.time() <  time(9, 15) and
-                    self._daily_reset_date != today):
-
+            if (
+                now.time() >= time(9, 14)
+                and now.time() < time(9, 15)
+                and self._daily_reset_date != today
+            ):
                 self._daily_reset_date = today
                 logger.info("=== DAILY RESET ===")
 
@@ -220,40 +175,39 @@ class MarketScheduler:
                 self.engine.clear_cache()
 
                 self._last_signal_time = 0.0
-                self._latest_iv        = None
+                self._latest_iv = None
                 self._iv_history.clear()
 
                 logger.info("=== DAILY RESET COMPLETE ===")
 
             await asyncio.sleep(10)
 
-    # ── Main poll loop ────────────────────────────────────────
-
     async def _loop(self) -> None:
-        logger.info("🔄 Market loop started")
+        logger.info("MARKET LOOP TASK STARTED")
         while self.running:
             try:
                 if _market_open():
                     delay = _time.time() - self._last_tick_time
                     if delay > 10:
                         logger.error("Scheduler stalled! delay=%.2fs", delay)
+
                     data_stale = _time.time() - self._last_good_quote_time
                     if data_stale > settings.deadman_timeout:
                         logger.critical(
-                            "Dead-man switch: market data stale for %.1fs", data_stale)
+                            "Dead-man switch: market data stale for %.1fs",
+                            data_stale,
+                        )
                         await self._fail_safe_on_data_loss()
                 else:
-                    # Outside market hours — reset timers so watchdog doesn't fire at open
-                    self._last_tick_time       = _time.time()
+                    self._last_tick_time = _time.time()
                     self._last_good_quote_time = _time.time()
                     self._consecutive_quote_failures = 0
 
                 if not _market_open():
                     now_ts = _time.time()
                     if now_ts - self._last_closed_log >= _LOG_INTERVAL:
-                        now    = _now_ist()
-                        reason = ("weekend" if now.weekday() >= 5
-                                  else "outside market hours")
+                        now = _now_ist()
+                        reason = "weekend" if now.weekday() >= 5 else "outside market hours"
                         logger.info("Market closed (%s) — polling paused", reason)
                         self._last_closed_log = now_ts
                 else:
@@ -264,148 +218,155 @@ class MarketScheduler:
 
             await asyncio.sleep(settings.poll_seconds)
 
-    # ── Tick ──────────────────────────────────────────────────
-
     async def _tick(self) -> None:
+        logger.info("TICK FUNCTION ENTERED")
         self._last_tick_time = _time.time()
 
-        # ── Fetch NIFTY spot ────────────────────────────────
         try:
             index_quote = await asyncio.wait_for(
                 self.broker.get_index_quote(settings.nifty_symbol),
                 timeout=3,
             )
-            self._last_good_quote_time       = _time.time()
+            self._last_good_quote_time = _time.time()
             self._consecutive_quote_failures = 0
         except asyncio.TimeoutError:
-            logger.warning("⏰ Broker timeout")
+            logger.warning("Broker timeout")
             self._consecutive_quote_failures += 1
             return
-        except RuntimeError as exc:
+        except Exception as exc:
             self._consecutive_quote_failures += 1
             now_ts = _time.time()
             if now_ts - self._last_broker_error >= _LOG_INTERVAL:
-                logger.warning("❌ Broker quote unavailable: %s", exc)
+                logger.warning("Broker quote unavailable: %s", exc, exc_info=True)
                 self._last_broker_error = now_ts
             return
 
         spot = SamcoClient.parse_spot(index_quote)
         if spot is None:
-            logger.warning("❌ Spot parsing failed")
+            logger.warning("Spot parsing failed")
             self._consecutive_quote_failures += 1
             return
 
-        logger.info("💰 TICK: spot=%.2f", spot)
+        logger.info("TICK: spot=%.2f", spot)
 
-        # Extract IV if the broker provides it
         iv = self._extract_iv(index_quote)
         if iv is not None:
             self._latest_iv = iv
             self._iv_history.append(iv)
 
-        # ── Update spot in state ────────────────────────────
-        # IC trade monitoring (P&L, exit checks) is handled entirely by
-        # trading_engine._monitor_loop. Scheduler only needs to keep
-        # spot_price current so the engine can read it.
         try:
             await self.state.update(spot_price=spot)
         except Exception as exc:
-            logger.error("state.update spot_price failed: %s", exc)
+            logger.error("state.update spot_price failed: %s", exc, exc_info=True)
             return
 
-        logger.info("✅ TICK: spot_price=%.2f", spot)
+        await self.event_bus.publish(
+            "TICK",
+            {
+                "price": spot,
+                "volume": float(index_quote.get("volume") or 0),
+                "iv": float(iv or 0.0),
+            },
+        )
 
-        # ── Publish tick for any subscribers ────────────────
-        await self.event_bus.publish("TICK", {
-            "price":  spot,
-            "volume": float(index_quote.get("volume") or 0),
-            "iv":     float(iv or 0.0),
-        })
-
-        # ── IC entry gate ────────────────────────────────────
         state = await self.state.snapshot()
-        now   = _now_ist()
+        now = _now_ist()
 
         if not self._iron_condor_can_enter(now, spot, state):
             return
 
         payload = {
-            "signal":      "IRON_CONDOR",
-            "spot_price":  spot,
-            "size_label":  "FULL",
+            "signal": "IRON_CONDOR",
+            "spot_price": spot,
+            "size_label": "FULL",
             "trend_score": 0,
         }
-        try:
-            await self.state.update(signal="IRON_CONDOR", signal_meta=payload)
-        except Exception as exc:
-            logger.error("state.update signal failed: %s", exc)
-            return
 
+        await self.state.update(signal="IRON_CONDOR", signal_meta=payload)
         await self.event_bus.publish("SIGNAL", payload)
         self._last_signal_time = now.timestamp()
-        logger.info("✅ IRON_CONDOR entry signal emitted spot=%.2f", spot)
 
-    # ── IC entry gate ─────────────────────────────────────────
+        logger.info("IRON_CONDOR entry signal emitted spot=%.2f", spot)
 
     def _iron_condor_can_enter(self, now: datetime, spot: float, state) -> bool:
-        """
-        All conditions that must be true before emitting an IC entry signal.
-
-        Returns True only when every gate passes.
-        Logs the blocking reason at DEBUG so logs stay readable; only
-        the final SIGNAL log is at INFO.
-        """
         if state.active_trade:
-            logger.debug("IC gate: active trade already open")
-            return False
-
-        if state.last_iron_condor_month == now.month:
-            logger.debug("IC gate: already traded this month (month=%d)", now.month)
+            logger.info("IC gate blocked: active trade already open")
             return False
 
         if now.weekday() >= 5:
-            logger.debug("IC gate: weekend")
-            return False
-
-        if not (settings.ic_entry_day_start <= now.day <= settings.ic_entry_day_end):
-            logger.debug(
-                "IC gate: not in entry days (%d-%d), today=day %d",
-                settings.ic_entry_day_start, settings.ic_entry_day_end, now.day,
-            )
-            return False
-
-        try:
-            sh, sm = map(int, settings.ic_entry_window_start.split(":"))
-            eh, em = map(int, settings.ic_entry_window_end.split(":"))
-        except Exception:
-            sh, sm, eh, em = 9, 20, 10, 0
-            logger.warning("Failed to parse IC entry window — using defaults 09:20-10:00")
-
-        if not (time(sh, sm) <= now.time() < time(eh, em)):
-            logger.debug(
-                "IC gate: outside time window %02d:%02d-%02d:%02d, now=%s",
-                sh, sm, eh, em, now.strftime("%H:%M:%S"),
-            )
+            logger.info("IC gate blocked: weekend")
             return False
 
         if not state.trading_enabled:
-            logger.debug("IC gate: trading_enabled=False")
+            logger.info("IC gate blocked: trading_enabled=False")
             return False
 
-        # Signal cooldown — prevents rapid re-emission if SIGNAL not consumed yet
+        monthly_only = bool(getattr(settings, "ic_monthly_only", False))
+
+        if monthly_only:
+            start_day = int(getattr(settings, "ic_entry_day_start", 1))
+            end_day = int(getattr(settings, "ic_entry_day_end", 5))
+
+            if not (start_day <= now.day <= end_day):
+                logger.info(
+                    "IC gate blocked: monthly mode day filter start=%d end=%d today=%d",
+                    start_day,
+                    end_day,
+                    now.day,
+                )
+                return False
+
+            if getattr(state, "last_iron_condor_month", None) == now.month:
+                logger.info("IC gate blocked: already traded this month month=%d", now.month)
+                return False
+        else:
+            today = now.date().isoformat()
+            for value in (
+                getattr(state, "last_trade_date", None),
+                getattr(state, "last_ic_trade_date", None),
+                getattr(state, "iron_condor_trade_date", None),
+            ):
+                if value and str(value)[:10] == today:
+                    logger.info("IC gate blocked: already traded today value=%s", value)
+                    return False
+
+        try:
+            sh, sm = map(int, str(settings.ic_entry_window_start).split(":"))
+            eh, em = map(int, str(settings.ic_entry_window_end).split(":"))
+        except Exception:
+            sh, sm, eh, em = 10, 0, 10, 5
+            logger.warning("Failed to parse IC entry window — using defaults 10:00-10:05")
+
+        if not (time(sh, sm) <= now.time() < time(eh, em)):
+            logger.info(
+                "IC gate blocked: outside time window %02d:%02d-%02d:%02d now=%s",
+                sh,
+                sm,
+                eh,
+                em,
+                now.strftime("%H:%M:%S"),
+            )
+            return False
+
         if self._last_signal_time and now.timestamp() - self._last_signal_time < 60:
-            logger.debug("IC gate: cooldown active (last signal %.0fs ago)",
-                         now.timestamp() - self._last_signal_time)
+            logger.info(
+                "IC gate blocked: cooldown active last_signal_age=%.0fs",
+                now.timestamp() - self._last_signal_time,
+            )
             return False
 
+        logger.info(
+            "IC gate passed: monthly_only=%s time=%s spot=%.2f",
+            monthly_only,
+            now.strftime("%H:%M:%S"),
+            spot,
+        )
         return True
 
-    # ── Helpers ───────────────────────────────────────────────
-
     def _extract_iv(self, quote: dict) -> float | None:
-        """Extract implied volatility from broker quote payload if present."""
         if not isinstance(quote, dict):
             return None
+
         for key in ("impliedVolatility", "iv", "implied_volatility", "volatility"):
             raw = quote.get(key)
             if raw is not None:
@@ -417,63 +378,54 @@ class MarketScheduler:
                     continue
         return None
 
-    # ── Dead-man switch ───────────────────────────────────────
-
     async def _fail_safe_on_data_loss(self) -> None:
-        """Disable trading and attempt emergency flatten when data stream dies."""
         state = await self.state.snapshot()
         if state.trading_enabled:
             await self.state.update(trading_enabled=False)
             logger.critical("Trading disabled due to stale quote stream")
-        if state.active_trade:
-            logger.critical("Emergency flatten triggered by dead-man switch")
-            closed = False
-            for attempt in range(1, 4):
-                result = await self.flatten_position()
-                closed = result.get("status") in {"flattened", "no_active_trade"}
-                if closed:
-                    logger.critical(
-                        "Dead-man switch exit success attempt=%d", attempt)
-                    break
-                await asyncio.sleep(1.0)
-            if not closed:
-                logger.critical("Dead-man switch exit failed after retries")
-            await self.state.update(
-                trading_enabled=False,
-                last_risk_breach="deadman_switch",
-            )
-
-    # ── Manual flatten ────────────────────────────────────────
 
     async def flatten_position(self) -> dict:
-        """Emergency flatten — callable from dashboard FLATTEN button."""
         state = await self.state.snapshot()
         if not state.active_trade:
             return {"status": "no_active_trade"}
-        trade  = state.active_trade
+
+        trade = state.active_trade
         symbol = trade.get("symbol")
-        qty    = (
+        qty = (
             trade.get("t2_qty", trade.get("qty", 0) // 2)
             if trade.get("t1_booked")
             else trade.get("qty", 0)
         )
+
+        if str(getattr(settings, "mode", "paper")).strip().lower() == "paper":
+            await self.state.update(active_trade=None, live_pnl=0.0)
+            logger.info("Manual flatten simulated in PAPER mode symbol=%s qty=%d", symbol, qty)
+            return {
+                "status": "flattened",
+                "symbol": symbol,
+                "qty": qty,
+                "order_id": f"PAPER-FLATTEN-{symbol}",
+            }
+
         try:
             order_id, _ = await self.broker.place_order_and_wait_fill(
-                symbol=symbol, side="SELL", quantity=qty,
+                symbol=symbol,
+                side="SELL",
+                quantity=qty,
             )
             if not order_id:
                 return {"status": "error", "message": "no_order_id"}
+
             await self.state.update(active_trade=None, live_pnl=0.0)
             logger.info("Manual flatten %s qty=%d order=%s", symbol, qty, order_id)
             return {
-                "status":   "flattened",
-                "symbol":   symbol,
-                "qty":      qty,
+                "status": "flattened",
+                "symbol": symbol,
+                "qty": qty,
                 "order_id": order_id,
             }
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
 
 
-# ── Global instance ───────────────────────────────────────────
 scheduler = MarketScheduler()

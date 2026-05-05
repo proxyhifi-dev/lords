@@ -1,32 +1,22 @@
-"""
-PRODUCTION ORDER EXECUTION COMPONENTS
-=====================================
-
-Critical fixes for 8.5/10 → 10/10 upgrade:
-
-1. OrderExecutionSequence - Correct order sequence (hedges first)
-2. ExpiryDaySafetyProtocol - Avoid 2% ELM penalty
-3. WebSocketResilience - Auto-reconnection on network drops
-4. MarginUtilizationMonitor - Real-time margin tracking
-
-These components eliminate the 4 gaps costing you money.
-"""
+from __future__ import annotations
 
 import asyncio
-import logging
+import json
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
-from typing import Dict, List, Optional, Tuple
 
 IST = ZoneInfo("Asia/Kolkata")
 
 
 class OrderExecutionSequence:
     """
-    Manages exact order sequence for Iron Condor entry/exit.
+    Paper-safe / broker-compatible Iron Condor execution helper.
 
-    CRITICAL RULE: Buy hedges FIRST, then Sell shorts
-    This ensures broker recognizes hedge and applies correct margin (₹45-50k, not ₹150k).
+    Design:
+    - In paper mode: simulate success, no real broker orders.
+    - In live mode: this helper requires resolved broker symbols for each leg.
+    - If symbols are not supplied, it fails closed instead of guessing.
     """
 
     def __init__(self, broker_client, settings, logger):
@@ -34,302 +24,256 @@ class OrderExecutionSequence:
         self.settings = settings
         self.logger = logger
         self.max_retries = 3
-        self.retry_delay = 1.0  # seconds, uses exponential backoff
+        self.retry_delay = 1.0
 
-    async def enter_iron_condor_sequence(self, strikes: dict, premiums: dict) -> Dict:
+    def _is_live(self) -> bool:
+        return str(getattr(self.settings, "mode", "paper")).strip().lower() == "live"
+
+    def _paper_order_id(self, prefix: str, symbol: str) -> str:
+        ts = int(datetime.now(IST).timestamp())
+        return f"PAPER-{prefix}-{symbol}-{ts}"
+
+    async def enter_iron_condor_sequence(
+        self,
+        strikes: dict,
+        premiums: dict,
+        symbols: dict[str, str] | None = None,
+    ) -> Dict[str, Any]:
         """
-        Execute Iron Condor entry with CORRECT sequence.
+        Execute Iron Condor with hedge-first sequence.
 
-        SEQUENCE (CRITICAL FOR MARGIN):
-        1. Buy Long Call (hedge)      ← First (protects against gap up)
-        2. Buy Long Put (hedge)       ← First (protects against gap down)
-        3. Sell Short Call (premium)  ← After hedges confirmed (now margin safe)
-        4. Sell Short Put (premium)   ← After hedges confirmed (now margin safe)
-
-        This sequence ensures:
-        - Broker recognizes protective hedge
-        - Margin required drops from ₹150k to ₹45-50k
-        - Order placement succeeds 98%+ of the time
-
-        Args:
-            strikes: {'short_call': X, 'long_call': Y, 'short_put': Z, 'long_put': W}
-            premiums: {'short_call': P1, 'long_call': P2, ...}
-
-        Returns:
+        Expected symbols in live mode:
             {
-                'success': bool,
-                'order_ids': {'short_call': id, 'long_call': id, ...},
-                'margin_used': float,
-                'filled_legs': [leg1, leg2, ...],
-                'error': str (if failed)
+                "long_call": "...",
+                "long_put": "...",
+                "short_call": "...",
+                "short_put": "...",
             }
         """
 
-        self.logger.info("=" * 100)
-        self.logger.info("🚀 IRON CONDOR ENTRY SEQUENCE STARTING")
-        self.logger.info(f"Strikes: SC={strikes['short_call']}, LC={strikes['long_call']}, " +
-                        f"SP={strikes['short_put']}, LP={strikes['long_put']}")
-        self.logger.info("=" * 100)
+        self.logger.info("=" * 80)
+        self.logger.info("IRON CONDOR ENTRY SEQUENCE STARTING")
+        self.logger.info(
+            "Strikes: SC=%s LC=%s SP=%s LP=%s",
+            strikes.get("short_call"),
+            strikes.get("long_call"),
+            strikes.get("short_put"),
+            strikes.get("long_put"),
+        )
+        self.logger.info("=" * 80)
 
-        order_ids = {}
-        filled_orders = []
+        if not self._is_live():
+            self.logger.info("PAPER MODE: simulating hedge-first Iron Condor sequence")
+            return {
+                "success": True,
+                "order_ids": {
+                    "long_call": self._paper_order_id("BUY", f"LC-{strikes['long_call']}"),
+                    "long_put": self._paper_order_id("BUY", f"LP-{strikes['long_put']}"),
+                    "short_call": self._paper_order_id("SELL", f"SC-{strikes['short_call']}"),
+                    "short_put": self._paper_order_id("SELL", f"SP-{strikes['short_put']}"),
+                },
+                "margin_used": float(getattr(self.settings, "ic_margin_required", 0)),
+                "filled_legs": [
+                    ("LONG_CALL", f"LC-{strikes['long_call']}"),
+                    ("LONG_PUT", f"LP-{strikes['long_put']}"),
+                    ("SHORT_CALL", f"SC-{strikes['short_call']}"),
+                    ("SHORT_PUT", f"SP-{strikes['short_put']}"),
+                ],
+                "error": None,
+            }
+
+        required_keys = {"long_call", "long_put", "short_call", "short_put"}
+        if not symbols or not required_keys.issubset(symbols.keys()):
+            error = (
+                "Live IC entry requires resolved option symbols for all 4 legs. "
+                "Missing symbols prevents safe order placement."
+            )
+            self.logger.error(error)
+            return {"success": False, "order_ids": {}, "filled_legs": [], "error": error}
+
+        order_ids: dict[str, str] = {}
+        filled_legs: list[tuple[str, str]] = []
 
         try:
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # PHASE 1: BUY PROTECTIVE HEDGES FIRST
-            # ═══════════════════════════════════════════════════════════════════════════════
+            self.logger.info("PHASE 1: Buying protective hedges first")
 
-            self.logger.info("\n📍 PHASE 1: Buying protective hedges (Long Call & Long Put)")
-            self.logger.info("This phase MUST complete before selling shorts to ensure margin recognition")
-
-            # BUY Long Call (hedge)
-            self.logger.info(f"\n  Step 1/4: Buying Long Call @ {strikes['long_call']}")
-            lc_order = await self._place_order_with_retry(
+            lc = await self._place_market_order_with_retry(
+                symbol=symbols["long_call"],
                 side="BUY",
-                strike=strikes['long_call'],
-                opt_type="CE",
-                qty=self.settings.order_qty,
-                order_type="LIMIT",
-                price=premiums.get('long_call', None)
+                quantity=self.settings.order_qty,
+                leg_name="LONG_CALL",
             )
+            if not lc["success"]:
+                return {"success": False, "order_ids": {}, "filled_legs": [], "error": "Long Call fill failed"}
+            order_ids["long_call"] = lc["order_id"]
+            filled_legs.append(("LONG_CALL", lc["order_id"]))
 
-            if not lc_order['success']:
-                self.logger.error("❌ Long Call purchase failed - ABORTING entire sequence")
-                return {'success': False, 'error': 'Long Call fill failed', 'order_ids': {}}
-
-            order_ids['long_call'] = lc_order['order_id']
-            filled_orders.append(('LONG_CALL', lc_order['order_id']))
-            self.logger.info(f"  ✅ Long Call bought | Order ID: {lc_order['order_id']} | " +
-                            f"Filled @ ₹{lc_order.get('filled_price', 0):.2f}")
-
-            # BUY Long Put (hedge)
-            self.logger.info(f"\n  Step 2/4: Buying Long Put @ {strikes['long_put']}")
-            lp_order = await self._place_order_with_retry(
+            lp = await self._place_market_order_with_retry(
+                symbol=symbols["long_put"],
                 side="BUY",
-                strike=strikes['long_put'],
-                opt_type="PE",
-                qty=self.settings.order_qty,
-                order_type="LIMIT",
-                price=premiums.get('short_put', None)
+                quantity=self.settings.order_qty,
+                leg_name="LONG_PUT",
             )
+            if not lp["success"]:
+                await self._offset_filled_legs(
+                    [{"symbol": symbols["long_call"], "side": "BUY", "qty": self.settings.order_qty}]
+                )
+                return {"success": False, "order_ids": {}, "filled_legs": [], "error": "Long Put fill failed"}
+            order_ids["long_put"] = lp["order_id"]
+            filled_legs.append(("LONG_PUT", lp["order_id"]))
 
-            if not lp_order['success']:
-                self.logger.error("❌ Long Put purchase failed - Rolling back Long Call")
-                await self._rollback_orders([order_ids['long_call']])
-                return {'success': False, 'error': 'Long Put fill failed', 'order_ids': {}}
+            self.logger.info("PHASE 2: Selling short strikes after hedges confirmed")
 
-            order_ids['long_put'] = lp_order['order_id']
-            filled_orders.append(('LONG_PUT', lp_order['order_id']))
-            self.logger.info(f"  ✅ Long Put bought | Order ID: {lp_order['order_id']} | " +
-                            f"Filled @ ₹{lp_order.get('filled_price', 0):.2f}")
-
-            self.logger.info("\n  ✅ PHASE 1 COMPLETE: Both hedges purchased")
-            self.logger.info("  Broker now recognizes protective hedge - Proceeding to Phase 2")
-
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # PHASE 2: SELL SHORT STRIKES (Now that hedges are in place)
-            # ═══════════════════════════════════════════════════════════════════════════════
-
-            self.logger.info("\n📍 PHASE 2: Selling short strikes (Short Call & Short Put)")
-            self.logger.info("Hedges in place - Broker will apply ₹45-50k margin (NOT ₹150k)")
-
-            # SELL Short Call
-            self.logger.info(f"\n  Step 3/4: Selling Short Call @ {strikes['short_call']}")
-            sc_order = await self._place_order_with_retry(
+            sc = await self._place_market_order_with_retry(
+                symbol=symbols["short_call"],
                 side="SELL",
-                strike=strikes['short_call'],
-                opt_type="CE",
-                qty=self.settings.order_qty,
-                order_type="LIMIT",
-                price=premiums.get('short_call', None)
+                quantity=self.settings.order_qty,
+                leg_name="SHORT_CALL",
             )
+            if not sc["success"]:
+                await self._offset_filled_legs(
+                    [
+                        {"symbol": symbols["long_call"], "side": "BUY", "qty": self.settings.order_qty},
+                        {"symbol": symbols["long_put"], "side": "BUY", "qty": self.settings.order_qty},
+                    ]
+                )
+                return {"success": False, "order_ids": {}, "filled_legs": [], "error": "Short Call fill failed"}
+            order_ids["short_call"] = sc["order_id"]
+            filled_legs.append(("SHORT_CALL", sc["order_id"]))
 
-            if not sc_order['success']:
-                self.logger.error("❌ Short Call sale failed - Rolling back hedges")
-                await self._rollback_orders([order_ids['long_call'], order_ids['long_put']])
-                return {'success': False, 'error': 'Short Call fill failed', 'order_ids': {}}
-
-            order_ids['short_call'] = sc_order['order_id']
-            filled_orders.append(('SHORT_CALL', sc_order['order_id']))
-            self.logger.info(f"  ✅ Short Call sold | Order ID: {sc_order['order_id']} | " +
-                            f"Filled @ ₹{sc_order.get('filled_price', 0):.2f}")
-
-            # SELL Short Put
-            self.logger.info(f"\n  Step 4/4: Selling Short Put @ {strikes['short_put']}")
-            sp_order = await self._place_order_with_retry(
+            sp = await self._place_market_order_with_retry(
+                symbol=symbols["short_put"],
                 side="SELL",
-                strike=strikes['short_put'],
-                opt_type="PE",
-                qty=self.settings.order_qty,
-                order_type="LIMIT",
-                price=premiums.get('short_put', None)
+                quantity=self.settings.order_qty,
+                leg_name="SHORT_PUT",
             )
+            if not sp["success"]:
+                await self._offset_filled_legs(
+                    [
+                        {"symbol": symbols["long_call"], "side": "BUY", "qty": self.settings.order_qty},
+                        {"symbol": symbols["long_put"], "side": "BUY", "qty": self.settings.order_qty},
+                        {"symbol": symbols["short_call"], "side": "SELL", "qty": self.settings.order_qty},
+                    ]
+                )
+                return {"success": False, "order_ids": {}, "filled_legs": [], "error": "Short Put fill failed"}
+            order_ids["short_put"] = sp["order_id"]
+            filled_legs.append(("SHORT_PUT", sp["order_id"]))
 
-            if not sp_order['success']:
-                self.logger.error("❌ Short Put sale failed - Rolling back all legs")
-                await self._rollback_orders([
-                    order_ids['long_call'],
-                    order_ids['long_put'],
-                    order_ids['short_call']
-                ])
-                return {'success': False, 'error': 'Short Put fill failed', 'order_ids': {}}
-
-            order_ids['short_put'] = sp_order['order_id']
-            filled_orders.append(('SHORT_PUT', sp_order['order_id']))
-            self.logger.info(f"  ✅ Short Put sold | Order ID: {sp_order['order_id']} | " +
-                            f"Filled @ ₹{sp_order.get('filled_price', 0):.2f}")
-
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # SUCCESS: All 4 legs filled
-            # ═══════════════════════════════════════════════════════════════════════════════
-
-            self.logger.info("\n" + "=" * 100)
-            self.logger.info("🎉 IRON CONDOR ENTRY COMPLETE - ALL 4 LEGS FILLED")
-            self.logger.info("=" * 100)
-            self.logger.info(f"Order IDs: {order_ids}")
-            self.logger.info(f"Filled Orders: {filled_orders}")
-            self.logger.info(f"Margin Used: ₹{self.settings.ic_margin_required:,.0f}")
-            self.logger.info("Position is now FULLY HEDGED and MARGIN-SAFE")
-
+            self.logger.info("IRON CONDOR ENTRY COMPLETE - ALL 4 LEGS FILLED")
             return {
-                'success': True,
-                'order_ids': order_ids,
-                'margin_used': self.settings.ic_margin_required,
-                'filled_legs': filled_orders,
-                'error': None
+                "success": True,
+                "order_ids": order_ids,
+                "margin_used": float(getattr(self.settings, "ic_margin_required", 0)),
+                "filled_legs": filled_legs,
+                "error": None,
             }
 
-        except Exception as e:
-            self.logger.error(f"❌ CRITICAL ERROR in entry sequence: {str(e)}", exc_info=True)
-            if filled_orders:
-                await self._rollback_orders([oid for _, oid in filled_orders])
-            return {'success': False, 'order_ids': {}, 'error': str(e)}
+        except Exception as exc:
+            self.logger.error("Critical error in entry sequence: %s", exc, exc_info=True)
+            return {"success": False, "order_ids": order_ids, "filled_legs": filled_legs, "error": str(exc)}
 
-    async def _place_order_with_retry(self, side: str, strike: int, opt_type: str,
-                                      qty: int, order_type: str, price: Optional[float]) -> Dict:
-        """
-        Place order with limit chasing and exponential backoff retry logic.
-
-        SLIPPAGE MITIGATION:
-        - Starts with limit order at current market price
-        - If not filled in 3 seconds, modifies to +₹1
-        - If not filled in 6 seconds, modifies to +₹2
-        - Max retries: 3
-
-        For SELL orders: Chase downward (-₹1, -₹2, etc)
-        For BUY orders: Chase upward (+₹1, +₹2, etc)
-        """
-
-        for attempt in range(self.max_retries):
+    async def _place_market_order_with_retry(
+        self,
+        symbol: str,
+        side: str,
+        quantity: int,
+        leg_name: str,
+    ) -> Dict[str, Any]:
+        for attempt in range(1, self.max_retries + 1):
             try:
-                self.logger.info(f"    Attempt {attempt + 1}/{self.max_retries}: " +
-                               f"{side} {opt_type} @ {strike} for ₹{price:.2f if price else 0}")
-
-                # Place initial order
-                order = await self.broker.place_order(
+                self.logger.info(
+                    "Attempt %d/%d: %s %s qty=%d",
+                    attempt,
+                    self.max_retries,
+                    side,
+                    symbol,
+                    quantity,
+                )
+                resp = await self.broker.place_order(
+                    symbol=symbol,
                     side=side,
-                    strike=strike,
-                    opt_type=opt_type,
-                    qty=qty,
-                    order_type=order_type,
-                    price=price if price else None
+                    quantity=quantity,
+                    exchange="NFO",
+                )
+                order_id = resp.get("orderNumber") or resp.get("orderId") or resp.get("order_id")
+
+                if not order_id:
+                    raise RuntimeError(f"{leg_name} order placement returned no order id: {resp}")
+
+                fill_state, _, fill_price = await self.broker.confirm_fill(
+                    order_id=str(order_id),
+                    requested_qty=quantity,
+                    max_attempts=10,
+                    delay=0.5,
                 )
 
-                # Wait for fill with price buffer adjustment
-                filled_price = await self._wait_for_fill_with_chase(
-                    order_id=order['order_id'],
-                    initial_price=price,
-                    side=side,
-                    attempt=attempt
+                if fill_state == "FILLED":
+                    self.logger.info(
+                        "%s filled successfully order=%s fill_price=%s",
+                        leg_name,
+                        order_id,
+                        fill_price,
+                    )
+                    return {
+                        "success": True,
+                        "order_id": str(order_id),
+                        "filled_price": fill_price,
+                    }
+
+                self.logger.warning(
+                    "%s not fully filled attempt=%d state=%s order=%s",
+                    leg_name,
+                    attempt,
+                    fill_state,
+                    order_id,
                 )
 
-                self.logger.info(f"    ✅ Order filled @ ₹{filled_price:.2f} (slippage: ₹{abs(filled_price - price):.2f})")
-                return {
-                    'success': True,
-                    'order_id': order['order_id'],
-                    'filled_price': filled_price
-                }
+            except Exception as exc:
+                self.logger.warning(
+                    "%s attempt %d/%d failed: %s",
+                    leg_name,
+                    attempt,
+                    self.max_retries,
+                    exc,
+                )
 
-            except Exception as e:
-                self.logger.warning(f"    ⚠️ Attempt {attempt + 1} failed: {str(e)}")
+            if attempt < self.max_retries:
+                await asyncio.sleep(self.retry_delay * (2 ** (attempt - 1)))
 
-                if attempt < self.max_retries - 1:
-                    wait_time = self.retry_delay * (2 ** attempt)  # Exponential backoff
-                    self.logger.info(f"    Waiting {wait_time:.1f}s before retry...")
-                    await asyncio.sleep(wait_time)
-                else:
-                    self.logger.error(f"    ❌ All {self.max_retries} attempts exhausted")
-                    return {'success': False}
+        self.logger.error("%s failed after %d attempts", leg_name, self.max_retries)
+        return {"success": False}
 
-        return {'success': False}
-
-    async def _wait_for_fill_with_chase(self, order_id: str, initial_price: float,
-                                        side: str, attempt: int) -> float:
+    async def _offset_filled_legs(self, legs: List[Dict[str, Any]]) -> None:
         """
-        Wait for order fill with limit price chasing.
-
-        If not filled within 3 seconds, adjust limit price:
-        - For BUY orders: Increase limit (chase upward) ← Accept higher price
-        - For SELL orders: Decrease limit (chase downward) ← Accept lower price
-
-        This reduces slippage from 5-10% to 1-2%
+        Offset already-filled legs with opposite side market orders.
+        This is safer than trying to cancel filled orders.
         """
-
-        start_time = datetime.now(IST)
-        max_wait = 3  # seconds
-        price_increment = 1.0
-        current_price = initial_price
-
-        while True:
-            # Check if filled
-            status = await self.broker.get_order_status(order_id)
-
-            if status.get('filled'):
-                return status.get('filled_price', current_price)
-
-            # Check if timed out
-            elapsed = (datetime.now(IST) - start_time).total_seconds()
-            if elapsed > max_wait:
-                # Adjust price based on side
-                if side == "BUY":
-                    # For BUY: Increase limit (willing to pay slightly more)
-                    current_price += price_increment * (attempt + 1)
-                    direction = "↑ (chasing upward)"
-                else:  # SELL
-                    # For SELL: Decrease limit (willing to accept slightly less)
-                    current_price -= price_increment * (attempt + 1)
-                    direction = "↓ (chasing downward)"
-
-                self.logger.info(f"      Price chasing: Modifying to ₹{current_price:.2f} {direction}")
-
-                # Modify the order
-                await self.broker.modify_order(
-                    order_id=order_id,
-                    new_price=current_price
-                )
-
-                # Reset timer
-                start_time = datetime.now(IST)
-
-            await asyncio.sleep(0.1)  # Check every 100ms
-
-    async def _rollback_orders(self, order_ids: List[str]):
-        """Cancel any filled orders if sequence fails"""
-        for order_id in order_ids:
+        for leg in reversed(legs):
             try:
-                await self.broker.cancel_order(order_id)
-                self.logger.info(f"    Rolled back order: {order_id}")
-            except Exception as e:
-                self.logger.error(f"    Rollback failed for {order_id}: {str(e)}")
+                exit_side = "SELL" if leg["side"].upper() == "BUY" else "BUY"
+                self.logger.warning(
+                    "Offsetting filled leg symbol=%s original_side=%s exit_side=%s qty=%d",
+                    leg["symbol"],
+                    leg["side"],
+                    exit_side,
+                    leg["qty"],
+                )
+                await self.broker.place_order(
+                    symbol=leg["symbol"],
+                    side=exit_side,
+                    quantity=leg["qty"],
+                    exchange="NFO",
+                )
+            except Exception as exc:
+                self.logger.error("Offset failed for %s: %s", leg, exc)
 
 
 class ExpiryDaySafetyProtocol:
     """
-    PREVENTS 2% EXTREME LOSS MARGIN (ELM) PENALTY ON EXPIRY DAY
+    Simple expiry safety gate.
 
-    SEBI Rule: 2% additional margin on ALL short index options on expiry day
-    Impact: ₹1,200 extra margin needed on expiry day
-    Solution: Force exit 1 day BEFORE expiry at 3:25 PM IST
+    For now, uses configured same-day IC_EXIT_TIME as the main intraday control.
+    This avoids overcomplicated monthly-expiry assumptions for a daily paper bot.
     """
 
     def __init__(self, settings, logger):
@@ -337,63 +281,23 @@ class ExpiryDaySafetyProtocol:
         self.logger = logger
 
     def get_safe_exit_deadline(self, entry_date: datetime) -> datetime:
-        """
-        Calculate the LATEST time to exit to completely avoid ELM penalty.
+        exit_text = str(getattr(self.settings, "ic_exit_time", "15:00"))
+        try:
+            hour, minute = map(int, exit_text.split(":"))
+        except Exception:
+            hour, minute = 15, 0
 
-        Monthly options expiry: 4th Thursday of the month
-        Safe exit deadline: 3rd Thursday, 3:25 PM IST (1 day before expiry)
+        deadline = entry_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if deadline < entry_date:
+            deadline = deadline + timedelta(days=1)
 
-        Args:
-            entry_date: Date when position was entered
-
-        Returns:
-            datetime object representing safe exit deadline
-        """
-
-        from datetime import timedelta
-
-        # Calculate expiry (4th Thursday of entry month)
-        year = entry_date.year
-        month = entry_date.month
-
-        # Find first Thursday
-        first_day = datetime(year, month, 1, tzinfo=IST)
-        days_until_thursday = (3 - first_day.weekday()) % 7
-        first_thursday = first_day + timedelta(days=days_until_thursday)
-
-        # 4th Thursday is expiry
-        expiry_date = first_thursday + timedelta(weeks=3)
-
-        # Safe deadline: 1 day before, 3:25 PM
-        safe_deadline = (expiry_date - timedelta(days=1)).replace(hour=15, minute=25, second=0)
-
-        self.logger.info(f"\n📅 EXPIRY SAFETY PROTOCOL:")
-        self.logger.info(f"    Entry Date: {entry_date.date()}")
-        self.logger.info(f"    Monthly Expiry: {expiry_date.date()}")
-        self.logger.info(f"    Safe Exit Deadline: {safe_deadline} IST")
-        self.logger.info(f"    (Must exit BEFORE this time to avoid 2% ELM penalty)")
-
-        return safe_deadline
+        return deadline
 
     def should_force_exit(self, current_time: datetime, entry_time: datetime) -> Tuple[bool, str]:
-        """
-        Check if position should be force-exited due to expiry approach.
-
-        Returns:
-            (should_exit: bool, reason: str)
-        """
-
         safe_deadline = self.get_safe_exit_deadline(entry_time)
 
         if current_time >= safe_deadline:
-            reason = f"⚠️ EXPIRY SAFETY: Safe exit deadline {safe_deadline} reached"
-            self.logger.critical(reason)
-            return True, reason
-
-        # Also check if we're within 1 hour of deadline
-        time_until_deadline = (safe_deadline - current_time).total_seconds() / 3600
-        if time_until_deadline < 1.0:
-            reason = f"⚠️ CRITICAL: {time_until_deadline:.1f} hours until ELM penalty"
+            reason = f"EOD/expiry safety exit deadline reached: {safe_deadline.isoformat()}"
             self.logger.warning(reason)
             return True, reason
 
@@ -401,27 +305,16 @@ class ExpiryDaySafetyProtocol:
 
 
 class WebSocketResilience:
-    """
-    MAINTAINS LIVE DATA FEED WITH AUTOMATIC RECONNECTION
-
-    Problem: Internet drop → WebSocket dies → Bot crashes
-    Solution: Heartbeat check + exponential backoff reconnection
-
-    This prevents crashes from brief internet hiccups.
-    """
-
     def __init__(self, websocket_url: str, logger):
         self.websocket_url = websocket_url
         self.logger = logger
         self.ws = None
         self.is_connected = False
-        self.reconnect_delay = 1.0  # seconds
+        self.reconnect_delay = 1.0
         self.max_reconnect_delay = 60.0
-        self.heartbeat_interval = 30  # seconds
+        self.heartbeat_interval = 30
 
     async def connect(self):
-        """Connect to WebSocket with error handling and exponential backoff"""
-
         try:
             import websockets
         except ImportError:
@@ -430,117 +323,104 @@ class WebSocketResilience:
 
         while not self.is_connected:
             try:
-                self.logger.info(f"🔗 Connecting to WebSocket: {self.websocket_url}")
+                self.logger.info("Connecting to WebSocket: %s", self.websocket_url)
                 self.ws = await websockets.connect(self.websocket_url)
                 self.is_connected = True
-                self.reconnect_delay = 1.0  # Reset on successful connection
-                self.logger.info("✅ WebSocket connected successfully")
-
-                # Start heartbeat monitor
+                self.reconnect_delay = 1.0
+                self.logger.info("WebSocket connected successfully")
                 asyncio.create_task(self._heartbeat_monitor())
-
-            except Exception as e:
-                self.logger.error(f"❌ WebSocket connection failed: {str(e)}")
+            except Exception as exc:
+                self.logger.error("WebSocket connection failed: %s", exc)
                 self.is_connected = False
-
-                # Exponential backoff
                 wait_time = min(self.reconnect_delay, self.max_reconnect_delay)
-                self.logger.info(f"⏳ Retrying in {wait_time:.1f}s... (Exponential backoff)")
+                self.logger.info("Retrying in %.1fs...", wait_time)
                 await asyncio.sleep(wait_time)
                 self.reconnect_delay = min(self.reconnect_delay * 2, self.max_reconnect_delay)
 
     async def _heartbeat_monitor(self):
-        """Monitor connection with periodic heartbeat"""
-
         while self.is_connected:
             try:
                 await asyncio.sleep(self.heartbeat_interval)
-
-                # Send ping to check connection
                 await self.ws.ping()
-                self.logger.debug("💓 WebSocket heartbeat sent")
-
-            except Exception as e:
-                self.logger.error(f"❌ Heartbeat failed: {str(e)}")
+                self.logger.debug("WebSocket heartbeat sent")
+            except Exception as exc:
+                self.logger.error("Heartbeat failed: %s", exc)
                 self.is_connected = False
-                await self.connect()  # Reconnect
+                await self.connect()
 
     async def receive(self) -> dict:
-        """Receive data from WebSocket with automatic reconnection on failure"""
-
         while True:
             try:
                 if not self.is_connected:
                     await self.connect()
 
-                # Wait for data with timeout
                 data = await asyncio.wait_for(self.ws.recv(), timeout=self.heartbeat_interval)
-                return eval(data)  # Parse JSON
+
+                if isinstance(data, bytes):
+                    data = data.decode("utf-8", errors="ignore")
+
+                if isinstance(data, str):
+                    try:
+                        parsed = json.loads(data)
+                        if isinstance(parsed, dict):
+                            return parsed
+                        return {"data": parsed}
+                    except json.JSONDecodeError:
+                        return {"raw": data}
+
+                return {"data": data}
 
             except asyncio.TimeoutError:
-                self.logger.warning("⚠️ WebSocket timeout - no data received")
+                self.logger.warning("WebSocket timeout - no data received")
                 self.is_connected = False
                 await self.connect()
-
-            except Exception as e:
-                self.logger.error(f"❌ WebSocket error: {str(e)}")
+            except Exception as exc:
+                self.logger.error("WebSocket error: %s", exc)
                 self.is_connected = False
                 await self.connect()
 
 
 class MarginUtilizationMonitor:
-    """
-    MONITORS AND LOGS MARGIN UTILIZATION IN REAL-TIME
-
-    Alerts if margin usage approaches critical levels.
-    Prevents over-leverage by tracking available capital.
-    """
-
     def __init__(self, total_capital: float, safety_buffer: float, logger):
-        self.total_capital = total_capital
-        self.safety_buffer = safety_buffer  # ₹5,000
-        self.available_capital = total_capital - safety_buffer
+        self.total_capital = float(total_capital)
+        self.safety_buffer = float(safety_buffer)
+        self.available_capital = max(self.total_capital - self.safety_buffer, 1.0)
         self.logger = logger
-        self.warning_threshold = 0.85  # Alert if 85% used
-        self.critical_threshold = 0.95  # Critical if 95% used
+        self.warning_threshold = 0.85
+        self.critical_threshold = 0.95
 
-    def check_margin(self, margin_used: float) -> Dict:
-        """
-        Check margin utilization and return status.
-
-        Returns:
-            {
-                'status': 'OK'|'WARNING'|'CRITICAL',
-                'usage_pct': float (0-1),
-                'margin_used': float,
-                'available': float
-            }
-        """
-
+    def check_margin(self, margin_used: float) -> Dict[str, Any]:
+        margin_used = float(margin_used or 0.0)
         usage_pct = margin_used / self.available_capital
 
-        status = 'OK'
+        status = "OK"
         if usage_pct >= self.critical_threshold:
-            status = 'CRITICAL'
+            status = "CRITICAL"
             self.logger.critical(
-                f"🚨 CRITICAL MARGIN: {usage_pct*100:.1f}% used " +
-                f"(₹{margin_used:,.0f}/₹{self.available_capital:,.0f})"
+                "CRITICAL MARGIN: %.1f%% used (₹%s/₹%s)",
+                usage_pct * 100,
+                f"{margin_used:,.0f}",
+                f"{self.available_capital:,.0f}",
             )
         elif usage_pct >= self.warning_threshold:
-            status = 'WARNING'
+            status = "WARNING"
             self.logger.warning(
-                f"⚠️ HIGH MARGIN: {usage_pct*100:.1f}% used " +
-                f"(₹{margin_used:,.0f}/₹{self.available_capital:,.0f})"
+                "HIGH MARGIN: %.1f%% used (₹%s/₹%s)",
+                usage_pct * 100,
+                f"{margin_used:,.0f}",
+                f"{self.available_capital:,.0f}",
             )
         else:
             self.logger.info(
-                f"✅ Margin OK: {usage_pct*100:.1f}% used " +
-                f"(₹{margin_used:,.0f}/₹{self.available_capital:,.0f})"
+                "Margin OK: %.1f%% used (₹%s/₹%s)",
+                usage_pct * 100,
+                f"{margin_used:,.0f}",
+                f"{self.available_capital:,.0f}",
             )
 
         return {
-            'status': status,
-            'usage_pct': usage_pct,
-            'margin_used': margin_used,
-            'available': self.available_capital - margin_used
+            "status": status,
+            "usage_pct": usage_pct,
+            "margin_used": margin_used,
+            "available": self.available_capital - margin_used,
         }

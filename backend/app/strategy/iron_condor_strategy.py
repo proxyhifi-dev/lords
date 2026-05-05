@@ -93,10 +93,6 @@ class IronCondorStrategy:
             getattr(self.settings, "ic_wing_width", 300),
         )
 
-    # ---------------------------------------------------------------------
-    # Helpers
-    # ---------------------------------------------------------------------
-
     def _parse_time(self, value: str | time | None, default: time) -> time:
         if isinstance(value, time):
             return value
@@ -128,7 +124,6 @@ class IronCondorStrategy:
         if not text:
             return None
 
-        # Accept "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DD"
         return text[:10]
 
     def _ceil_to_step(self, value: float, step: int) -> int:
@@ -139,10 +134,6 @@ class IronCondorStrategy:
 
     def _round_to_step(self, value: float, step: int) -> int:
         return int(round(value / step) * step)
-
-    # ---------------------------------------------------------------------
-    # Entry permission
-    # ---------------------------------------------------------------------
 
     def can_enter_cycle(self, current_time: datetime, state) -> bool:
         """
@@ -218,10 +209,6 @@ class IronCondorStrategy:
 
         logger.info("Iron Condor entry allowed")
         return True
-
-    # ---------------------------------------------------------------------
-    # Strike selection
-    # ---------------------------------------------------------------------
 
     def calculate_strikes(self, spot: float) -> dict:
         """
@@ -302,10 +289,6 @@ class IronCondorStrategy:
         logger.info("IC strikes calculated for spot=%.2f -> %s", spot, strikes)
         return strikes
 
-    # ---------------------------------------------------------------------
-    # Synthetic premium estimation
-    # ---------------------------------------------------------------------
-
     def estimate_dynamic_entry_credit(self, spot: float) -> float:
         """
         Calibrated synthetic IC credit.
@@ -319,7 +302,7 @@ class IronCondorStrategy:
         if not spot or spot <= 0:
             return 0.0
 
-        strikes N = self.calculate_strikes(spot)
+        strikes = self.calculate_strikes(spot)
         if not strikes:
             return 0.0
 
@@ -412,8 +395,6 @@ class IronCondorStrategy:
         if net_credit <= 0:
             return {}
 
-        # Split credit across legs. Short legs carry most premium; long hedges
-        # retain small value. Net = SC + SP - LC - LP.
         short_call = round(net_credit * 0.58, 2)
         short_put = round(net_credit * 0.58, 2)
         long_call = round(net_credit * 0.08, 2)
@@ -501,7 +482,6 @@ class IronCondorStrategy:
 
         minutes = (current_time - entry_time).total_seconds() / 60.0
 
-        # If no spot context is provided, use theta-only fallback.
         if not entry_spot or not current_spot or not strikes:
             hours_passed = minutes / 60.0
             decay_rate = float(getattr(self.settings, "ic_decay_rate", 0.15))
@@ -520,7 +500,6 @@ class IronCondorStrategy:
 
         session_minutes = 375.0
 
-        # Theta component.
         theta_decay_strength = 0.34
         min_theta_floor_pct = 0.52
         progress = max(0.0, min(minutes / session_minutes, 1.0))
@@ -529,7 +508,6 @@ class IronCondorStrategy:
             entry_premium * (1.0 - theta_decay_strength * progress),
         )
 
-        # Direction risk.
         move_pct = abs(current_spot - entry_spot) / max(entry_spot, 1.0)
         direction_noise_floor = 0.0008
         if move_pct <= direction_noise_floor:
@@ -538,7 +516,6 @@ class IronCondorStrategy:
             adjusted_move = move_pct - direction_noise_floor
             direction = entry_premium * ((adjusted_move * 6.5) ** 1.35)
 
-        # Gamma near short strikes.
         nearest_pct = min(
             abs(short_call - current_spot),
             abs(current_spot - short_put),
@@ -558,7 +535,6 @@ class IronCondorStrategy:
             )
             gamma = entry_premium * 0.55 * (proximity ** 2)
 
-        # IV/range expansion.
         if day_high and day_low and day_high > 0 and day_low > 0:
             range_pct = abs(day_high - day_low) / max(entry_spot, 1.0)
         else:
@@ -570,29 +546,22 @@ class IronCondorStrategy:
         iv_pct = max(0.0, min(iv_pct, 0.45))
         iv = entry_premium * iv_pct
 
-        # Breach penalty.
         breach = 0.0
         if current_spot >= short_call:
             breach = entry_premium * 1.45 + (current_spot - short_call) * 0.45
         elif current_spot <= short_put:
             breach = entry_premium * 1.45 + (short_put - current_spot) * 0.45
 
-        # Trend penalty.
         trend = 0.0
         trend_threshold_pct = 0.0045
         if move_pct > trend_threshold_pct:
             excess = move_pct - trend_threshold_pct
             trend = entry_premium * 0.28 * (1.0 + excess * 80.0)
 
-        # Spread/slippage.
         friction = entry_premium * (0.020 + 0.012)
 
         current = theta + direction + gamma + iv + breach + trend + friction
         return round(max(0.1, current), 2)
-
-    # ---------------------------------------------------------------------
-    # Exit logic
-    # ---------------------------------------------------------------------
 
     def get_exit_reason(
         self,
@@ -650,16 +619,11 @@ class IronCondorStrategy:
             )
             return "STOP_LOSS"
 
-        # Time/EOD exit from config.
         if current_t >= self.exit_time:
             logger.info("EOD exit current_time=%s exit_time=%s", current_t, self.exit_time)
             return "EOD"
 
         return None
-
-    # ---------------------------------------------------------------------
-    # P&L / risk
-    # ---------------------------------------------------------------------
 
     def compute_pnl(
         self,
@@ -685,10 +649,7 @@ class IronCondorStrategy:
         stt_rate = float(getattr(self.settings, "ic_stt_rate", 0.0015))
         platform_charges = float(getattr(self.settings, "ic_platform_charges", 100.0))
 
-        # For short premium strategy, STT approximation on sell premium.
         stt = entry_premium * qty * stt_rate
-
-        # Additional simple friction approximation.
         exchange_txn = (entry_premium + exit_premium) * qty * 0.00053
         sebi = (entry_premium + exit_premium) * qty * 0.000001
         gst = (platform_charges + exchange_txn) * 0.18
@@ -768,7 +729,6 @@ class IronCondorStrategy:
         }
 
 
-# Backward compatibility properties.
 IronCondorStrategy.days_to_expiry = property(
     lambda self: getattr(self.settings, "ic_days_to_expiry", 30)
 )
