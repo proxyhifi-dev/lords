@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Lords Bot — Iron Condor</title>
-  <link rel="stylesheet" href="/static/styles.css"/>
+  <link rel="stylesheet" href="/static/styles.css?v=6"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@300;400;600;700;800&display=swap" rel="stylesheet"/>
 </head>
@@ -12,7 +12,6 @@
 
 <div id="alert-banner" class="alert-banner hidden"></div>
 
-<!-- ── HEADER ─────────────────────────────────────────── -->
 <header class="header">
   <div class="header-left">
     <div class="logo-block">
@@ -40,10 +39,7 @@
   </div>
 </header>
 
-<!-- ── MAIN GRID ──────────────────────────────────────── -->
 <main class="grid">
-
-  <!-- KPI: Daily P&L -->
   <section class="card kpi-card" id="card-daily-pnl">
     <div class="kpi-label">DAILY P&L</div>
     <div class="kpi-value" id="daily-pnl">₹0</div>
@@ -51,28 +47,24 @@
     <div class="kpi-bar-track"><div id="pnl-bar" class="kpi-bar"></div></div>
   </section>
 
-  <!-- KPI: Live P&L -->
   <section class="card kpi-card" id="card-live-pnl">
     <div class="kpi-label">LIVE P&L</div>
     <div class="kpi-value" id="live-pnl">₹0</div>
     <div class="kpi-sub" id="live-symbol">no open position</div>
   </section>
 
-  <!-- KPI: IC Cycle Status -->
   <section class="card kpi-card">
     <div class="kpi-label">CYCLE STATUS</div>
     <div class="kpi-value" id="cycle-status">READY</div>
     <div class="kpi-sub" id="cycle-month">month not traded</div>
   </section>
 
-  <!-- KPI: Signal / State -->
   <section class="card kpi-card">
     <div class="kpi-label">SIGNAL</div>
     <div class="kpi-value signal-value" id="signal-display">NONE</div>
     <div class="kpi-sub" id="trading-status">waiting</div>
   </section>
 
-  <!-- Iron Condor Position Panel -->
   <section class="card card--ic-position">
     <div class="panel-header">
       <span class="panel-title">IRON CONDOR POSITION</span>
@@ -86,7 +78,6 @@
     </div>
   </section>
 
-  <!-- IC Payoff Diagram -->
   <section class="card card--payoff">
     <div class="panel-header">
       <span class="panel-title">PAYOFF DIAGRAM</span>
@@ -97,7 +88,6 @@
     </div>
   </section>
 
-  <!-- Strategy Analytics -->
   <section class="card card--analytics">
     <div class="panel-header">
       <span class="panel-title">STRATEGY ANALYTICS</span>
@@ -108,19 +98,18 @@
     </div>
   </section>
 
-  <!-- Controls -->
   <section class="card card--controls">
     <div class="panel-header"><span class="panel-title">CONTROLS</span></div>
     <div class="controls-body">
       <div class="control-row">
         <span class="ctrl-label">BOT</span>
         <button id="btn-start" class="btn btn--green" onclick="startBot()">▶ START</button>
-        <button id="btn-stop"  class="btn btn--red"   onclick="stopBot()">■ STOP</button>
+        <button id="btn-stop" class="btn btn--red" onclick="stopBot()">■ STOP</button>
       </div>
       <div class="control-row">
         <span class="ctrl-label">MODE</span>
         <button id="btn-paper" class="btn btn--active" onclick="setMode('PAPER')">PAPER</button>
-        <button id="btn-live"  class="btn"             onclick="setMode('LIVE')">LIVE</button>
+        <button id="btn-live" class="btn" onclick="setMode('LIVE')">LIVE</button>
       </div>
       <div class="control-row">
         <span class="ctrl-label">RISK</span>
@@ -134,7 +123,6 @@
     </div>
   </section>
 
-  <!-- Trade History -->
   <section class="card card--log">
     <div class="panel-header">
       <span class="panel-title">TRADE HISTORY</span>
@@ -144,18 +132,26 @@
       <table class="log-table">
         <thead>
           <tr>
-            <th>DATE</th><th>STRATEGY</th><th>STRIKES</th>
-            <th>ENTRY ₹</th><th>EXIT ₹</th><th>REASON</th>
-            <th>CHARGES</th><th>NET P&L</th>
+            <th>DATE</th>
+            <th>STRATEGY</th>
+            <th>SYMBOL</th>
+            <th>EXPIRY</th>
+            <th>STRIKES</th>
+            <th>QTY</th>
+            <th>ENTRY ₹</th>
+            <th>EXIT ₹</th>
+            <th>GROSS</th>
+            <th>CHARGES</th>
+            <th>NET P&L</th>
+            <th>REASON</th>
           </tr>
         </thead>
         <tbody id="log-body">
-          <tr><td colspan="8" class="log-empty">No trades yet</td></tr>
+          <tr><td colspan="12" class="log-empty">No trades yet</td></tr>
         </tbody>
       </table>
     </div>
   </section>
-
 </main>
 
 <footer class="footer">
@@ -163,7 +159,6 @@
   <span id="footer-mode">MODE: PAPER</span>
   <span>⚠ Options trading carries substantial risk of loss</span>
 </footer>
-
-<script src="/static/dashboard.js"></script>
+<script src="/static/dashboard.js?v=10"></script>
 </body>
 </html>

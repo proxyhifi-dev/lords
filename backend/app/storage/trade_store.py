@@ -1,3 +1,4 @@
+# backend/app/storage/trade_store.py
 from __future__ import annotations
 
 import csv
@@ -111,6 +112,27 @@ class TradeStore:
             return False
 
     @staticmethod
+    def _looks_like_expiry(value: Any) -> bool:
+        text = str(value or "").strip()
+        if not text:
+            return False
+        for fmt in ("%Y-%m-%d", "%d-%b-%y", "%d-%b-%Y", "%d %b %y", "%d %b %Y"):
+            try:
+                datetime.strptime(text, fmt)
+                return True
+            except ValueError:
+                continue
+        return False
+
+    @staticmethod
+    def _looks_like_strike_pair(value: Any) -> bool:
+        text = str(value or "").strip()
+        if "/" not in text:
+            return False
+        left, right = text.split("/", 1)
+        return left.strip().isdigit() and right.strip().isdigit()
+
+    @staticmethod
     def _known_exit_reason(value: Any) -> bool:
         if value is None:
             return False
@@ -129,6 +151,7 @@ class TradeStore:
                 "EXIT",
                 "TRAIL",
                 "FORCED",
+                "LOSS",
             )
         )
 
@@ -183,8 +206,96 @@ class TradeStore:
 
         return round(abs(gross - net), 2)
 
+    def _repair_shifted_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        """
+        Repairs legacy malformed rows like:
+        signal=IRON_CONDOR, symbol=IRON_CONDOR, strike=NIFTY,
+        entry_price=NIFTY 50, entry_ltp=2026-05-05, entry_slippage=24200/23950, ...
+
+        Why:
+        Older files used a shorter header, then newer rows were appended with extra fields,
+        causing column shifts. This fixes the most common IC corruption pattern.
+        """
+        repaired = dict(row)
+
+        signal = self._clean_text(repaired.get("signal")).upper()
+        symbol = self._clean_text(repaired.get("symbol"))
+        strike = self._clean_text(repaired.get("strike"))
+        entry_price = self._clean_text(repaired.get("entry_price"))
+        entry_ltp = self._clean_text(repaired.get("entry_ltp"))
+        entry_slippage = self._clean_text(repaired.get("entry_slippage"))
+        exit_price = self._clean_text(repaired.get("exit_price"))
+        qty = self._clean_text(repaired.get("qty"))
+        t1_hit = self._clean_text(repaired.get("t1_hit"))
+        gross_pnl = self._clean_text(repaired.get("gross_pnl"))
+        pnl = self._clean_text(repaired.get("pnl"))
+        daily_pnl = self._clean_text(repaired.get("daily_pnl"))
+        reason = self._clean_text(repaired.get("reason"))
+        order_id = self._clean_text(repaired.get("order_id"))
+        pricing_source = self._clean_text(repaired.get("pricing_source"))
+        holding_seconds = self._clean_text(repaired.get("holding_seconds"))
+
+        if (
+            signal == "IRON_CONDOR"
+            and symbol.upper() == "IRON_CONDOR"
+            and not self._looks_like_strike_pair(strike)
+            and self._looks_like_expiry(entry_ltp)
+            and self._looks_like_strike_pair(entry_slippage)
+        ):
+            repaired["strategy"] = "IRON_CONDOR"
+            repaired["symbol"] = strike or settings.nifty_symbol
+            repaired["underlying"] = entry_price or repaired["symbol"]
+            repaired["expiry"] = entry_ltp
+            repaired["strike"] = entry_slippage
+            repaired["entry_price"] = exit_price
+            repaired["entry_ltp"] = qty
+            repaired["entry_slippage"] = t1_hit
+            repaired["exit_price"] = repaired.get("t1_exit_price", "")
+            repaired["exit_premium"] = repaired.get("t1_pnl", "")
+            repaired["qty"] = gross_pnl
+            repaired["t1_hit"] = pnl
+            repaired["t1_exit_price"] = ""
+            repaired["t1_pnl"] = ""
+            repaired["gross_pnl"] = repaired.get("brokerage", "")
+            repaired["pnl"] = repaired.get("stt", "")
+            repaired["net_pnl"] = repaired.get("exchange_fee", "")
+            repaired["brokerage"] = repaired.get("gst", "")
+            repaired["stt"] = repaired.get("stamp_duty", "")
+            repaired["exchange_fee"] = repaired.get("total_charges", "")
+            repaired["gst"] = repaired.get("daily_pnl", "")
+            repaired["stamp_duty"] = repaired.get("reason", "")
+            repaired["total_charges"] = repaired.get("order_id", "")
+            repaired["daily_pnl"] = repaired.get("sell_order_id", "")
+            repaired["reason"] = pricing_source
+            repaired["order_id"] = repaired.get("quality_score", "")
+            repaired["sell_order_id"] = repaired.get("regime", "")
+            repaired["pricing_source"] = repaired.get("holding_seconds", "")
+            repaired["quality_score"] = ""
+            repaired["regime"] = ""
+            repaired["holding_seconds"] = ""
+
+        # Secondary cleanup for rows where reason/order_id are swapped.
+        if self._known_exit_reason(order_id) and not self._known_exit_reason(reason):
+            repaired["reason"] = order_id
+            repaired["order_id"] = ""
+
+        # If pricing_source accidentally landed in quality_score.
+        if not repaired.get("pricing_source") and self._clean_text(repaired.get("quality_score")).lower() in {
+            "broker_quote_snapshot",
+            "broker_fill",
+            "model_fallback",
+        }:
+            repaired["pricing_source"] = repaired.get("quality_score", "")
+            repaired["quality_score"] = ""
+
+        # If holding seconds got written into an unnamed trailing field, keep existing valid value only.
+        if holding_seconds and self._is_numeric_text(holding_seconds):
+            repaired["holding_seconds"] = holding_seconds
+
+        return repaired
+
     def _normalize_loaded_row(self, raw_row: dict[str, Any]) -> dict[str, Any]:
-        row = dict(raw_row)
+        row = self._repair_shifted_row(dict(raw_row))
 
         strategy = self._clean_text(row.get("strategy") or row.get("signal"))
         signal = self._clean_text(row.get("signal") or strategy)
@@ -192,13 +303,16 @@ class TradeStore:
         underlying = self._clean_text(row.get("underlying") or symbol or settings.nifty_symbol)
         expiry = self._clean_text(row.get("expiry"))
         strike = self._clean_text(row.get("strike"))
+
         entry_price = self._clean_text(row.get("entry_price"))
         entry_ltp = self._clean_text(row.get("entry_ltp") or entry_price)
         exit_price = self._clean_text(row.get("exit_price") or row.get("exit_premium"))
         qty = self._clean_text(row.get("qty"))
+
         gross_pnl = self._clean_text(row.get("gross_pnl"))
         pnl = self._clean_text(row.get("pnl") or row.get("net_pnl"))
         net_pnl = self._clean_text(row.get("net_pnl") or pnl)
+
         pricing_source = self._clean_text(row.get("pricing_source"))
         order_id = self._clean_text(row.get("order_id"))
         sell_order_id = self._clean_text(row.get("sell_order_id"))
@@ -291,6 +405,7 @@ class TradeStore:
         underlying = self._clean_text(trade.get("underlying") or symbol or settings.nifty_symbol)
         expiry = self._clean_text(trade.get("expiry"))
         strike = self._clean_text(trade.get("strike"))
+
         qty = trade.get("qty", "")
         gross_pnl = trade.get("gross_pnl", "")
         net_pnl = trade.get("net_pnl", trade.get("pnl", ""))
@@ -377,8 +492,8 @@ class TradeStore:
     def append_trade(self, trade: dict[str, Any], daily_pnl: float | None = None) -> None:
         with self._lock:
             row = self._build_row(trade, daily_pnl=daily_pnl)
-
             self._recent.append(row)
+
             if daily_pnl is not None:
                 self._daily_pnl = daily_pnl
 

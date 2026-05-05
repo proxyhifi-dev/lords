@@ -1,3 +1,4 @@
+# backend/main.py
 """
 Lords Bot — FastAPI Entry Point
 Run: uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
@@ -31,9 +32,7 @@ def _safe_number(value: Any) -> Any:
     if isinstance(value, int):
         return value
     if isinstance(value, float):
-        if math.isfinite(value):
-            return value
-        return None
+        return value if math.isfinite(value) else None
     return value
 
 
@@ -83,7 +82,6 @@ def _is_trade_closed(trade: dict[str, Any]) -> bool:
     status = _clean_text(trade.get("status")).upper()
     if status == "CLOSED":
         return True
-
     return any(
         trade.get(key) not in ("", None)
         for key in ("exit_time", "exit_reason", "reason", "exit_price", "exit_premium")
@@ -107,16 +105,13 @@ def _get_dashboard_trade_counts(
     active_trade: dict[str, Any] | None,
 ) -> dict[str, int]:
     closed_trade_count = sum(
-        1
-        for trade in trades
-        if _is_iron_condor_trade(trade) and _is_trade_closed(trade)
+        1 for trade in trades if _is_iron_condor_trade(trade) and _is_trade_closed(trade)
     )
-    open_trade_count = 1 if active_trade and _is_iron_condor_trade(active_trade) else 0
-    display_trade_count = closed_trade_count + open_trade_count
-
+    active_trade_count = 1 if active_trade and _is_iron_condor_trade(active_trade) else 0
+    display_trade_count = closed_trade_count + active_trade_count
     return {
         "closed_trade_count": closed_trade_count,
-        "active_trade_count": open_trade_count,
+        "active_trade_count": active_trade_count,
         "display_trade_count": display_trade_count,
     }
 
@@ -158,9 +153,7 @@ async def _get_live_iron_condor_snapshot(engine, trade: dict[str, Any]) -> dict[
         mark_price = _quote_price_for_leg(side, bid, ask, ltp)
 
         if mark_price <= 0:
-            raise RuntimeError(
-                f"Invalid live quote for {symbol}: bid={bid} ask={ask} ltp={ltp}"
-            )
+            raise RuntimeError(f"Invalid live quote for {symbol}: bid={bid} ask={ask} ltp={ltp}")
 
         if side == "SELL":
             current_premium += mark_price
@@ -203,6 +196,7 @@ async def lifespan(app: FastAPI):
     )
 
     startup_success = await startup_manager.perform_safe_startup()
+
     if not startup_success:
         logger.error("Safe startup failed")
         if getattr(settings, "is_live", False):
@@ -468,6 +462,7 @@ async def emergency_flatten():
 
     flatten_result = await scheduler.flatten_position()
     reconcile_result = await scheduler._reconciler.run_once()
+
     return _safe_json_response(
         {
             "status": "ok",
@@ -486,7 +481,9 @@ async def get_iron_condor_stats():
     engine = scheduler.engine
 
     if not engine or not engine.iron_condor_strategy:
-        return _safe_json_response({"status": "disabled", "message": "Iron Condor strategy not enabled"})
+        return _safe_json_response(
+            {"status": "disabled", "message": "Iron Condor strategy not enabled"}
+        )
 
     state = await scheduler.state.snapshot()
     current_time = datetime.now(ist)
@@ -515,7 +512,7 @@ async def get_iron_condor_stats():
     except Exception as exc:
         logger.warning("Live IC snapshot failed, falling back to model pricing: %s", exc)
         current_premium = engine.iron_condor_strategy.estimate_current_premium(
-            trade["entry_price"],
+            float(trade["entry_price"]),
             entry_time,
             current_time,
         )
@@ -555,12 +552,15 @@ def _days_until_next_entry() -> int:
     if bool(getattr(settings, "ic_monthly_only", False)):
         start_day = int(getattr(settings, "ic_entry_day_start", 1))
         end_day = int(getattr(settings, "ic_entry_day_end", 5))
+
         if start_day <= now.day <= end_day:
             return 0
         if now.day < start_day:
             return start_day - now.day
+
         next_month = (now.replace(day=28) + timedelta(days=4)).replace(day=1)
         return (next_month.replace(day=start_day) - now).days
+
     return 0
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import time as _time
+import time as wall_time
 from collections import deque
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
@@ -19,25 +19,38 @@ from backend.app.utils.logger import get_logger
 settings = get_settings()
 logger = get_logger("market_scheduler")
 
-_MARKET_OPEN = time(9, 15)
-_MARKET_CLOSE = time(15, 30)
-_LOG_INTERVAL = 60
 IST = ZoneInfo("Asia/Kolkata")
+MARKET_OPEN_TIME = time(9, 15)
+MARKET_CLOSE_TIME = time(15, 30)
+DEFAULT_ENTRY_START = time(10, 0)
+DEFAULT_ENTRY_END = time(10, 5)
+CLOSED_LOG_INTERVAL_SECONDS = 60
+SIGNAL_COOLDOWN_SECONDS = 60
+STARTUP_RECONCILE_TIMEOUT_SECONDS = 30
 
 
-def _now_ist() -> datetime:
+def now_ist() -> datetime:
     return datetime.now(IST)
 
 
-def _market_open() -> bool:
-    now = _now_ist()
+def is_market_open() -> bool:
+    now = now_ist()
     if now.weekday() >= 5:
         return False
-    return _MARKET_OPEN <= now.time() <= _MARKET_CLOSE
+    return MARKET_OPEN_TIME <= now.time() <= MARKET_CLOSE_TIME
+
+
+def parse_hhmm(value: object, default: time) -> time:
+    try:
+        text = str(value).strip()
+        hour, minute = map(int, text.split(":")[:2])
+        return time(hour, minute)
+    except Exception:
+        return default
 
 
 class MarketScheduler:
-    def __init__(self):
+    def __init__(self) -> None:
         self.state = state_manager
         self.trade_store = TradeStore()
         self.broker = SamcoClient()
@@ -57,30 +70,58 @@ class MarketScheduler:
 
         self.running = False
         self._tasks: list[asyncio.Task] = []
+        self._startup_task: asyncio.Task | None = None
 
         self._last_signal_time = 0.0
-        self._last_closed_log = 0.0
+        self._last_closed_log_time = 0.0
         self._daily_reset_date = ""
-        self._last_tick_time = _time.time()
-        self._last_good_quote_time = _time.time()
+        self._last_tick_time = wall_time.time()
+        self._last_good_quote_time = wall_time.time()
         self._consecutive_quote_failures = 0
-        self._last_broker_error = 0.0
+        self._last_broker_error_time = 0.0
 
         self._latest_iv: float | None = None
-        self._iv_history: deque = deque(maxlen=20)
+        self._iv_history: deque[float] = deque(maxlen=20)
 
-    def _track_task(self, task: asyncio.Task, name: str) -> asyncio.Task:
+        self._entry_window_start = parse_hhmm(
+            getattr(settings, "ic_entry_window_start", "10:00"),
+            DEFAULT_ENTRY_START,
+        )
+        self._entry_window_end = parse_hhmm(
+            getattr(settings, "ic_entry_window_end", "10:05"),
+            DEFAULT_ENTRY_END,
+        )
+
+    def _track_task(
+        self,
+        task: asyncio.Task,
+        name: str,
+        *,
+        allow_normal_finish: bool = False,
+    ) -> asyncio.Task:
         def _done_callback(done_task: asyncio.Task) -> None:
             try:
                 exc = done_task.exception()
-                if exc:
-                    logger.error("Task crashed: %s err=%s", name, exc, exc_info=True)
-                else:
-                    logger.warning("Task finished unexpectedly: %s", name)
             except asyncio.CancelledError:
                 logger.info("Task cancelled: %s", name)
+                return
             except Exception as callback_exc:
-                logger.error("Task callback failed for %s: %s", name, callback_exc, exc_info=True)
+                logger.error(
+                    "Task callback failed for %s: %s",
+                    name,
+                    callback_exc,
+                    exc_info=True,
+                )
+                return
+
+            if exc is not None:
+                logger.error("Task crashed: %s err=%s", name, exc, exc_info=True)
+                return
+
+            if allow_normal_finish:
+                logger.info("Task completed: %s", name)
+            else:
+                logger.warning("Task finished unexpectedly: %s", name)
 
         task.add_done_callback(_done_callback)
         return task
@@ -99,6 +140,7 @@ class MarketScheduler:
 
         await self.state.load()
         state = await self.state.snapshot()
+
         logger.info(
             "State check: spot_price=%s trading_enabled=%s active_trade=%s "
             "last_ic_month=%s last_trade_date=%s",
@@ -120,18 +162,36 @@ class MarketScheduler:
         self.running = True
         await self.state.update(bot_running=True)
 
-        startup_reconcile = asyncio.create_task(
-            self._reconciler.run_once(),
-            name="reconcile-startup",
+        self._startup_task = self._track_task(
+            asyncio.create_task(
+                self._run_startup_reconciliation(),
+                name="reconcile-startup",
+            ),
+            "reconcile-startup",
+            allow_normal_finish=True,
         )
-        self._track_task(startup_reconcile, "reconcile-startup")
 
         self._tasks = [
-            self._track_task(asyncio.create_task(self._loop(), name="market-loop"), "market-loop"),
-            self._track_task(asyncio.create_task(self.risk.run(), name="risk-manager"), "risk-manager"),
-            self._track_task(asyncio.create_task(self.engine.run(), name="trading-engine"), "trading-engine"),
-            self._track_task(asyncio.create_task(self._daily_watcher(), name="daily-reset"), "daily-reset"),
-            self._track_task(asyncio.create_task(self._reconciler.run_loop(300), name="reconciler"), "reconciler"),
+            self._track_task(
+                asyncio.create_task(self._loop(), name="market-loop"),
+                "market-loop",
+            ),
+            self._track_task(
+                asyncio.create_task(self.risk.run(), name="risk-manager"),
+                "risk-manager",
+            ),
+            self._track_task(
+                asyncio.create_task(self.engine.run(), name="trading-engine"),
+                "trading-engine",
+            ),
+            self._track_task(
+                asyncio.create_task(self._daily_watcher(), name="daily-reset"),
+                "daily-reset",
+            ),
+            self._track_task(
+                asyncio.create_task(self._reconciler.run_loop(300), name="reconciler"),
+                "reconciler",
+            ),
         ]
 
         logger.info("All scheduler tasks started (%d tasks)", len(self._tasks))
@@ -142,31 +202,58 @@ class MarketScheduler:
 
         logger.info("Stopping Lords Bot scheduler")
         self.running = False
+
         await self.event_bus.stop()
 
+        if self._startup_task and not self._startup_task.done():
+            self._startup_task.cancel()
+            try:
+                await self._startup_task
+            except asyncio.CancelledError:
+                pass
+        self._startup_task = None
+
         for task in self._tasks:
-            if not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+            if task.done():
+                continue
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
         self._tasks.clear()
         await self.state.update(bot_running=False)
         logger.info("Scheduler stopped")
 
+    async def _run_startup_reconciliation(self) -> None:
+        try:
+            result = await asyncio.wait_for(
+                self._reconciler.run_once(),
+                timeout=STARTUP_RECONCILE_TIMEOUT_SECONDS,
+            )
+            logger.info("Startup reconciliation completed: %s", result)
+        except asyncio.TimeoutError:
+            logger.warning("Startup reconciliation timed out")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("Startup reconciliation failed: %s", exc, exc_info=True)
+
     async def _daily_watcher(self) -> None:
         logger.info("DAILY WATCHER TASK STARTED")
+
         while self.running:
-            now = _now_ist()
+            now = now_ist()
             today = now.date().isoformat()
 
-            if (
+            should_reset = (
                 now.time() >= time(9, 14)
                 and now.time() < time(9, 15)
                 and self._daily_reset_date != today
-            ):
+            )
+
+            if should_reset:
                 self._daily_reset_date = today
                 logger.info("=== DAILY RESET ===")
 
@@ -184,50 +271,58 @@ class MarketScheduler:
 
     async def _loop(self) -> None:
         logger.info("MARKET LOOP TASK STARTED")
+
         while self.running:
             try:
-                if _market_open():
-                    delay = _time.time() - self._last_tick_time
-                    if delay > 10:
-                        logger.error("Scheduler stalled! delay=%.2fs", delay)
-
-                    data_stale = _time.time() - self._last_good_quote_time
-                    if data_stale > settings.deadman_timeout:
-                        logger.critical(
-                            "Dead-man switch: market data stale for %.1fs",
-                            data_stale,
-                        )
-                        await self._fail_safe_on_data_loss()
+                if is_market_open():
+                    await self._handle_open_market_cycle()
                 else:
-                    self._last_tick_time = _time.time()
-                    self._last_good_quote_time = _time.time()
-                    self._consecutive_quote_failures = 0
-
-                if not _market_open():
-                    now_ts = _time.time()
-                    if now_ts - self._last_closed_log >= _LOG_INTERVAL:
-                        now = _now_ist()
-                        reason = "weekend" if now.weekday() >= 5 else "outside market hours"
-                        logger.info("Market closed (%s) — polling paused", reason)
-                        self._last_closed_log = now_ts
-                else:
-                    await self._tick()
-
+                    self._handle_closed_market_cycle()
             except Exception as exc:
                 logger.error("Market loop error: %s", exc, exc_info=True)
 
             await asyncio.sleep(settings.poll_seconds)
 
+    async def _handle_open_market_cycle(self) -> None:
+        delay = wall_time.time() - self._last_tick_time
+        if delay > 10:
+            logger.error("Scheduler stalled! delay=%.2fs", delay)
+
+        data_stale = wall_time.time() - self._last_good_quote_time
+        if data_stale > settings.deadman_timeout:
+            logger.critical(
+                "Dead-man switch: market data stale for %.1fs",
+                data_stale,
+            )
+            await self._fail_safe_on_data_loss()
+            return
+
+        await self._tick()
+
+    def _handle_closed_market_cycle(self) -> None:
+        now_ts = wall_time.time()
+        self._last_tick_time = now_ts
+        self._last_good_quote_time = now_ts
+        self._consecutive_quote_failures = 0
+
+        if now_ts - self._last_closed_log_time < CLOSED_LOG_INTERVAL_SECONDS:
+            return
+
+        now = now_ist()
+        reason = "weekend" if now.weekday() >= 5 else "outside market hours"
+        logger.info("Market closed (%s) — polling paused", reason)
+        self._last_closed_log_time = now_ts
+
     async def _tick(self) -> None:
         logger.info("TICK FUNCTION ENTERED")
-        self._last_tick_time = _time.time()
+        self._last_tick_time = wall_time.time()
 
         try:
             index_quote = await asyncio.wait_for(
                 self.broker.get_index_quote(settings.nifty_symbol),
                 timeout=3,
             )
-            self._last_good_quote_time = _time.time()
+            self._last_good_quote_time = wall_time.time()
             self._consecutive_quote_failures = 0
         except asyncio.TimeoutError:
             logger.warning("Broker timeout")
@@ -235,10 +330,10 @@ class MarketScheduler:
             return
         except Exception as exc:
             self._consecutive_quote_failures += 1
-            now_ts = _time.time()
-            if now_ts - self._last_broker_error >= _LOG_INTERVAL:
+            now_ts = wall_time.time()
+            if now_ts - self._last_broker_error_time >= CLOSED_LOG_INTERVAL_SECONDS:
                 logger.warning("Broker quote unavailable: %s", exc, exc_info=True)
-                self._last_broker_error = now_ts
+                self._last_broker_error_time = now_ts
             return
 
         spot = SamcoClient.parse_spot(index_quote)
@@ -270,7 +365,7 @@ class MarketScheduler:
         )
 
         state = await self.state.snapshot()
-        now = _now_ist()
+        now = now_ist()
 
         if not self._iron_condor_can_enter(now, spot, state):
             return
@@ -284,8 +379,8 @@ class MarketScheduler:
 
         await self.state.update(signal="IRON_CONDOR", signal_meta=payload)
         await self.event_bus.publish("SIGNAL", payload)
-        self._last_signal_time = now.timestamp()
 
+        self._last_signal_time = now.timestamp()
         logger.info("IRON_CONDOR entry signal emitted spot=%.2f", spot)
 
     def _iron_condor_can_enter(self, now: datetime, spot: float, state) -> bool:
@@ -301,6 +396,34 @@ class MarketScheduler:
             logger.info("IC gate blocked: trading_enabled=False")
             return False
 
+        if not self._passes_cycle_limit(now, state):
+            return False
+
+        if not (self._entry_window_start <= now.time() < self._entry_window_end):
+            logger.info(
+                "IC gate blocked: outside time window %s-%s now=%s",
+                self._entry_window_start.strftime("%H:%M"),
+                self._entry_window_end.strftime("%H:%M"),
+                now.strftime("%H:%M:%S"),
+            )
+            return False
+
+        if self._last_signal_time and now.timestamp() - self._last_signal_time < SIGNAL_COOLDOWN_SECONDS:
+            logger.info(
+                "IC gate blocked: cooldown active last_signal_age=%.0fs",
+                now.timestamp() - self._last_signal_time,
+            )
+            return False
+
+        logger.info(
+            "IC gate passed: monthly_only=%s time=%s spot=%.2f",
+            bool(getattr(settings, "ic_monthly_only", False)),
+            now.strftime("%H:%M:%S"),
+            spot,
+        )
+        return True
+
+    def _passes_cycle_limit(self, now: datetime, state) -> bool:
         monthly_only = bool(getattr(settings, "ic_monthly_only", False))
 
         if monthly_only:
@@ -319,48 +442,19 @@ class MarketScheduler:
             if getattr(state, "last_iron_condor_month", None) == now.month:
                 logger.info("IC gate blocked: already traded this month month=%d", now.month)
                 return False
-        else:
-            today = now.date().isoformat()
-            for value in (
-                getattr(state, "last_trade_date", None),
-                getattr(state, "last_ic_trade_date", None),
-                getattr(state, "iron_condor_trade_date", None),
-            ):
-                if value and str(value)[:10] == today:
-                    logger.info("IC gate blocked: already traded today value=%s", value)
-                    return False
 
-        try:
-            sh, sm = map(int, str(settings.ic_entry_window_start).split(":"))
-            eh, em = map(int, str(settings.ic_entry_window_end).split(":"))
-        except Exception:
-            sh, sm, eh, em = 10, 0, 10, 5
-            logger.warning("Failed to parse IC entry window — using defaults 10:00-10:05")
+            return True
 
-        if not (time(sh, sm) <= now.time() < time(eh, em)):
-            logger.info(
-                "IC gate blocked: outside time window %02d:%02d-%02d:%02d now=%s",
-                sh,
-                sm,
-                eh,
-                em,
-                now.strftime("%H:%M:%S"),
-            )
-            return False
+        today = now.date().isoformat()
+        for value in (
+            getattr(state, "last_trade_date", None),
+            getattr(state, "last_ic_trade_date", None),
+            getattr(state, "iron_condor_trade_date", None),
+        ):
+            if value and str(value)[:10] == today:
+                logger.info("IC gate blocked: already traded today value=%s", value)
+                return False
 
-        if self._last_signal_time and now.timestamp() - self._last_signal_time < 60:
-            logger.info(
-                "IC gate blocked: cooldown active last_signal_age=%.0fs",
-                now.timestamp() - self._last_signal_time,
-            )
-            return False
-
-        logger.info(
-            "IC gate passed: monthly_only=%s time=%s spot=%.2f",
-            monthly_only,
-            now.strftime("%H:%M:%S"),
-            spot,
-        )
         return True
 
     def _extract_iv(self, quote: dict) -> float | None:
@@ -369,20 +463,24 @@ class MarketScheduler:
 
         for key in ("impliedVolatility", "iv", "implied_volatility", "volatility"):
             raw = quote.get(key)
-            if raw is not None:
-                try:
-                    iv = float(raw)
-                    if iv > 0:
-                        return iv
-                except (TypeError, ValueError):
-                    continue
+            if raw is None:
+                continue
+            try:
+                iv = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if iv > 0:
+                return iv
+
         return None
 
     async def _fail_safe_on_data_loss(self) -> None:
         state = await self.state.snapshot()
-        if state.trading_enabled:
-            await self.state.update(trading_enabled=False)
-            logger.critical("Trading disabled due to stale quote stream")
+        if not state.trading_enabled:
+            return
+
+        await self.state.update(trading_enabled=False)
+        logger.critical("Trading disabled due to stale quote stream")
 
     async def flatten_position(self) -> dict:
         state = await self.state.snapshot()
@@ -418,6 +516,7 @@ class MarketScheduler:
 
             await self.state.update(active_trade=None, live_pnl=0.0)
             logger.info("Manual flatten %s qty=%d order=%s", symbol, qty, order_id)
+
             return {
                 "status": "flattened",
                 "symbol": symbol,
