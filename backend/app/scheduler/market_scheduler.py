@@ -133,6 +133,7 @@ class MarketScheduler:
         self._startup_task: asyncio.Task[Any] | None = None
 
         self._last_signal_time = 0.0
+        self._signal_block_until = 0.0
         self._last_closed_log_time = 0.0
         self._daily_reset_date = ""
         self._last_tick_time = wall_time.time()
@@ -154,6 +155,10 @@ class MarketScheduler:
     @property
     def signal_cooldown_seconds(self) -> int:
         return setting_int("signal_cooldown_seconds")
+
+    @property
+    def signal_rejection_cooldown_seconds(self) -> int:
+        return setting_int("signal_rejection_cooldown_seconds")
 
     @property
     def startup_reconcile_timeout_seconds(self) -> int:
@@ -283,6 +288,10 @@ class MarketScheduler:
                 ),
                 "reconciler",
             ),
+            self._track_task(
+                asyncio.create_task(self._rejection_watcher(), name="rejection-watcher"),
+                "rejection-watcher",
+            ),
         ]
 
         logger.info("All scheduler tasks started (%d tasks)", len(self._tasks))
@@ -362,6 +371,7 @@ class MarketScheduler:
                 self.engine.clear_cache()
 
                 self._last_signal_time = 0.0
+                self._signal_block_until = 0.0
                 self._last_manual_flatten_time = 0.0
                 self._latest_iv = None
                 self._iv_history.clear()
@@ -369,6 +379,20 @@ class MarketScheduler:
                 logger.info("=== DAILY RESET COMPLETE ===")
 
             await asyncio.sleep(self.daily_reset_check_interval_seconds)
+
+    async def _rejection_watcher(self) -> None:
+        logger.info("Scheduler rejection watcher started")
+        queue = self.event_bus.subscribe("IC_ENTRY_REJECTED")
+
+        async for event in self.event_bus.iter_events(queue):
+            cooldown = self.signal_rejection_cooldown_seconds
+            self._signal_block_until = wall_time.time() + cooldown
+            payload = event.payload or {}
+            logger.info(
+                "IC entry rejected reason=%s — extending cooldown by %ds",
+                payload.get("reason", "unknown"),
+                cooldown,
+            )
 
     async def _loop(self) -> None:
         logger.info("MARKET LOOP TASK STARTED")
@@ -551,6 +575,14 @@ class MarketScheduler:
                     signal_age,
                 )
                 return False
+
+        if self._signal_block_until and wall_time.time() < self._signal_block_until:
+            remaining = self._signal_block_until - wall_time.time()
+            logger.info(
+                "IC gate blocked: rejection cooldown active for %.0fs more",
+                remaining,
+            )
+            return False
 
         logger.info(
             "IC gate passed: monthly_only=%s time=%s spot=%.2f",
