@@ -6,9 +6,10 @@ import json
 import shutil
 import sqlite3
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 try:
     import redis.asyncio as redis
@@ -20,14 +21,15 @@ from backend.app.utils.logger import get_logger
 
 settings = get_settings()
 logger = get_logger("state_manager")
+IST = ZoneInfo("Asia/Kolkata")
 
 
 def _now_iso() -> str:
-    return datetime.now().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _today_iso() -> str:
-    return datetime.now().date().isoformat()
+    return datetime.now(IST).date().isoformat()
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
