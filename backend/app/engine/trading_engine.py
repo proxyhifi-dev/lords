@@ -36,6 +36,8 @@ _EXIT_VERIFY_DELAY = 1.0
 _QUOTE_DEGRADED_WARN_TICKS = 15
 _QUOTE_DEGRADED_CRITICAL_TICKS = 150
 
+_PARTIAL_FILL_RETRY_DELAY = 1.5
+
 
 def _parse_volume(quote: dict) -> int:
     def _int(value: Any) -> int:
@@ -1486,17 +1488,55 @@ class TradingEngine:
                 logger.warning("BOOK PARTIAL SKIPPED: no active trade in state")
                 return
 
-            symbol = trade["symbol"]
-            t1_qty = trade.get("t1_qty", trade["qty"] // 2)
+            if state.active_trade.get("t1_booked"):
+                logger.info("BOOK PARTIAL SKIPPED: t1 already booked (idempotency guard)")
+                return
+
+            latest_trade = {**state.active_trade, **trade}
+            symbol = latest_trade["symbol"]
+            t1_qty = latest_trade.get("t1_qty", latest_trade["qty"] // 2)
             logger.info("BOOKING PARTIAL: %s qty=%d ltp=%.2f", symbol, t1_qty, ltp)
 
-            sell_id, fill_price = await self._sell_with_retry(symbol, t1_qty, "TARGET_1")
+            sell_id, fill_price, fill_state, filled_qty = await self._sell_with_retry(
+                symbol, t1_qty, "TARGET_1"
+            )
 
-            if not sell_id:
-                logger.critical("T1 SELL FAILED — position may be open! %s qty=%d", symbol, t1_qty)
+            if fill_state == "PARTIAL" and 0 < filled_qty < t1_qty:
+                remaining = t1_qty - filled_qty
+                logger.warning(
+                    "T1 partial fill %d/%d — retrying remainder %d after %.1fs",
+                    filled_qty, t1_qty, remaining, _PARTIAL_FILL_RETRY_DELAY,
+                )
+                await asyncio.sleep(_PARTIAL_FILL_RETRY_DELAY)
+                sid2, fp2, fs2, fq2 = await self._sell_with_retry(symbol, remaining, "TARGET_1_RETRY")
+                if sid2 and fs2 == "FILLED":
+                    filled_qty += fq2
+                    if fp2 is not None:
+                        fill_price = fp2
+                    fill_state = "FILLED"
+                else:
+                    logger.critical(
+                        "T1 partial fill UNRECOVERED filled=%d/%d retry_state=%s",
+                        filled_qty, t1_qty, fs2,
+                    )
+                    await self.event_bus.publish(
+                        "T1_PARTIAL_FILL_UNRECOVERED",
+                        {"symbol": symbol, "filled": filled_qty, "requested": t1_qty},
+                    )
+                    await self._handle_fatal_exception(
+                        "T1_PARTIAL_FILL_UNRECOVERED",
+                        RuntimeError(f"T1 partial fill {filled_qty}/{t1_qty}"),
+                    )
+                    return
+
+            if not sell_id or fill_state not in {"FILLED"}:
+                logger.critical(
+                    "T1 SELL FAILED — position may be open! %s qty=%d state=%s",
+                    symbol, t1_qty, fill_state,
+                )
                 await self.event_bus.publish(
                     "SELL_FAILED_CRITICAL",
-                    {"symbol": symbol, "qty": t1_qty, "reason": "TARGET_1"},
+                    {"symbol": symbol, "qty": t1_qty, "reason": "TARGET_1", "fill_state": fill_state},
                 )
                 return
 
@@ -1504,16 +1544,20 @@ class TradingEngine:
             bid, _ = self.broker.parse_bid_ask(quote)
             conservative_ltp = bid if bid else ltp
             exit_price = fill_price if fill_price else conservative_ltp
-            t1_pnl = round((exit_price - trade["entry_price"]) * t1_qty, 2)
+            t1_pnl = round((exit_price - latest_trade["entry_price"]) * filled_qty, 2)
 
-            logger.info("T1 PARTIAL FILL: order=%s fill=%.2f pnl=%.2f", sell_id, exit_price, t1_pnl)
+            logger.info(
+                "T1 BOOKED: order=%s fill=%.2f pnl=%.2f qty=%d",
+                sell_id, exit_price, t1_pnl, filled_qty,
+            )
 
-            trade["t1_booked"] = True
-            trade["t1_pnl"] = t1_pnl
-            trade["t1_exit_price"] = exit_price
+            latest_trade["t1_booked"] = True
+            latest_trade["t1_pnl"] = t1_pnl
+            latest_trade["t1_exit_price"] = exit_price
+            latest_trade["t1_filled_qty"] = filled_qty
 
-            await self.state_manager.update(active_trade=trade)
-            await self.event_bus.publish("PARTIAL_BOOKED", {"trade": trade})
+            await self.state_manager.update(active_trade=latest_trade)
+            await self.event_bus.publish("PARTIAL_BOOKED", {"trade": latest_trade})
 
     async def _exit_remaining(self, trade: dict, reason: str, ltp: float):
         if trade.get("status") == "CLOSED":
@@ -1531,13 +1575,46 @@ class TradingEngine:
 
             logger.info("EXITING REMAINING: %s qty=%d reason=%s ltp=%.2f", symbol, t2_qty, reason, ltp)
 
-            sell_id, fill_price = await self._sell_with_retry(symbol, t2_qty, reason)
+            sell_id, fill_price, fill_state, filled_qty = await self._sell_with_retry(
+                symbol, t2_qty, reason
+            )
 
-            if not sell_id:
-                logger.critical("T2 SELL FAILED — position may be open! %s qty=%d reason=%s", symbol, t2_qty, reason)
+            if fill_state == "PARTIAL" and 0 < filled_qty < t2_qty:
+                remaining = t2_qty - filled_qty
+                logger.warning(
+                    "T2 partial fill %d/%d — retrying remainder %d after %.1fs",
+                    filled_qty, t2_qty, remaining, _PARTIAL_FILL_RETRY_DELAY,
+                )
+                await asyncio.sleep(_PARTIAL_FILL_RETRY_DELAY)
+                sid2, fp2, fs2, fq2 = await self._sell_with_retry(symbol, remaining, f"{reason}_RETRY")
+                if sid2 and fs2 == "FILLED":
+                    filled_qty += fq2
+                    if fp2 is not None:
+                        fill_price = fp2
+                    fill_state = "FILLED"
+                else:
+                    logger.critical(
+                        "T2 partial fill UNRECOVERED filled=%d/%d retry_state=%s",
+                        filled_qty, t2_qty, fs2,
+                    )
+                    await self.event_bus.publish(
+                        "T2_PARTIAL_FILL_UNRECOVERED",
+                        {"symbol": symbol, "filled": filled_qty, "requested": t2_qty, "reason": reason},
+                    )
+                    await self._handle_fatal_exception(
+                        f"exit_remaining_partial_unrecovered:{reason}",
+                        RuntimeError(f"T2 partial fill {filled_qty}/{t2_qty}"),
+                    )
+                    return
+
+            if not sell_id or fill_state != "FILLED":
+                logger.critical(
+                    "T2 SELL FAILED — position may be open! %s qty=%d reason=%s state=%s",
+                    symbol, t2_qty, reason, fill_state,
+                )
                 await self.event_bus.publish(
                     "SELL_FAILED_CRITICAL",
-                    {"symbol": symbol, "qty": t2_qty, "reason": reason},
+                    {"symbol": symbol, "qty": t2_qty, "reason": reason, "fill_state": fill_state},
                 )
                 await self._handle_fatal_exception(
                     f"exit_remaining_sell_failed:{reason}",
@@ -1691,32 +1768,62 @@ class TradingEngine:
 
             await self.event_bus.publish("TRADE_CLOSED", {"trade": closed})
 
-    async def _sell_with_retry(self, symbol: str, qty: int, reason: str) -> tuple[str | None, float | None]:
+    async def _sell_with_retry(
+        self, symbol: str, qty: int, reason: str
+    ) -> tuple[str | None, float | None, str, int]:
         if self._is_paper_mode():
             ltp = await self._paper_quote_price(symbol, fallback=0.0)
             sell_id = self._paper_safe_order_id("SELL", symbol)
             logger.info("PAPER MODE: simulated SELL symbol=%s qty=%d reason=%s fill=%.2f", symbol, qty, reason, ltp)
-            return sell_id, ltp
+            return sell_id, ltp, "FILLED", qty
 
         for attempt in range(1, _SELL_MAX_RETRIES + 1):
             try:
-                sell_id, fill_price = await self.broker.place_order_and_wait_fill(
+                sell_id, fill_price, fill_state, filled_qty = await self.broker.place_order_with_fill_info(
                     symbol=symbol,
                     side="SELL",
                     quantity=qty,
                 )
 
-                if sell_id:
+                if sell_id and fill_state == "FILLED":
                     logger.info(
-                        "SELL OK attempt=%d reason=%s order=%s fill=%s",
+                        "SELL OK attempt=%d reason=%s order=%s fill=%s qty=%d",
                         attempt,
                         reason,
                         sell_id,
                         f"{fill_price:.2f}" if fill_price else "N/A",
+                        filled_qty,
                     )
-                    return sell_id, fill_price
+                    return sell_id, fill_price, fill_state, filled_qty
 
-                logger.warning("SELL attempt %d/%d no order_id reason=%s", attempt, _SELL_MAX_RETRIES, reason)
+                if sell_id and fill_state == "PARTIAL":
+                    logger.warning(
+                        "SELL PARTIAL attempt=%d reason=%s order=%s filled=%d/%d",
+                        attempt,
+                        reason,
+                        sell_id,
+                        filled_qty,
+                        qty,
+                    )
+                    return sell_id, fill_price, fill_state, filled_qty
+
+                if sell_id and fill_state in {"REJECTED", "CANCELLED", "CANCELED"}:
+                    logger.error(
+                        "SELL %s attempt=%d reason=%s order=%s — broker rejected, not retrying",
+                        fill_state,
+                        attempt,
+                        reason,
+                        sell_id,
+                    )
+                    return sell_id, None, fill_state, 0
+
+                logger.warning(
+                    "SELL attempt %d/%d unfilled state=%s reason=%s",
+                    attempt,
+                    _SELL_MAX_RETRIES,
+                    fill_state,
+                    reason,
+                )
             except Exception as exc:
                 logger.error("SELL attempt %d/%d exception reason=%s: %s", attempt, _SELL_MAX_RETRIES, reason, exc)
 
@@ -1738,11 +1845,11 @@ class TradingEngine:
                 await asyncio.sleep(2)
                 fill_price = await self.broker.get_actual_fill_price(emergency_id)
                 logger.critical("EMERGENCY SELL placed order=%s fill=%s", emergency_id, fill_price)
-                return emergency_id, fill_price
+                return emergency_id, fill_price, "UNKNOWN", 0
         except Exception as exc:
             logger.critical("EMERGENCY SELL also failed: %s", exc)
 
-        return None, None
+        return None, None, "FAILED", 0
 
     async def emergency_exit_active_trade(self, reason: str = "EMERGENCY") -> bool:
         state = await self.state_manager.snapshot()
@@ -1766,8 +1873,8 @@ class TradingEngine:
             await self.state_manager.update(active_trade=None, live_pnl=0.0)
             return False
 
-        sell_id, _ = await self._sell_with_retry(symbol, qty, reason)
-        if not sell_id:
+        sell_id, _, fill_state, _ = await self._sell_with_retry(symbol, qty, reason)
+        if not sell_id or fill_state != "FILLED":
             return False
 
         closed = await self._ensure_position_closed(symbol, reason, fallback_qty=qty)
