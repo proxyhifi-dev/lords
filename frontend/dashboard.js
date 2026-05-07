@@ -92,6 +92,12 @@ function updateHeader(data) {
 
   document.getElementById('last-update').textContent =
     new Date(data.timestamp || Date.now()).toLocaleTimeString('en-IN', { hour12: false });
+
+  const ivEl = document.getElementById('iv-display');
+  if (ivEl) {
+    const iv = Number(data.current_iv);
+    ivEl.textContent = Number.isFinite(iv) && iv > 0 ? `IV ${(iv * 100).toFixed(1)}%` : 'IV —';
+  }
 }
 
 function updateKPIs(data) {
@@ -800,12 +806,14 @@ function renderHistoryLegCell(leg) {
   const exitPrice = Number(exitPriceRaw || 0);
   const hasExit = exitPrice > 0;
 
+  const entryDisplay = entryPrice > 0 ? `₹${entryPrice.toFixed(2)}` : '—';
+
   return `
     <div>
       <strong>${escapeHtml(side)} ${escapeHtml(String(strike || '—'))} ${escapeHtml(optionType || '—')}</strong>
     </div>
     <div style="font-size:11px;opacity:.75">${escapeHtml(symbol)}</div>
-    <div>ENTRY ₹${entryPrice.toFixed(2)}</div>
+    <div>ENTRY ${entryDisplay}</div>
     <div>${hasExit ? `EXIT ₹${exitPrice.toFixed(2)}` : 'EXIT —'}</div>
   `;
 }
@@ -1056,9 +1064,12 @@ function fmtNum(value) {
 }
 
 function fmtPnl(value) {
-  const number = Number(value || 0);
+  const number = Number(value);
 
-  return `${number >= 0 ? '+' : '-'}₹${Math.abs(number).toLocaleString('en-IN', {
+  if (!Number.isFinite(number)) return '—';
+  if (number === 0) return '₹0';
+
+  return `${number > 0 ? '+' : '-'}₹${Math.abs(number).toLocaleString('en-IN', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })}`;
