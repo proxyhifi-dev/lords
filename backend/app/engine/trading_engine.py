@@ -641,7 +641,13 @@ class TradingEngine:
             return
 
         current_time = datetime.now(IST)
-        logger.info("IC entry check started spot=%.2f time=%s", spot, current_time.isoformat())
+        live_iv = getattr(state, "current_iv", None)
+        logger.info(
+            "IC entry check started spot=%.2f iv=%s time=%s",
+            spot,
+            f"{live_iv:.4f}" if live_iv else "N/A",
+            current_time.isoformat(),
+        )
 
         allowed = self.iron_condor_strategy.can_enter_cycle(current_time, state)
         logger.info("IC can_enter_cycle=%s", allowed)
@@ -649,12 +655,51 @@ class TradingEngine:
             logger.warning("IC entry blocked by can_enter_cycle()")
             return
 
-        strikes = self.iron_condor_strategy.calculate_strikes(spot)
-        logger.info("IC strikes=%s", strikes)
+        soft_dd_pct = float(getattr(settings, "ic_drawdown_soft_pct", 0.12) or 0.12)
+        peak_equity = float(getattr(state, "peak_equity", 0.0) or settings.capital)
+        equity_now = float(settings.capital) + float(getattr(state, "daily_pnl", 0.0) or 0.0)
+        drawdown_pct = ((peak_equity - equity_now) / peak_equity) if peak_equity > 0 else 0.0
+        if drawdown_pct >= soft_dd_pct:
+            logger.warning(
+                "IC entry blocked by soft drawdown gate dd=%.2f%% threshold=%.2f%%",
+                drawdown_pct * 100,
+                soft_dd_pct * 100,
+            )
+            await self.event_bus.publish(
+                "IC_ENTRY_REJECTED",
+                {
+                    "reason": "soft_drawdown_gate",
+                    "drawdown_pct": round(drawdown_pct, 4),
+                    "threshold_pct": round(soft_dd_pct, 4),
+                },
+            )
+            return
+
+        strikes = self.iron_condor_strategy.calculate_strikes(spot, live_iv=live_iv)
+        logger.info("IC strikes=%s iv_adaptive=%s", strikes, bool(live_iv))
 
         if not strikes:
             logger.error("Invalid strikes calculated - skipping entry")
             return
+
+        short_distance_used = abs(int(strikes.get("short_call", 0)) - int(spot))
+        em_safe, em_diag = self.iron_condor_strategy.is_expected_move_safe(
+            spot=spot,
+            short_distance=short_distance_used,
+            live_iv=live_iv,
+        )
+        if not em_safe:
+            logger.warning(
+                "IC entry rejected by expected-move filter diag=%s",
+                em_diag,
+            )
+            await self.event_bus.publish(
+                "IC_ENTRY_REJECTED",
+                {"reason": "expected_move_exceeds_distance", "diagnostics": em_diag},
+            )
+            return
+
+        logger.info("IC expected-move filter passed diag=%s", em_diag)
 
         expiry = OptionSelector.get_expiry_api()
         snapshot_legs, snapshot_premiums, snapshot_net_premium = await self._build_iron_condor_snapshot_legs(
