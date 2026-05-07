@@ -33,6 +33,9 @@ _FILL_CONFIRM_DELAY = 0.75
 _EXIT_VERIFY_ATTEMPTS = 4
 _EXIT_VERIFY_DELAY = 1.0
 
+_QUOTE_DEGRADED_WARN_TICKS = 15
+_QUOTE_DEGRADED_CRITICAL_TICKS = 150
+
 
 def _parse_volume(quote: dict) -> int:
     def _int(value: Any) -> int:
@@ -131,6 +134,11 @@ class TradingEngine:
         self._fatal_lock = asyncio.Lock()
         self._ltp_history: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=20))
         self._ic_quote_cache: dict[str, dict[str, Any]] = {}
+
+        self._ic_fallback_streak = 0
+        self._ic_fallback_alert_level = 0
+        self._directional_bad_quote_streak = 0
+        self._directional_bad_quote_alert_level = 0
 
         self.iron_condor_strategy: IronCondorStrategy | None = None
         if settings.strategy_type == "iron_condor":
@@ -1255,6 +1263,50 @@ class TradingEngine:
 
         await self.event_bus.publish("TRADE_OPENED", {"trade": trade})
 
+    async def _track_quote_degradation(
+        self,
+        *,
+        is_degraded: bool,
+        streak_attr: str,
+        level_attr: str,
+        event_name: str,
+        context: dict[str, Any],
+    ) -> None:
+        if not is_degraded:
+            if getattr(self, level_attr) > 0:
+                streak = getattr(self, streak_attr)
+                logger.info("Quote source recovered: %s (streak=%d)", event_name, streak)
+                await self.event_bus.publish(
+                    f"{event_name}_RECOVERED",
+                    {**context, "streak_at_recovery": streak},
+                )
+            setattr(self, streak_attr, 0)
+            setattr(self, level_attr, 0)
+            return
+
+        streak = getattr(self, streak_attr) + 1
+        setattr(self, streak_attr, streak)
+        level = getattr(self, level_attr)
+
+        if streak >= _QUOTE_DEGRADED_CRITICAL_TICKS and level < 2:
+            logger.critical(
+                "Quote source DEGRADED CRITICAL: %s ticks=%d", event_name, streak
+            )
+            await self.event_bus.publish(
+                f"{event_name}_CRITICAL",
+                {**context, "streak_ticks": streak},
+            )
+            setattr(self, level_attr, 2)
+        elif streak >= _QUOTE_DEGRADED_WARN_TICKS and level < 1:
+            logger.warning(
+                "Quote source degraded: %s ticks=%d", event_name, streak
+            )
+            await self.event_bus.publish(
+                event_name,
+                {**context, "streak_ticks": streak},
+            )
+            setattr(self, level_attr, 1)
+
     async def _monitor_loop(self):
         while True:
             await asyncio.sleep(2)
@@ -1314,6 +1366,18 @@ class TradingEngine:
             )
             return
 
+        await self._track_quote_degradation(
+            is_degraded=(pricing_source != "broker_quote_snapshot"),
+            streak_attr="_ic_fallback_streak",
+            level_attr="_ic_fallback_alert_level",
+            event_name="IC_QUOTE_DEGRADED",
+            context={
+                "pricing_source": pricing_source,
+                "entry_price": float(updated_trade["entry_price"]),
+                "current_premium": float(current_premium),
+            },
+        )
+
         if pricing_source == "broker_quote_snapshot":
             reason = self.iron_condor_strategy.get_exit_reason(
                 entry_time,
@@ -1340,7 +1404,22 @@ class TradingEngine:
             ltp = self.broker.parse_ltp(quote)
 
             if not ltp or ltp <= 0:
+                await self._track_quote_degradation(
+                    is_degraded=True,
+                    streak_attr="_directional_bad_quote_streak",
+                    level_attr="_directional_bad_quote_alert_level",
+                    event_name="DIRECTIONAL_QUOTE_DEGRADED",
+                    context={"symbol": trade.get("symbol")},
+                )
                 return
+
+            await self._track_quote_degradation(
+                is_degraded=False,
+                streak_attr="_directional_bad_quote_streak",
+                level_attr="_directional_bad_quote_alert_level",
+                event_name="DIRECTIONAL_QUOTE_DEGRADED",
+                context={"symbol": trade.get("symbol")},
+            )
 
             entry = trade["entry_price"]
             t1_booked = trade.get("t1_booked", False)
