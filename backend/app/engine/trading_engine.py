@@ -656,6 +656,42 @@ class TradingEngine:
             )
             return
 
+        spread_width = max(
+            int(strikes.get("call_width") or 0),
+            int(strikes.get("put_width") or 0),
+        )
+        viable, viability_reason, viability_diag = self.iron_condor_strategy.is_entry_credit_viable(
+            entry_premium=snapshot_net_premium,
+            qty=settings.order_qty,
+            spread_width=spread_width or None,
+        )
+        if not viable:
+            logger.warning(
+                "IC entry rejected by economics filter reason=%s premium=%.2f qty=%d width=%d diag=%s",
+                viability_reason,
+                snapshot_net_premium,
+                settings.order_qty,
+                spread_width,
+                viability_diag,
+            )
+            await self.event_bus.publish(
+                "IC_ENTRY_REJECTED",
+                {
+                    "reason": viability_reason,
+                    "net_premium": snapshot_net_premium,
+                    "qty": settings.order_qty,
+                    "spread_width": spread_width,
+                    "diagnostics": viability_diag,
+                },
+            )
+            return
+
+        logger.info(
+            "IC economics filter passed reason=%s diag=%s",
+            viability_reason,
+            viability_diag,
+        )
+
         is_valid = await self.risk_manager.validate_iron_condor_position(snapshot_net_premium, state)
         logger.info("IC risk validation passed=%s", is_valid)
 
