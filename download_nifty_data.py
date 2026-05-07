@@ -41,6 +41,10 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 
 from backend.app.broker.samco_client import SamcoClient, get_expiry_api
+from backend.app.core.config_loader import get_settings
+
+
+_SETTINGS = get_settings()
 
 
 INDEX_NAME = "NIFTY 50"
@@ -49,11 +53,18 @@ EXCHANGE_NFO = "NFO"
 
 DAY_START = "09:15:00"
 DAY_END = "15:30:00"
-ENTRY_TIME = "09:20:00"
 
-ROUNDING = 50
-SHORT_DISTANCE = 350
-WING_WIDTH = 300
+
+def _entry_time_default() -> str:
+    raw = str(getattr(_SETTINGS, "ic_entry_window_start", "09:30")).strip()
+    return f"{raw}:00" if len(raw) == 5 else raw
+
+
+ENTRY_TIME = _entry_time_default()
+
+ROUNDING = int(getattr(_SETTINGS, "ic_strike_rounding", 50))
+SHORT_DISTANCE = int(getattr(_SETTINGS, "ic_short_distance", 250))
+WING_WIDTH = int(getattr(_SETTINGS, "ic_wing_width", 100))
 
 RATE_LIMIT_SECONDS = 0.5
 
@@ -684,16 +695,8 @@ async def main() -> None:
     print("=" * 72)
 
     print("\nNext:")
-    print(
-        "python backtest_runner.py "
-        f"--file {spot_csv_path} "
-        "--capital 50000 "
-        "--lot-size 50 "
-        "--mode realistic "
-        "--target-pct 0.30 "
-        "--stop-loss-mult 1.80 "
-        "--short-distance 350"
-    )
+    print(f"python backtest_runner.py --file {spot_csv_path}")
+    print("(strategy params come from .env automatically — override with CLI flags if needed)")
 
 
 if __name__ == "__main__":
