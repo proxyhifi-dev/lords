@@ -748,11 +748,8 @@ class MarketScheduler:
 
             charges = {
                 "brokerage": round(to_float(pnl.get("platform_charges"), 0.0), 2),
-                "brokerage_total": round(to_float(pnl.get("platform_charges"), 0.0), 2),
                 "stt": round(to_float(pnl.get("stt"), 0.0), 2),
-                "stt_sell": round(to_float(pnl.get("stt"), 0.0), 2),
                 "exchange_txn": round(to_float(pnl.get("exchange_txn"), 0.0), 2),
-                "exch_txn_total": round(to_float(pnl.get("exchange_txn"), 0.0), 2),
                 "sebi": round(to_float(pnl.get("sebi"), 0.0), 2),
                 "gst": round(to_float(pnl.get("gst"), 0.0), 2),
                 "stamp_duty": round(to_float(pnl.get("stamp_duty"), 0.0), 2),
