@@ -99,6 +99,7 @@ def _json_dumps(value: Any) -> str:
 @dataclass
 class RuntimeState:
     spot_price: float | None = None
+    current_iv: float | None = None
     signal: str | None = None
     signal_meta: dict[str, Any] | None = None
     active_trade: dict[str, Any] | None = None
@@ -139,6 +140,10 @@ class RuntimeState:
         self.spot_price = None if self.spot_price in ("", None) else _safe_float(self.spot_price, 0.0)
         if self.spot_price is not None and self.spot_price <= 0:
             self.spot_price = None
+
+        self.current_iv = None if self.current_iv in ("", None) else _safe_float(self.current_iv, 0.0)
+        if self.current_iv is not None and self.current_iv <= 0:
+            self.current_iv = None
 
         self.signal = _safe_str(self.signal)
         self.signal_meta = _safe_dict(self.signal_meta)
