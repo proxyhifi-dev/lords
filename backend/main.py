@@ -581,6 +581,7 @@ async def dashboard():
                 "active_trade": state.active_trade,
                 "daily_pnl": round(state.daily_pnl, 2),
                 "live_pnl": round(state.live_pnl, 2),
+                "max_daily_loss": float(getattr(settings, "max_daily_loss", 0.0) or 0.0),
                 "trade_count": state.trade_count,
                 "closed_trade_count": trade_counts["closed_trade_count"],
                 "active_trade_count": trade_counts["active_trade_count"],
