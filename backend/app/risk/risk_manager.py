@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from typing import Any, Dict
+from zoneinfo import ZoneInfo
 
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.config_loader import get_settings
@@ -11,6 +12,7 @@ from backend.app.utils.logger import get_logger, log_event
 
 settings = get_settings()
 logger = get_logger("risk_manager")
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class RiskManager:
@@ -70,7 +72,7 @@ class RiskManager:
             return
 
         if settings.is_live:
-            now = datetime.now().time()
+            now = datetime.now(IST).time()
             h, m = map(int, str(settings.no_entry_after).split(":"))
             cutoff = time(h, m)
             if now > cutoff:
@@ -127,7 +129,7 @@ class RiskManager:
 
         await self.event_bus.publish(
             "RISK_BLOCKED",
-            {"reason": reason, "timestamp": datetime.now().isoformat()},
+            {"reason": reason, "timestamp": datetime.now(timezone.utc).isoformat()},
         )
 
     async def _block(self, reason: str, details: Dict[str, Any] | None = None) -> None:
@@ -138,7 +140,7 @@ class RiskManager:
             {
                 "reason": reason,
                 "details": details,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
