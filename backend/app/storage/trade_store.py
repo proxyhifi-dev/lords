@@ -621,7 +621,6 @@ class TradeStore:
             "holding_seconds": holding_seconds,
             "legs": legs,
             "exit_legs": exit_legs,
-            "current_legs": exit_legs,
             "legs_json": legs_json,
             "exit_legs_json": exit_legs_json,
         }
@@ -798,7 +797,6 @@ class TradeStore:
             "holding_seconds": holding_seconds,
             "legs": legs,
             "exit_legs": exit_legs,
-            "current_legs": exit_legs,
             "legs_json": self._json_dumps(legs),
             "exit_legs_json": self._json_dumps(exit_legs),
         }
