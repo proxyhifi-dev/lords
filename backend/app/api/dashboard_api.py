@@ -7,6 +7,9 @@ from fastapi import APIRouter
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.engine.state_manager import StateManager
 from backend.app.storage.trade_store import TradeStore
+from backend.app.utils.logger import get_logger
+
+logger = get_logger("dashboard_api")
 
 
 def build_dashboard_router(
@@ -108,11 +111,10 @@ def build_dashboard_router(
         if broker:
             try:
                 await broker.cancel_all_open_orders()
-                # Assuming your SamcoClient has this method. If not, it will just pass gracefully.
                 if hasattr(broker, "close_all_positions_market"):
                     await broker.close_all_positions_market()
-            except Exception as e:
-                pass # In production, log this error
+            except Exception:
+                logger.exception("Kill-switch broker flatten failed")
                 
         # ✅ Cleaned up state fetch for the return payload
         state = await state_manager.snapshot()
