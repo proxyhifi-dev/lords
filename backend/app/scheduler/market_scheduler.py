@@ -14,6 +14,7 @@ from backend.app.core.event_bus import EventBus
 from backend.app.engine.reconciliation import ReconciliationEngine
 from backend.app.engine.state_manager import state_manager
 from backend.app.engine.trading_engine import TradingEngine
+from backend.app.notifications.telegram import TelegramNotifier
 from backend.app.risk.risk_manager import RiskManager
 from backend.app.storage.trade_store import TradeStore
 from backend.app.utils.logger import get_logger
@@ -127,6 +128,8 @@ class MarketScheduler:
             state_manager=self.state,
             event_bus=self.event_bus,
         )
+
+        self.notifier = TelegramNotifier(self.event_bus)
 
         self.running = False
         self._tasks: list[asyncio.Task[Any]] = []
@@ -291,6 +294,11 @@ class MarketScheduler:
             self._track_task(
                 asyncio.create_task(self._rejection_watcher(), name="rejection-watcher"),
                 "rejection-watcher",
+            ),
+            self._track_task(
+                asyncio.create_task(self.notifier.run(), name="telegram-notifier"),
+                "telegram-notifier",
+                allow_normal_finish=True,
             ),
         ]
 
