@@ -1838,14 +1838,22 @@ class TradingEngine:
         )
 
         try:
-            response = await self.broker.place_order(symbol=symbol, side="SELL", quantity=qty)
-            emergency_id = response.get("orderNumber") or response.get("orderId")
+            emergency_id, fill_price, fill_state, filled_qty = await self.broker.place_order_with_fill_info(
+                symbol=symbol,
+                side="SELL",
+                quantity=qty,
+            )
 
             if emergency_id:
-                await asyncio.sleep(2)
-                fill_price = await self.broker.get_actual_fill_price(emergency_id)
-                logger.critical("EMERGENCY SELL placed order=%s fill=%s", emergency_id, fill_price)
-                return emergency_id, fill_price, "UNKNOWN", 0
+                logger.critical(
+                    "EMERGENCY SELL placed order=%s state=%s filled=%d/%d fill=%s",
+                    emergency_id,
+                    fill_state,
+                    filled_qty,
+                    qty,
+                    f"{fill_price:.2f}" if fill_price else "N/A",
+                )
+                return emergency_id, fill_price, fill_state, filled_qty
         except Exception as exc:
             logger.critical("EMERGENCY SELL also failed: %s", exc)
 
@@ -2225,8 +2233,38 @@ class TradingEngine:
             await self.event_bus.publish("ORDER_UNCERTAIN", {"reason": reason, "symbol": symbol, "qty": qty})
             return
 
+        forced_fill_state = "UNKNOWN"
+        forced_filled_qty = 0
+        forced_order_id: str | None = None
+
         try:
-            await self.broker.place_order(symbol=symbol, side="SELL", quantity=qty)
+            forced_order_id, fill_price, forced_fill_state, forced_filled_qty = (
+                await self.broker.place_order_with_fill_info(
+                    symbol=symbol,
+                    side="SELL",
+                    quantity=qty,
+                )
+            )
+            if forced_fill_state == "FILLED":
+                logger.critical(
+                    "Forced exit FILLED symbol=%s qty=%d order=%s fill=%s reason=%s",
+                    symbol,
+                    qty,
+                    forced_order_id,
+                    f"{fill_price:.2f}" if fill_price else "N/A",
+                    reason,
+                )
+            else:
+                logger.critical(
+                    "Forced exit UNCONFIRMED symbol=%s qty=%d order=%s state=%s filled=%d/%d reason=%s",
+                    symbol,
+                    qty,
+                    forced_order_id,
+                    forced_fill_state,
+                    forced_filled_qty,
+                    qty,
+                    reason,
+                )
         except Exception as exc:
             logger.critical("Forced exit failed symbol=%s qty=%s err=%s", symbol, qty, exc, exc_info=True)
 
@@ -2235,7 +2273,17 @@ class TradingEngine:
         except Exception as exc:
             logger.warning("cancel_all_open_orders failed: %s", exc)
 
-        await self.event_bus.publish("ORDER_UNCERTAIN", {"reason": reason, "symbol": symbol, "qty": qty})
+        await self.event_bus.publish(
+            "ORDER_UNCERTAIN",
+            {
+                "reason": reason,
+                "symbol": symbol,
+                "qty": qty,
+                "order_id": forced_order_id,
+                "fill_state": forced_fill_state,
+                "filled_qty": forced_filled_qty,
+            },
+        )
 
     def _validate_trade_setup(
         self,
