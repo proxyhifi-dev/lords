@@ -1,9 +1,11 @@
+# backend/app/scheduler/market_scheduler.py
 from __future__ import annotations
 
 import asyncio
 import time as wall_time
 from collections import deque
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from backend.app.broker.samco_client import SamcoClient
@@ -18,35 +20,90 @@ from backend.app.utils.logger import get_logger
 
 settings = get_settings()
 logger = get_logger("market_scheduler")
-
 IST = ZoneInfo("Asia/Kolkata")
-MARKET_OPEN_TIME = time(9, 15)
-MARKET_CLOSE_TIME = time(15, 30)
-DEFAULT_ENTRY_START = time(10, 0)
-DEFAULT_ENTRY_END = time(10, 5)
-CLOSED_LOG_INTERVAL_SECONDS = 60
-SIGNAL_COOLDOWN_SECONDS = 60
-STARTUP_RECONCILE_TIMEOUT_SECONDS = 30
+UTC = ZoneInfo("UTC")
 
 
 def now_ist() -> datetime:
     return datetime.now(IST)
 
 
-def is_market_open() -> bool:
-    now = now_ist()
-    if now.weekday() >= 5:
-        return False
-    return MARKET_OPEN_TIME <= now.time() <= MARKET_CLOSE_TIME
+def parse_hhmm(value: Any, setting_name: str) -> time:
+    text = str(value or "").strip()
 
-
-def parse_hhmm(value: object, default: time) -> time:
     try:
-        text = str(value).strip()
         hour, minute = map(int, text.split(":")[:2])
         return time(hour, minute)
-    except Exception:
+    except Exception as exc:
+        raise RuntimeError(f"Invalid time setting {setting_name}={text!r}") from exc
+
+
+def required_setting(name: str) -> Any:
+    if not hasattr(settings, name):
+        raise RuntimeError(f"Missing setting in config_loader.py: {name}")
+
+    value = getattr(settings, name)
+
+    if value is None or str(value).strip() == "":
+        raise RuntimeError(f"Empty setting in .env/config_loader.py: {name}")
+
+    return value
+
+
+def setting_int(name: str) -> int:
+    value = required_setting(name)
+
+    try:
+        return int(float(str(value).strip()))
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"Invalid integer setting {name}={value!r}") from exc
+
+
+def setting_float(name: str) -> float:
+    value = required_setting(name)
+
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"Invalid float setting {name}={value!r}") from exc
+
+
+def setting_time(name: str) -> time:
+    return parse_hhmm(required_setting(name), name)
+
+
+def is_market_open() -> bool:
+    current_time = now_ist()
+
+    if current_time.weekday() >= 5:
+        return False
+
+    market_open = setting_time("market_open_time")
+    market_close = setting_time("market_close_time")
+
+    return market_open <= current_time.time() <= market_close
+
+
+def to_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(str(value).replace(",", "").strip())
+    except (TypeError, ValueError):
         return default
+
+
+def to_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(float(str(value).replace(",", "").strip()))
+    except (TypeError, ValueError):
+        return default
+
+
+def is_iron_condor_trade(trade: dict[str, Any] | None) -> bool:
+    if not trade:
+        return False
+
+    strategy = str(trade.get("strategy") or trade.get("signal") or "").strip().upper()
+    return strategy == "IRON_CONDOR"
 
 
 class MarketScheduler:
@@ -55,13 +112,16 @@ class MarketScheduler:
         self.trade_store = TradeStore()
         self.broker = SamcoClient()
         self.event_bus = EventBus()
+
         self.risk = RiskManager(self.event_bus, self.state, self.broker)
+
         self.engine = TradingEngine(
             event_bus=self.event_bus,
             state_manager=self.state,
             trade_store=self.trade_store,
             broker=self.broker,
         )
+
         self._reconciler = ReconciliationEngine(
             broker=self.broker,
             state_manager=self.state,
@@ -69,8 +129,8 @@ class MarketScheduler:
         )
 
         self.running = False
-        self._tasks: list[asyncio.Task] = []
-        self._startup_task: asyncio.Task | None = None
+        self._tasks: list[asyncio.Task[Any]] = []
+        self._startup_task: asyncio.Task[Any] | None = None
 
         self._last_signal_time = 0.0
         self._last_closed_log_time = 0.0
@@ -79,27 +139,54 @@ class MarketScheduler:
         self._last_good_quote_time = wall_time.time()
         self._consecutive_quote_failures = 0
         self._last_broker_error_time = 0.0
+        self._last_manual_flatten_time = 0.0
 
         self._latest_iv: float | None = None
         self._iv_history: deque[float] = deque(maxlen=20)
 
-        self._entry_window_start = parse_hhmm(
-            getattr(settings, "ic_entry_window_start", "10:00"),
-            DEFAULT_ENTRY_START,
-        )
-        self._entry_window_end = parse_hhmm(
-            getattr(settings, "ic_entry_window_end", "10:05"),
-            DEFAULT_ENTRY_END,
-        )
+        self._entry_window_start = setting_time("ic_entry_window_start")
+        self._entry_window_end = setting_time("ic_entry_window_end")
+
+    @property
+    def closed_log_interval_seconds(self) -> int:
+        return setting_int("closed_log_interval_seconds")
+
+    @property
+    def signal_cooldown_seconds(self) -> int:
+        return setting_int("signal_cooldown_seconds")
+
+    @property
+    def startup_reconcile_timeout_seconds(self) -> int:
+        return setting_int("startup_reconcile_timeout_seconds")
+
+    @property
+    def broker_quote_timeout_seconds(self) -> int:
+        return setting_int("broker_quote_timeout_seconds")
+
+    @property
+    def daily_reset_check_interval_seconds(self) -> int:
+        return setting_int("daily_reset_check_interval_seconds")
+
+    @property
+    def manual_flatten_cooldown_seconds(self) -> int:
+        return setting_int("manual_flatten_cooldown_seconds")
+
+    @property
+    def scheduler_stall_warn_seconds(self) -> float:
+        return setting_float("scheduler_stall_warn_seconds")
+
+    @property
+    def reconciliation_interval_seconds(self) -> int:
+        return setting_int("reconciliation_interval_seconds")
 
     def _track_task(
         self,
-        task: asyncio.Task,
+        task: asyncio.Task[Any],
         name: str,
         *,
         allow_normal_finish: bool = False,
-    ) -> asyncio.Task:
-        def _done_callback(done_task: asyncio.Task) -> None:
+    ) -> asyncio.Task[Any]:
+        def done_callback(done_task: asyncio.Task[Any]) -> None:
             try:
                 exc = done_task.exception()
             except asyncio.CancelledError:
@@ -123,7 +210,7 @@ class MarketScheduler:
             else:
                 logger.warning("Task finished unexpectedly: %s", name)
 
-        task.add_done_callback(_done_callback)
+        task.add_done_callback(done_callback)
         return task
 
     async def start(self) -> None:
@@ -143,12 +230,13 @@ class MarketScheduler:
 
         logger.info(
             "State check: spot_price=%s trading_enabled=%s active_trade=%s "
-            "last_ic_month=%s last_trade_date=%s",
+            "last_ic_month=%s last_trade_date=%s trade_count=%s",
             state.spot_price,
             state.trading_enabled,
             bool(state.active_trade),
             getattr(state, "last_iron_condor_month", None),
             getattr(state, "last_trade_date", None),
+            getattr(state, "trade_count", None),
         )
 
         await self.event_bus.start()
@@ -189,7 +277,10 @@ class MarketScheduler:
                 "daily-reset",
             ),
             self._track_task(
-                asyncio.create_task(self._reconciler.run_loop(300), name="reconciler"),
+                asyncio.create_task(
+                    self._reconciler.run_loop(self.reconciliation_interval_seconds),
+                    name="reconciler",
+                ),
                 "reconciler",
             ),
         ]
@@ -207,22 +298,27 @@ class MarketScheduler:
 
         if self._startup_task and not self._startup_task.done():
             self._startup_task.cancel()
+
             try:
                 await self._startup_task
             except asyncio.CancelledError:
                 pass
+
         self._startup_task = None
 
         for task in self._tasks:
             if task.done():
                 continue
+
             task.cancel()
+
             try:
                 await task
             except asyncio.CancelledError:
                 pass
 
         self._tasks.clear()
+
         await self.state.update(bot_running=False)
         logger.info("Scheduler stopped")
 
@@ -230,7 +326,7 @@ class MarketScheduler:
         try:
             result = await asyncio.wait_for(
                 self._reconciler.run_once(),
-                timeout=STARTUP_RECONCILE_TIMEOUT_SECONDS,
+                timeout=self.startup_reconcile_timeout_seconds,
             )
             logger.info("Startup reconciliation completed: %s", result)
         except asyncio.TimeoutError:
@@ -244,17 +340,21 @@ class MarketScheduler:
         logger.info("DAILY WATCHER TASK STARTED")
 
         while self.running:
-            now = now_ist()
-            today = now.date().isoformat()
+            current_time = now_ist()
+            today = current_time.date().isoformat()
+
+            market_open = setting_time("market_open_time")
+            market_open_dt = datetime.combine(current_time.date(), market_open, tzinfo=IST)
+            reset_start_dt = market_open_dt - timedelta(minutes=1)
 
             should_reset = (
-                now.time() >= time(9, 14)
-                and now.time() < time(9, 15)
+                reset_start_dt.time() <= current_time.time() < market_open
                 and self._daily_reset_date != today
             )
 
             if should_reset:
                 self._daily_reset_date = today
+
                 logger.info("=== DAILY RESET ===")
 
                 await self.state.daily_reset()
@@ -262,12 +362,13 @@ class MarketScheduler:
                 self.engine.clear_cache()
 
                 self._last_signal_time = 0.0
+                self._last_manual_flatten_time = 0.0
                 self._latest_iv = None
                 self._iv_history.clear()
 
                 logger.info("=== DAILY RESET COMPLETE ===")
 
-            await asyncio.sleep(10)
+            await asyncio.sleep(self.daily_reset_check_interval_seconds)
 
     async def _loop(self) -> None:
         logger.info("MARKET LOOP TASK STARTED")
@@ -285,10 +386,12 @@ class MarketScheduler:
 
     async def _handle_open_market_cycle(self) -> None:
         delay = wall_time.time() - self._last_tick_time
-        if delay > 10:
+
+        if delay > self.scheduler_stall_warn_seconds:
             logger.error("Scheduler stalled! delay=%.2fs", delay)
 
         data_stale = wall_time.time() - self._last_good_quote_time
+
         if data_stale > settings.deadman_timeout:
             logger.critical(
                 "Dead-man switch: market data stale for %.1fs",
@@ -300,27 +403,30 @@ class MarketScheduler:
         await self._tick()
 
     def _handle_closed_market_cycle(self) -> None:
-        now_ts = wall_time.time()
-        self._last_tick_time = now_ts
-        self._last_good_quote_time = now_ts
+        current_ts = wall_time.time()
+
+        self._last_tick_time = current_ts
+        self._last_good_quote_time = current_ts
         self._consecutive_quote_failures = 0
 
-        if now_ts - self._last_closed_log_time < CLOSED_LOG_INTERVAL_SECONDS:
+        if current_ts - self._last_closed_log_time < self.closed_log_interval_seconds:
             return
 
-        now = now_ist()
-        reason = "weekend" if now.weekday() >= 5 else "outside market hours"
+        current_time = now_ist()
+        reason = "weekend" if current_time.weekday() >= 5 else "outside market hours"
+
         logger.info("Market closed (%s) — polling paused", reason)
-        self._last_closed_log_time = now_ts
+        self._last_closed_log_time = current_ts
 
     async def _tick(self) -> None:
         logger.info("TICK FUNCTION ENTERED")
+
         self._last_tick_time = wall_time.time()
 
         try:
             index_quote = await asyncio.wait_for(
                 self.broker.get_index_quote(settings.nifty_symbol),
-                timeout=3,
+                timeout=self.broker_quote_timeout_seconds,
             )
             self._last_good_quote_time = wall_time.time()
             self._consecutive_quote_failures = 0
@@ -330,13 +436,16 @@ class MarketScheduler:
             return
         except Exception as exc:
             self._consecutive_quote_failures += 1
-            now_ts = wall_time.time()
-            if now_ts - self._last_broker_error_time >= CLOSED_LOG_INTERVAL_SECONDS:
+            current_ts = wall_time.time()
+
+            if current_ts - self._last_broker_error_time >= self.closed_log_interval_seconds:
                 logger.warning("Broker quote unavailable: %s", exc, exc_info=True)
-                self._last_broker_error_time = now_ts
+                self._last_broker_error_time = current_ts
+
             return
 
         spot = SamcoClient.parse_spot(index_quote)
+
         if spot is None:
             logger.warning("Spot parsing failed")
             self._consecutive_quote_failures += 1
@@ -345,6 +454,7 @@ class MarketScheduler:
         logger.info("TICK: spot=%.2f", spot)
 
         iv = self._extract_iv(index_quote)
+
         if iv is not None:
             self._latest_iv = iv
             self._iv_history.append(iv)
@@ -365,9 +475,9 @@ class MarketScheduler:
         )
 
         state = await self.state.snapshot()
-        now = now_ist()
+        current_time = now_ist()
 
-        if not self._iron_condor_can_enter(now, spot, state):
+        if not self._iron_condor_can_enter(current_time, spot, state):
             return
 
         payload = {
@@ -380,15 +490,29 @@ class MarketScheduler:
         await self.state.update(signal="IRON_CONDOR", signal_meta=payload)
         await self.event_bus.publish("SIGNAL", payload)
 
-        self._last_signal_time = now.timestamp()
+        self._last_signal_time = current_time.timestamp()
+
         logger.info("IRON_CONDOR entry signal emitted spot=%.2f", spot)
 
-    def _iron_condor_can_enter(self, now: datetime, spot: float, state) -> bool:
+    def _iron_condor_can_enter(
+        self,
+        current_time: datetime,
+        spot: float,
+        state: Any,
+    ) -> bool:
+        if str(settings.strategy_type).strip().lower() != "iron_condor":
+            logger.info("IC gate blocked: strategy_type is not iron_condor")
+            return False
+
+        if not bool(settings.iron_condor_enabled):
+            logger.info("IC gate blocked: IRON_CONDOR_ENABLED=false")
+            return False
+
         if state.active_trade:
             logger.info("IC gate blocked: active trade already open")
             return False
 
-        if now.weekday() >= 5:
+        if current_time.weekday() >= 5:
             logger.info("IC gate blocked: weekend")
             return False
 
@@ -396,56 +520,72 @@ class MarketScheduler:
             logger.info("IC gate blocked: trading_enabled=False")
             return False
 
-        if not self._passes_cycle_limit(now, state):
+        if self._last_manual_flatten_time:
+            flatten_age = wall_time.time() - self._last_manual_flatten_time
+
+            if flatten_age < self.manual_flatten_cooldown_seconds:
+                logger.info(
+                    "IC gate blocked: manual flatten cooldown active age=%.0fs",
+                    flatten_age,
+                )
+                return False
+
+        if not self._passes_cycle_limit(current_time, state):
             return False
 
-        if not (self._entry_window_start <= now.time() < self._entry_window_end):
+        if not (self._entry_window_start <= current_time.time() < self._entry_window_end):
             logger.info(
                 "IC gate blocked: outside time window %s-%s now=%s",
                 self._entry_window_start.strftime("%H:%M"),
                 self._entry_window_end.strftime("%H:%M"),
-                now.strftime("%H:%M:%S"),
+                current_time.strftime("%H:%M:%S"),
             )
             return False
 
-        if self._last_signal_time and now.timestamp() - self._last_signal_time < SIGNAL_COOLDOWN_SECONDS:
-            logger.info(
-                "IC gate blocked: cooldown active last_signal_age=%.0fs",
-                now.timestamp() - self._last_signal_time,
-            )
-            return False
+        if self._last_signal_time:
+            signal_age = current_time.timestamp() - self._last_signal_time
+
+            if signal_age < self.signal_cooldown_seconds:
+                logger.info(
+                    "IC gate blocked: cooldown active last_signal_age=%.0fs",
+                    signal_age,
+                )
+                return False
 
         logger.info(
             "IC gate passed: monthly_only=%s time=%s spot=%.2f",
-            bool(getattr(settings, "ic_monthly_only", False)),
-            now.strftime("%H:%M:%S"),
+            bool(settings.ic_monthly_only),
+            current_time.strftime("%H:%M:%S"),
             spot,
         )
+
         return True
 
-    def _passes_cycle_limit(self, now: datetime, state) -> bool:
-        monthly_only = bool(getattr(settings, "ic_monthly_only", False))
+    def _passes_cycle_limit(self, current_time: datetime, state: Any) -> bool:
+        if settings.ic_monthly_only:
+            start_day = settings.ic_entry_day_start
+            end_day = settings.ic_entry_day_end
 
-        if monthly_only:
-            start_day = int(getattr(settings, "ic_entry_day_start", 1))
-            end_day = int(getattr(settings, "ic_entry_day_end", 5))
-
-            if not (start_day <= now.day <= end_day):
+            if not (start_day <= current_time.day <= end_day):
                 logger.info(
                     "IC gate blocked: monthly mode day filter start=%d end=%d today=%d",
                     start_day,
                     end_day,
-                    now.day,
+                    current_time.day,
                 )
                 return False
 
-            if getattr(state, "last_iron_condor_month", None) == now.month:
-                logger.info("IC gate blocked: already traded this month month=%d", now.month)
+            if getattr(state, "last_iron_condor_month", None) == current_time.month:
+                logger.info(
+                    "IC gate blocked: already traded this month month=%d",
+                    current_time.month,
+                )
                 return False
 
             return True
 
-        today = now.date().isoformat()
+        today = current_time.date().isoformat()
+
         for value in (
             getattr(state, "last_trade_date", None),
             getattr(state, "last_ic_trade_date", None),
@@ -457,18 +597,21 @@ class MarketScheduler:
 
         return True
 
-    def _extract_iv(self, quote: dict) -> float | None:
+    def _extract_iv(self, quote: dict[str, Any]) -> float | None:
         if not isinstance(quote, dict):
             return None
 
         for key in ("impliedVolatility", "iv", "implied_volatility", "volatility"):
             raw = quote.get(key)
+
             if raw is None:
                 continue
+
             try:
                 iv = float(raw)
             except (TypeError, ValueError):
                 continue
+
             if iv > 0:
                 return iv
 
@@ -476,28 +619,207 @@ class MarketScheduler:
 
     async def _fail_safe_on_data_loss(self) -> None:
         state = await self.state.snapshot()
+
         if not state.trading_enabled:
             return
 
         await self.state.update(trading_enabled=False)
         logger.critical("Trading disabled due to stale quote stream")
 
-    async def flatten_position(self) -> dict:
+    async def flatten_position(self) -> dict[str, Any]:
         state = await self.state.snapshot()
+
         if not state.active_trade:
             return {"status": "no_active_trade"}
 
         trade = state.active_trade
+
+        if is_iron_condor_trade(trade):
+            return await self._flatten_iron_condor_trade(trade)
+
+        return await self._flatten_directional_trade(trade)
+
+    async def _flatten_iron_condor_trade(self, trade: dict[str, Any]) -> dict[str, Any]:
+        qty = to_int(trade.get("qty"), 0)
+        symbol = str(
+            trade.get("symbol")
+            or trade.get("underlying")
+            or settings.nifty_symbol
+        ).strip()
+
+        current_premium = to_float(
+            trade.get("current_premium")
+            or trade.get("exit_premium")
+            or trade.get("entry_price"),
+            to_float(trade.get("entry_price"), 0.0),
+        )
+
+        if settings.is_paper:
+            closed_trade = self._build_paper_closed_iron_condor_trade(
+                trade=trade,
+                exit_premium=current_premium,
+                reason="MANUAL_FLATTEN",
+            )
+
+            gross_pnl = to_float(closed_trade.get("gross_pnl"), 0.0)
+            net_pnl = to_float(
+                closed_trade.get("net_pnl") or closed_trade.get("pnl"),
+                gross_pnl,
+            )
+
+            state = await self.state.snapshot()
+            current_daily_pnl = to_float(getattr(state, "daily_pnl", 0.0), 0.0)
+            new_daily_pnl = round(current_daily_pnl + net_pnl, 2)
+
+            self.trade_store.append_trade(closed_trade, new_daily_pnl)
+
+            today = now_ist().date().isoformat()
+
+            await self.state.update(
+                active_trade=None,
+                live_pnl=0.0,
+                daily_pnl=new_daily_pnl,
+                last_trade_date=today,
+                last_ic_trade_date=today,
+                iron_condor_trade_date=today,
+                last_iron_condor_month=now_ist().month,
+            )
+
+            self._last_manual_flatten_time = wall_time.time()
+            self._last_signal_time = now_ist().timestamp()
+
+            await self.event_bus.publish("TRADE_CLOSED", {"trade": closed_trade})
+
+            logger.info(
+                "Manual IC flatten simulated in PAPER mode symbol=%s qty=%d premium=%.2f pnl=%.2f",
+                symbol,
+                qty,
+                current_premium,
+                net_pnl,
+            )
+
+            return {
+                "status": "flattened",
+                "symbol": symbol,
+                "qty": qty,
+                "exit_premium": round(current_premium, 2),
+                "pnl": round(net_pnl, 2),
+                "order_id": f"PAPER-FLATTEN-IC-{int(wall_time.time())}",
+            }
+
+        if not self.engine:
+            return {"status": "error", "message": "trading_engine_unavailable"}
+
+        await self.engine._exit_iron_condor_trade(
+            trade=trade,
+            reason="MANUAL_FLATTEN",
+            current_premium=current_premium,
+        )
+
+        self._last_manual_flatten_time = wall_time.time()
+        self._last_signal_time = now_ist().timestamp()
+
+        return {
+            "status": "flattened",
+            "symbol": symbol,
+            "qty": qty,
+            "exit_premium": round(current_premium, 2),
+        }
+
+    def _build_paper_closed_iron_condor_trade(
+        self,
+        trade: dict[str, Any],
+        exit_premium: float,
+        reason: str,
+    ) -> dict[str, Any]:
+        qty = to_int(trade.get("qty"), 0)
+        entry_premium = to_float(trade.get("entry_price"), 0.0)
+
+        if self.engine and self.engine.iron_condor_strategy:
+            pnl = self.engine.iron_condor_strategy.compute_pnl(
+                entry_premium,
+                exit_premium,
+                qty,
+            )
+
+            gross_pnl = round(to_float(pnl.get("gross_pnl"), 0.0), 2)
+            total_charges = round(to_float(pnl.get("total_charges"), 0.0), 2)
+            net_pnl = round(to_float(pnl.get("net_pnl"), gross_pnl - total_charges), 2)
+
+            charges = {
+                "brokerage": round(to_float(pnl.get("platform_charges"), 0.0), 2),
+                "brokerage_total": round(to_float(pnl.get("platform_charges"), 0.0), 2),
+                "stt": round(to_float(pnl.get("stt"), 0.0), 2),
+                "stt_sell": round(to_float(pnl.get("stt"), 0.0), 2),
+                "exchange_txn": round(to_float(pnl.get("exchange_txn"), 0.0), 2),
+                "exch_txn_total": round(to_float(pnl.get("exchange_txn"), 0.0), 2),
+                "sebi": round(to_float(pnl.get("sebi"), 0.0), 2),
+                "gst": round(to_float(pnl.get("gst"), 0.0), 2),
+                "stamp_duty": round(to_float(pnl.get("stamp_duty"), 0.0), 2),
+                "total_charges": total_charges,
+            }
+        else:
+            gross_pnl = round((entry_premium - exit_premium) * qty, 2)
+            total_charges = 0.0
+            net_pnl = gross_pnl
+            charges = {"total_charges": total_charges}
+
+        now_utc = datetime.now(UTC).isoformat()
+
+        return {
+            **trade,
+            "strategy": "IRON_CONDOR",
+            "signal": "IRON_CONDOR",
+            "symbol": trade.get("symbol") or settings.nifty_symbol,
+            "underlying": trade.get("underlying") or settings.nifty_symbol,
+            "status": "CLOSED",
+            "exit_time": now_utc,
+            "exit_reason": reason,
+            "reason": reason,
+            "exit_price": round(exit_premium, 2),
+            "exit_premium": round(exit_premium, 2),
+            "gross_pnl": gross_pnl,
+            "pnl": net_pnl,
+            "net_pnl": net_pnl,
+            "charges": charges,
+            "total_charges": total_charges,
+            "brokerage": charges.get("brokerage", 0.0),
+            "stt": charges.get("stt", 0.0),
+            "exchange_fee": charges.get("exchange_txn", 0.0),
+            "gst": charges.get("gst", 0.0),
+            "stamp_duty": charges.get("stamp_duty", 0.0),
+            "trade_type": "IRON_CONDOR",
+            "pricing_source": (
+                trade.get("current_pricing_source")
+                or trade.get("pricing_source")
+                or "broker_quote_snapshot"
+            ),
+            "sell_order_id": f"PAPER-FLATTEN-IC-{int(wall_time.time())}",
+        }
+
+    async def _flatten_directional_trade(self, trade: dict[str, Any]) -> dict[str, Any]:
         symbol = trade.get("symbol")
+
         qty = (
-            trade.get("t2_qty", trade.get("qty", 0) // 2)
+            trade.get("t2_qty", to_int(trade.get("qty"), 0) // 2)
             if trade.get("t1_booked")
             else trade.get("qty", 0)
         )
+        qty = to_int(qty, 0)
 
-        if str(getattr(settings, "mode", "paper")).strip().lower() == "paper":
+        if not symbol or qty <= 0:
             await self.state.update(active_trade=None, live_pnl=0.0)
+            self._last_manual_flatten_time = wall_time.time()
+            return {"status": "error", "message": "invalid_active_trade"}
+
+        if settings.is_paper:
+            await self.state.update(active_trade=None, live_pnl=0.0)
+
+            self._last_manual_flatten_time = wall_time.time()
+            self._last_signal_time = now_ist().timestamp()
+
             logger.info("Manual flatten simulated in PAPER mode symbol=%s qty=%d", symbol, qty)
+
             return {
                 "status": "flattened",
                 "symbol": symbol,
@@ -511,10 +833,15 @@ class MarketScheduler:
                 side="SELL",
                 quantity=qty,
             )
+
             if not order_id:
                 return {"status": "error", "message": "no_order_id"}
 
             await self.state.update(active_trade=None, live_pnl=0.0)
+
+            self._last_manual_flatten_time = wall_time.time()
+            self._last_signal_time = now_ist().timestamp()
+
             logger.info("Manual flatten %s qty=%d order=%s", symbol, qty, order_id)
 
             return {

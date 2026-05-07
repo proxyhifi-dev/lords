@@ -2,6 +2,7 @@
 const API = '';
 const POLL_MS = 2000;
 const IC_POLL_MS = 5000;
+const ANALYTICS_POLL_MS = 15000;
 
 let prevSpot = null;
 let tradingEnabled = true;
@@ -11,14 +12,17 @@ document.addEventListener('DOMContentLoaded', () => {
   poll();
   loadICStats();
   loadAnalytics();
+
   setInterval(poll, POLL_MS);
   setInterval(loadICStats, IC_POLL_MS);
+  setInterval(loadAnalytics, ANALYTICS_POLL_MS);
 });
 
 async function poll() {
   try {
     const res = await fetch(`${API}/api/dashboard`);
     if (!res.ok) throw new Error(res.statusText);
+
     const data = await res.json();
     renderMain(data);
   } catch {
@@ -55,15 +59,19 @@ function updateHeader(data) {
   if (spot !== null && spot !== undefined) {
     const el = document.getElementById('nifty-spot');
     const delta = document.getElementById('spot-change');
+
     el.textContent = fmtNum(spot);
 
     if (prevSpot !== null) {
       const change = Number(spot) - Number(prevSpot);
-      const pct = Number(prevSpot) !== 0 ? ((change / Number(prevSpot)) * 100).toFixed(2) : '0.00';
+      const pct = Number(prevSpot) !== 0
+        ? ((change / Number(prevSpot)) * 100).toFixed(2)
+        : '0.00';
+
       delta.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${pct}%)`;
       delta.className = `spot-delta ${change >= 0 ? 'up' : 'down'}`;
-      el.style.color = change >= 0 ? 'var(--green)' : 'var(--red)';
 
+      el.style.color = change >= 0 ? 'var(--green)' : 'var(--red)';
       setTimeout(() => {
         el.style.color = 'var(--accent)';
       }, 600);
@@ -79,6 +87,7 @@ function updateHeader(data) {
 function updateKPIs(data) {
   const dailyPnl = Number(data.daily_pnl || 0);
   const dailyEl = document.getElementById('daily-pnl');
+
   dailyEl.textContent = fmtPnl(dailyPnl);
   dailyEl.className = `kpi-value ${dailyPnl >= 0 ? 'positive' : 'negative'}`;
 
@@ -96,6 +105,7 @@ function updateKPIs(data) {
 
   const livePnl = Number(data.live_pnl || 0);
   const liveEl = document.getElementById('live-pnl');
+
   liveEl.textContent = fmtPnl(livePnl);
   liveEl.className = `kpi-value ${livePnl >= 0 ? 'positive' : 'negative'}`;
 
@@ -130,13 +140,14 @@ function updateKPIs(data) {
   signalEl.className = `kpi-value signal-value${signal === 'IRON_CONDOR' ? ' ic' : ''}`;
 
   tradingEnabled = data.trading_enabled !== false;
+
   signalSub.textContent = !data.bot_running
     ? 'bot offline'
     : !tradingEnabled
-      ? '⛔ trading paused'
+      ? 'trading paused'
       : signal
         ? `signal: ${signal}`
-        : 'scanning…';
+        : 'scanning...';
 
   const btn = document.getElementById('btn-trading');
   btn.textContent = tradingEnabled ? 'PAUSE' : 'RESUME';
@@ -151,12 +162,15 @@ function fallbackDisplayTradeCount(data) {
 
   const closedStrategyTrades = trades.filter((trade) => {
     const strategy = String(trade.strategy || trade.signal || '').toUpperCase();
+    const status = String(trade.status || '').toUpperCase();
     const isClosed =
-      String(trade.status || '').toUpperCase() === 'CLOSED' ||
+      status === 'CLOSED' ||
       Boolean(trade.exit_time) ||
-      trade.exit_reason !== undefined && trade.exit_reason !== null ||
-      trade.exit_price !== undefined && trade.exit_price !== null ||
-      trade.exit_premium !== undefined && trade.exit_premium !== null;
+      Boolean(trade.exit_reason) ||
+      Boolean(trade.reason) ||
+      trade.exit_price !== undefined ||
+      trade.exit_premium !== undefined;
+
     return strategy === 'IRON_CONDOR' && isClosed;
   });
 
@@ -189,29 +203,50 @@ function updateICPosition(data) {
   const strikes = trade.strikes || {};
   const premiums = trade.premiums || {};
   const qty = Number(trade.qty || 0);
+
   const entryTime = trade.entry_time
     ? new Date(trade.entry_time).toLocaleString('en-IN', { hour12: false })
     : '—';
 
-  const pricingSource = resolveTradePricingSource(trade, data.trading_mode);
-  const pricingLabel = formatPricingSource(pricingSource);
+  const pricingSource =
+    trade.current_pricing_source ||
+    trade.pricing_source ||
+    resolveTradePricingSource(trade, data.trading_mode);
 
+  const pricingLabel = formatPricingSource(pricingSource);
   const ic = icData && icData.status === 'active' ? icData : null;
-  const currentPremium = ic && Number.isFinite(Number(ic.current_premium))
-    ? Number(ic.current_premium)
-    : null;
+
+  const currentPremium = Number.isFinite(Number(trade.current_premium))
+    ? Number(trade.current_premium)
+    : ic && Number.isFinite(Number(ic.current_premium))
+      ? Number(ic.current_premium)
+      : null;
+
   const estimatedPnl = ic && Number.isFinite(Number(ic.estimated_pnl))
     ? Number(ic.estimated_pnl)
-    : null;
+    : currentPremium !== null
+      ? Number(((entryPremium - currentPremium) * qty).toFixed(2))
+      : null;
+
   const thetaPeak = ic && Number.isFinite(Number(ic.until_theta_peak))
     ? Number(ic.until_theta_peak)
     : null;
-  const targetPnl = ic && Number.isFinite(Number(ic.target_pnl))
-    ? Number(ic.target_pnl)
-    : entryPremium * 0.13;
-  const stopLossPrem = ic && Number.isFinite(Number(ic.stop_loss_prem))
+
+  const targetProfitPct = Number.isFinite(Number(ic?.target_profit_pct))
+    ? Number(ic.target_profit_pct)
+    : 0.25;
+
+  const stopLossMultiple = Number.isFinite(Number(ic?.stop_loss_multiple))
+    ? Number(ic.stop_loss_multiple)
+    : 1.60;
+
+  const targetProfitPerUnit = entryPremium * targetProfitPct;
+  const targetClosePremium = Math.max(entryPremium - targetProfitPerUnit, 0);
+  const targetProfitAmount = targetProfitPerUnit * qty;
+
+  const stopLossClosePremium = ic && Number.isFinite(Number(ic.stop_loss_prem))
     ? Number(ic.stop_loss_prem)
-    : entryPremium * 2.10;
+    : entryPremium * stopLossMultiple;
 
   const premiumDecayPct = currentPremium !== null && entryPremium > 0
     ? Math.max(0, Math.min(100, ((entryPremium - currentPremium) / entryPremium) * 100))
@@ -222,14 +257,17 @@ function updateICPosition(data) {
   const longCall = strikes.long_call || '';
   const longPut = strikes.long_put || '';
   const strikeLabel = shortCall && shortPut ? `${shortCall}/${shortPut}` : (trade.strike || '—');
+
   const underlying = trade.underlying || trade.symbol || 'NIFTY';
   const expiry = trade.expiry || '—';
 
-  const legsByName = buildLegMap(trade.legs || []);
-  const shortCallLeg = legsByName.short_call || null;
-  const longCallLeg = legsByName.long_call || null;
-  const shortPutLeg = legsByName.short_put || null;
-  const longPutLeg = legsByName.long_put || null;
+  const entryLegsByName = buildLegMap(trade.legs || []);
+  const currentLegsByName = buildLegMap(trade.current_legs || []);
+
+  const shortCallLeg = mergeLegForDisplay(entryLegsByName.short_call, currentLegsByName.short_call);
+  const longCallLeg = mergeLegForDisplay(entryLegsByName.long_call, currentLegsByName.long_call);
+  const shortPutLeg = mergeLegForDisplay(entryLegsByName.short_put, currentLegsByName.short_put);
+  const longPutLeg = mergeLegForDisplay(entryLegsByName.long_put, currentLegsByName.long_put);
 
   const shortCallPrem = getLegDisplayPrice(shortCallLeg, premiums.short_call);
   const longCallPrem = getLegDisplayPrice(longCallLeg, premiums.long_call);
@@ -277,10 +315,22 @@ function updateICPosition(data) {
         <div class="ic-field-value ${livePnl >= 0 ? 'positive' : 'negative'}">${fmtPnl(livePnl)}</div>
       </div>
       <div class="ic-field">
-        <div class="ic-field-label">EST P&L (NET)</div>
+        <div class="ic-field-label">EST P&L</div>
         <div class="ic-field-value ${estimatedPnl !== null && estimatedPnl >= 0 ? 'positive' : 'negative'}">
           ${estimatedPnl !== null ? fmtPnl(estimatedPnl) : '—'}
         </div>
+      </div>
+      <div class="ic-field">
+        <div class="ic-field-label">TARGET CLOSE</div>
+        <div class="ic-field-value positive">₹${targetClosePremium.toFixed(2)}</div>
+      </div>
+      <div class="ic-field">
+        <div class="ic-field-label">SL CLOSE</div>
+        <div class="ic-field-value negative">₹${stopLossClosePremium.toFixed(2)}</div>
+      </div>
+      <div class="ic-field">
+        <div class="ic-field-label">TARGET PROFIT</div>
+        <div class="ic-field-value positive">${fmtPnl(targetProfitAmount)}</div>
       </div>
       <div class="ic-field">
         <div class="ic-field-label">→ THETA PEAK</div>
@@ -297,9 +347,9 @@ function updateICPosition(data) {
         <span class="decay-label">${premiumDecayPct.toFixed(0)}% decayed</span>
       </div>
       <div class="decay-markers">
-        <span>ENTRY ₹${entryPremium.toFixed(0)}</span>
-        <span class="positive">TARGET = ₹${targetPnl.toFixed(0)}</span>
-        <span class="negative">SL = ₹${stopLossPrem.toFixed(0)}</span>
+        <span>ENTRY ₹${entryPremium.toFixed(2)}</span>
+        <span class="positive">TARGET CLOSE ₹${targetClosePremium.toFixed(2)}</span>
+        <span class="negative">SL CLOSE ₹${stopLossClosePremium.toFixed(2)}</span>
       </div>
     </div>
 
@@ -319,12 +369,28 @@ function updateICPosition(data) {
 
 function buildLegMap(legs) {
   const result = {};
-  for (const leg of legs) {
+
+  for (const leg of legs || []) {
     if (leg && leg.name) {
       result[leg.name] = leg;
     }
   }
+
   return result;
+}
+
+function mergeLegForDisplay(entryLeg, currentLeg) {
+  if (!entryLeg && !currentLeg) return null;
+
+  return {
+    ...(entryLeg || {}),
+    ...(currentLeg || {}),
+    entry_price: entryLeg?.entry_price ?? entryLeg?.fill_price ?? currentLeg?.entry_price ?? 0,
+    entry_bid: entryLeg?.entry_bid ?? 0,
+    entry_ask: entryLeg?.entry_ask ?? 0,
+    entry_ltp: entryLeg?.entry_ltp ?? 0,
+    price_source: currentLeg?.price_source || entryLeg?.price_source || '',
+  };
 }
 
 function getLegDisplayPrice(leg, fallbackPremium) {
@@ -333,6 +399,10 @@ function getLegDisplayPrice(leg, fallbackPremium) {
 }
 
 function resolveTradePricingSource(trade, mode) {
+  if (trade?.current_pricing_source) {
+    return trade.current_pricing_source;
+  }
+
   if (trade?.pricing_source) {
     return trade.pricing_source;
   }
@@ -354,9 +424,12 @@ function resolveTradePricingSource(trade, mode) {
 
 function formatPricingSource(source) {
   const normalized = String(source || '').toLowerCase();
+
   if (normalized === 'broker_fill') return 'BROKER FILL';
   if (normalized === 'broker_quote_snapshot') return 'BROKER QUOTE SNAPSHOT';
+  if (normalized === 'broker_quote_snapshot_cached') return 'BROKER QUOTE SNAPSHOT CACHED';
   if (normalized === 'model_fallback') return 'MODEL FALLBACK';
+
   return normalized ? normalized.toUpperCase().replaceAll('_', ' ') : '—';
 }
 
@@ -365,18 +438,26 @@ function inferPricingSource(mode) {
 }
 
 function renderLegCard(leg, side, strike, optionType, entryPrice) {
-  const bid = Number(leg?.entry_bid || 0);
-  const ask = Number(leg?.entry_ask || 0);
-  const ltp = Number(leg?.entry_ltp || 0);
+  const entryBid = Number(leg?.entry_bid || 0);
+  const entryAsk = Number(leg?.entry_ask || 0);
+  const entryLtp = Number(leg?.entry_ltp || 0);
+  const currentBid = Number(leg?.current_bid || 0);
+  const currentAsk = Number(leg?.current_ask || 0);
+  const currentLtp = Number(leg?.current_ltp || 0);
+  const currentClose = Number(leg?.current_close_price || leg?.current_price || 0);
   const source = formatPricingSource(leg?.price_source || '');
-  const displaySymbol = leg?.display_symbol || `${strike} ${optionType}`;
+  const displaySymbol = leg?.display_symbol || leg?.symbol || `${strike} ${optionType}`;
+  const hasLive = currentBid > 0 || currentAsk > 0 || currentLtp > 0 || currentClose > 0;
 
   return `
     <div class="leg ${side.toLowerCase()}">
       <div><strong>${side} ${escapeHtml(String(strike))} ${escapeHtml(optionType)}</strong> @ ₹${Number(entryPrice || 0).toFixed(2)}</div>
       <div class="leg-sub mono">${escapeHtml(displaySymbol)}</div>
       <div class="leg-sub">SRC: ${escapeHtml(source || '—')}</div>
-      <div class="leg-sub">BID ₹${bid.toFixed(2)} · ASK ₹${ask.toFixed(2)} · LTP ₹${ltp.toFixed(2)}</div>
+      <div class="leg-sub">ENTRY BID ₹${entryBid.toFixed(2)} · ASK ₹${entryAsk.toFixed(2)} · LTP ₹${entryLtp.toFixed(2)}</div>
+      <div class="leg-sub ${hasLive ? 'accent' : ''}">
+        LIVE BID ₹${currentBid.toFixed(2)} · ASK ₹${currentAsk.toFixed(2)} · LTP ₹${currentLtp.toFixed(2)} · CLOSE ₹${currentClose.toFixed(2)}
+      </div>
     </div>
   `;
 }
@@ -415,11 +496,9 @@ function renderPayoff(trade, spot) {
   const padRight = 22;
   const padTop = 20;
   const padBottom = 46;
-
   const focusPad = Math.max(spreadWidth * 2.5, 80);
   const rangeMin = longPut - focusPad;
   const rangeMax = longCall + focusPad;
-
   const points = [];
   const steps = 140;
 
@@ -442,8 +521,8 @@ function renderPayoff(trade, spot) {
     points.push({ price, pnl: pnlPerUnit * qty });
   }
 
-  const maxPnl = Math.max(...points.map((p) => p.pnl), 0);
-  const minPnl = Math.min(...points.map((p) => p.pnl), 0);
+  const maxPnl = Math.max(...points.map((point) => point.pnl), 0);
+  const minPnl = Math.min(...points.map((point) => point.pnl), 0);
   const pnlRange = Math.max(maxPnl - minPnl, 1);
 
   const toX = (price) =>
@@ -455,15 +534,15 @@ function renderPayoff(trade, spot) {
   const zeroY = toY(0);
 
   const pathD = points
-    .map((p, i) => `${i === 0 ? 'M' : 'L'}${toX(p.price).toFixed(1)},${toY(p.pnl).toFixed(1)}`)
+    .map((point, index) => `${index === 0 ? 'M' : 'L'}${toX(point.price).toFixed(1)},${toY(point.pnl).toFixed(1)}`)
     .join(' ');
 
   const fillAbove = `M${toX(points[0].price)},${zeroY} ${
-    points.map((p) => `L${toX(p.price).toFixed(1)},${Math.min(toY(p.pnl), zeroY).toFixed(1)}`).join(' ')
+    points.map((point) => `L${toX(point.price).toFixed(1)},${Math.min(toY(point.pnl), zeroY).toFixed(1)}`).join(' ')
   } L${toX(points[points.length - 1].price)},${zeroY} Z`;
 
   const fillBelow = `M${toX(points[0].price)},${zeroY} ${
-    points.map((p) => `L${toX(p.price).toFixed(1)},${Math.max(toY(p.pnl), zeroY).toFixed(1)}`).join(' ')
+    points.map((point) => `L${toX(point.price).toFixed(1)},${Math.max(toY(point.pnl), zeroY).toFixed(1)}`).join(' ')
   } L${toX(points[points.length - 1].price)},${zeroY} Z`;
 
   const markers = [
@@ -474,6 +553,7 @@ function renderPayoff(trade, spot) {
   ];
 
   let spotLine = '';
+
   if (spot && spot >= rangeMin && spot <= rangeMax) {
     const sx = toX(Number(spot));
     spotLine = `
@@ -490,23 +570,29 @@ function renderPayoff(trade, spot) {
           <rect x="${padLeft}" y="${padTop}" width="${width - padLeft - padRight}" height="${height - padTop - padBottom}"></rect>
         </clipPath>
       </defs>
+
       <rect x="${padLeft}" y="${padTop}" width="${width - padLeft - padRight}" height="${height - padTop - padBottom}"
             fill="transparent" stroke="var(--border-hi)" stroke-width="1" opacity="0.35"></rect>
+
       <line x1="${padLeft}" y1="${zeroY.toFixed(1)}" x2="${width - padRight}" y2="${zeroY.toFixed(1)}"
             stroke="var(--border-hi)" stroke-width="1.2"></line>
+
       <path d="${fillAbove}" fill="var(--green)" opacity="0.16" clip-path="url(#cp)"></path>
       <path d="${fillBelow}" fill="var(--red)" opacity="0.16" clip-path="url(#cp)"></path>
       <path d="${pathD}" fill="none" stroke="var(--accent)" stroke-width="3" clip-path="url(#cp)"></path>
-      ${markers.map((m) => {
-        const x = toX(m.price);
+
+      ${markers.map((marker) => {
+        const x = toX(marker.price);
         return `
           <line x1="${x}" y1="${padTop}" x2="${x}" y2="${height - padBottom}"
-                stroke="${m.color}" stroke-width="1.2" stroke-dasharray="4,4" opacity="0.7"></line>
-          <text x="${x}" y="${height - padBottom + 16 + m.offset}" fill="${m.color}" font-size="11"
-                font-family="var(--font-mono)" text-anchor="middle">${m.label}</text>
+                stroke="${marker.color}" stroke-width="1.2" stroke-dasharray="4,4" opacity="0.7"></line>
+          <text x="${x}" y="${height - padBottom + 16 + marker.offset}" fill="${marker.color}" font-size="11"
+                font-family="var(--font-mono)" text-anchor="middle">${marker.label}</text>
         `;
       }).join('')}
+
       ${spotLine}
+
       <text x="${padLeft}" y="${Math.max(padTop + 14, zeroY - 8)}" fill="var(--green)" font-size="12" font-family="var(--font-mono)">PROFIT</text>
       <text x="${padLeft}" y="${Math.min(height - padBottom - 6, zeroY + 16)}" fill="var(--red)" font-size="12" font-family="var(--font-mono)">LOSS</text>
     </svg>
@@ -519,6 +605,7 @@ async function loadICStats() {
   try {
     const res = await fetch(`${API}/api/iron-condor/stats`);
     if (!res.ok) return;
+
     icData = await res.json();
   } catch {
     icData = null;
@@ -532,89 +619,266 @@ function updateLog(trades) {
   count.textContent = `${trades.length} trade${trades.length !== 1 ? 's' : ''}`;
 
   if (!trades.length) {
-    body.innerHTML = '<tr><td colspan="12" class="log-empty">No trades yet</td></tr>';
+    body.innerHTML = '<tr><td colspan="17" class="log-empty">No trades yet</td></tr>';
     return;
   }
 
-  body.innerHTML = [...trades].reverse().map((trade) => {
-    const pnl = Number(trade.net_pnl || trade.pnl || 0);
-    const grossPnl = Number(trade.gross_pnl || trade.pnl || trade.net_pnl || 0);
-    const charges = Number(trade.total_charges || trade.charges || 0);
+  body.innerHTML = [...trades]
+    .reverse()
+    .map((trade) => renderTradeHistoryRow(trade))
+    .join('');
+}
 
-    const rawReason = trade.exit_reason ?? trade.reason;
-    const reason = typeof rawReason === 'string' && rawReason.trim()
-      ? rawReason.toUpperCase()
-      : (trade.status === 'OPEN' ? 'OPEN' : 'CLOSED');
+function renderTradeHistoryRow(trade) {
+  const pnl = Number(trade.net_pnl || trade.pnl || 0);
+  const grossPnl = Number(trade.gross_pnl || trade.pnl || trade.net_pnl || 0);
+  const charges = Number(trade.total_charges || trade.charges || 0);
+  const rawReason = trade.exit_reason ?? trade.reason;
 
-    const strategy = String(trade.strategy || trade.signal || '—').toUpperCase();
+  const reason = typeof rawReason === 'string' && rawReason.trim()
+    ? rawReason.toUpperCase()
+    : (trade.status === 'OPEN' ? 'OPEN' : 'CLOSED');
 
-    let symbol = String(trade.underlying || trade.symbol || trade.trade_type || 'NIFTY');
-    if (symbol.toUpperCase() === 'IRON_CONDOR') {
-      symbol = 'NIFTY 50';
+  const strategy = String(trade.strategy || trade.signal || '—').toUpperCase();
+
+  let symbol = String(trade.underlying || trade.symbol || trade.trade_type || 'NIFTY');
+  if (symbol.toUpperCase() === 'IRON_CONDOR') {
+    symbol = 'NIFTY 50';
+  }
+
+  const expiry = String(trade.expiry || '—');
+  const strike = trade.strike || formatStrikeFromTrade(trade);
+  const qty = Number(trade.qty || 0);
+  const entryPrice = Number(trade.entry_price || trade.entry || 0);
+
+  const exitPriceRaw = trade.exit_premium ?? trade.exit_price;
+  const exitPrice = exitPriceRaw !== undefined && exitPriceRaw !== null && exitPriceRaw !== ''
+    ? Number(exitPriceRaw)
+    : null;
+
+  const date = trade.entry_time
+    ? new Date(trade.entry_time).toLocaleDateString('en-IN')
+    : (trade.date || '—');
+
+  const pricingSource = formatPricingSource(resolveTradePricingSource(trade, trade.trading_mode || ''));
+  const legCells = getHistoryLegCells(trade);
+
+  const reasonCls = reason.includes('TARGET')
+    ? 't2'
+    : reason.includes('STOP') || reason.includes('SL')
+      ? 'sl'
+      : reason.includes('THETA')
+        ? 't1'
+        : reason === 'OPEN'
+          ? 'neutral'
+          : 'eod';
+
+  return `
+    <tr>
+      <td>${escapeHtml(date)}</td>
+      <td class="td-signal ic">${escapeHtml(strategy)}</td>
+      <td class="mono">${escapeHtml(symbol)}</td>
+      <td class="mono">${escapeHtml(expiry)}</td>
+      <td class="mono">${escapeHtml(strike || '—')}</td>
+      <td class="mono">${escapeHtml(pricingSource)}</td>
+      <td>${qty || '—'}</td>
+      <td class="mono">${legCells.sellCe}</td>
+      <td class="mono">${legCells.buyCe}</td>
+      <td class="mono">${legCells.sellPe}</td>
+      <td class="mono">${legCells.buyPe}</td>
+      <td>₹${entryPrice.toFixed(2)}</td>
+      <td>${exitPrice !== null ? `₹${exitPrice.toFixed(2)}` : 'OPEN'}</td>
+      <td class="${grossPnl >= 0 ? 'positive' : 'negative'}">${fmtPnl(grossPnl)}</td>
+      <td class="negative">₹${charges.toFixed(2)}</td>
+      <td class="td-pnl ${pnl >= 0 ? 'positive' : 'negative'}">${fmtPnl(pnl)}</td>
+      <td class="td-reason ${reasonCls}">${escapeHtml(reason)}</td>
+    </tr>
+  `;
+}
+
+function getHistoryLegCells(trade) {
+  const legs = collectTradeLegs(trade);
+  const byName = buildLegMap(legs);
+  const premiums = trade.premiums || {};
+  const strikes = trade.strikes || parseStrikePairFallback(trade.strike);
+
+  const shortCall = byName.short_call || buildSyntheticLeg('short_call', 'SELL', 'CE', strikes.short_call, premiums.short_call, trade);
+  const longCall = byName.long_call || buildSyntheticLeg('long_call', 'BUY', 'CE', strikes.long_call, premiums.long_call, trade);
+  const shortPut = byName.short_put || buildSyntheticLeg('short_put', 'SELL', 'PE', strikes.short_put, premiums.short_put, trade);
+  const longPut = byName.long_put || buildSyntheticLeg('long_put', 'BUY', 'PE', strikes.long_put, premiums.long_put, trade);
+
+  return {
+    sellCe: renderHistoryLegCell(shortCall),
+    buyCe: renderHistoryLegCell(longCall),
+    sellPe: renderHistoryLegCell(shortPut),
+    buyPe: renderHistoryLegCell(longPut),
+  };
+}
+
+function collectTradeLegs(trade) {
+  const sources = [
+    trade.legs,
+    trade.legs_json,
+    trade.entry_legs,
+    trade.entry_legs_json,
+    trade.current_legs,
+    trade.current_legs_json,
+    trade.exit_legs,
+    trade.exit_legs_json,
+  ];
+
+  const result = [];
+
+  for (const source of sources) {
+    for (const leg of parseTradeLegs(source)) {
+      if (leg && leg.name && !result.some((existing) => existing.name === leg.name)) {
+        result.push(leg);
+      }
     }
+  }
 
-    const expiry = String(trade.expiry || '—');
-    const strike = trade.strike || formatStrikeFromTrade(trade);
-    const qty = Number(trade.qty || 0);
-    const entryPrice = Number(trade.entry_price || trade.entry || 0);
+  return result;
+}
 
-    const exitPriceRaw = trade.exit_premium ?? trade.exit_price;
-    const exitPrice = exitPriceRaw !== undefined && exitPriceRaw !== null && exitPriceRaw !== ''
-      ? Number(exitPriceRaw)
-      : null;
+function buildSyntheticLeg(name, side, optionType, strike, premium, trade) {
+  const price = Number(premium || 0);
 
-    const date = trade.entry_time
-      ? new Date(trade.entry_time).toLocaleDateString('en-IN')
-      : (trade.date || '—');
+  if (!strike && price <= 0) {
+    return null;
+  }
 
-    const pricingSource = formatPricingSource(resolveTradePricingSource(trade, trade.trading_mode || ''));
+  return {
+    name,
+    side,
+    option_type: optionType,
+    strike,
+    entry_price: price,
+    fill_price: price,
+    qty: trade.qty || 0,
+    symbol: buildSyntheticOptionSymbol(trade, strike, optionType),
+  };
+}
 
-    const reasonCls = reason.includes('TARGET')
-      ? 't2'
-      : reason.includes('STOP') || reason.includes('SL')
-        ? 'sl'
-        : reason.includes('THETA')
-          ? 't1'
-          : reason === 'OPEN'
-            ? 'neutral'
-            : 'eod';
+function buildSyntheticOptionSymbol(trade, strike, optionType) {
+  if (!strike) return '—';
 
-    return `
-      <tr>
-        <td>${date}</td>
-        <td class="td-signal ic">${escapeHtml(strategy)}</td>
-        <td class="mono">${escapeHtml(symbol)}</td>
-        <td class="mono">${escapeHtml(expiry)}</td>
-        <td class="mono">${escapeHtml(strike || '—')}<div class="mono" style="font-size:11px;opacity:.7">${escapeHtml(pricingSource)}</div></td>
-        <td>${qty || '—'}</td>
-        <td>₹${entryPrice.toFixed(2)}</td>
-        <td>${exitPrice !== null ? `₹${exitPrice.toFixed(2)}` : 'OPEN'}</td>
-        <td class="${grossPnl >= 0 ? 'positive' : 'negative'}">${fmtPnl(grossPnl)}</td>
-        <td class="negative">₹${charges.toFixed(2)}</td>
-        <td class="td-pnl ${pnl >= 0 ? 'positive' : 'negative'}">${fmtPnl(pnl)}</td>
-        <td class="td-reason ${reasonCls}">${escapeHtml(reason)}</td>
-      </tr>
-    `;
-  }).join('');
+  const underlying = String(trade.underlying || trade.symbol || 'NIFTY').replace(/\s+/g, '');
+  const expiry = String(trade.expiry || '').trim();
+
+  if (!expiry || expiry === '—') {
+    return `${underlying} ${strike} ${optionType}`;
+  }
+
+  return `${underlying} ${expiry} ${strike} ${optionType}`;
+}
+
+function renderHistoryLegCell(leg) {
+  if (!leg) {
+    return '—';
+  }
+
+  const side = String(leg.side || inferSideFromName(leg.name)).toUpperCase();
+  const strike = leg.strike || inferStrike(leg);
+  const optionType = leg.option_type || inferOptionType(leg);
+  const symbol = leg.display_symbol || leg.symbol || `${strike} ${optionType}`;
+  const entryPrice = Number(leg.entry_price ?? leg.fill_price ?? leg.price ?? 0);
+  const exitPriceRaw = leg.exit_price ?? leg.current_close_price ?? leg.current_price;
+  const exitPrice = Number(exitPriceRaw || 0);
+  const hasExit = exitPrice > 0;
+
+  return `
+    <div>
+      <strong>${escapeHtml(side)} ${escapeHtml(String(strike || '—'))} ${escapeHtml(optionType || '—')}</strong>
+    </div>
+    <div style="font-size:11px;opacity:.75">${escapeHtml(symbol)}</div>
+    <div>ENTRY ₹${entryPrice.toFixed(2)}</div>
+    <div>${hasExit ? `EXIT ₹${exitPrice.toFixed(2)}` : 'EXIT —'}</div>
+  `;
+}
+
+function parseTradeLegs(value) {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.filter((leg) => leg && typeof leg === 'object');
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed)
+        ? parsed.filter((leg) => leg && typeof leg === 'object')
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function parseStrikePairFallback(value) {
+  const text = String(value || '').trim();
+
+  if (!text.includes('/')) {
+    return {};
+  }
+
+  const [left, right] = text.split('/').map((part) => Number(part.trim()));
+
+  if (!Number.isFinite(left) || !Number.isFinite(right)) {
+    return {};
+  }
+
+  return {
+    short_call: left,
+    short_put: right,
+  };
+}
+
+function inferSideFromName(name) {
+  const text = String(name || '').toLowerCase();
+  return text.includes('short') ? 'SELL' : 'BUY';
+}
+
+function inferOptionType(leg) {
+  const text = `${leg.option_type || ''} ${leg.symbol || ''} ${leg.display_symbol || ''}`.toUpperCase();
+
+  if (text.includes('CE')) return 'CE';
+  if (text.includes('PE')) return 'PE';
+
+  return '—';
+}
+
+function inferStrike(leg) {
+  if (leg.strike) return leg.strike;
+
+  const text = `${leg.symbol || ''} ${leg.display_symbol || ''}`;
+  const match = text.match(/(\d{4,6})(CE|PE)/i) || text.match(/\b(\d{4,6})\b/);
+
+  return match ? match[1] : '—';
 }
 
 function formatStrikeFromTrade(trade) {
   const strikes = trade.strikes || {};
+
   if (strikes.short_call && strikes.short_put) {
     return `${strikes.short_call}/${strikes.short_put}`;
   }
+
   return trade.strike || '';
 }
 
 async function loadAnalytics() {
   const grid = document.getElementById('analytics-grid');
-  grid.innerHTML = '<div class="analytics-placeholder">Loading…</div>';
+  grid.innerHTML = '<div class="analytics-placeholder">Loading...</div>';
 
   try {
     const res = await fetch(`${API}/api/analytics`);
     if (!res.ok) throw new Error('analytics request failed');
 
     const analytics = await res.json();
+
     if (analytics.status === 'error' || !analytics.total_trades) {
       grid.innerHTML = '<div class="analytics-placeholder">No trades yet — analytics available after first trade</div>';
       return;
@@ -647,40 +911,42 @@ async function loadAnalytics() {
 }
 
 function numberOrZero(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
 }
 
 function formatPercent(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? `${n}%` : '—';
+  const number = Number(value);
+  return Number.isFinite(number) ? `${number}%` : '—';
 }
 
 function formatMultiple(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? `${n}x` : '—';
+  const number = Number(value);
+  return Number.isFinite(number) ? `${number}x` : '—';
 }
 
 function formatPlainNumber(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? String(n) : '—';
+  const number = Number(value);
+  return Number.isFinite(number) ? String(number) : '—';
 }
 
 function formatCapitalK(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? `₹${(n / 1000).toFixed(0)}K` : '—';
+  const number = Number(value);
+  return Number.isFinite(number) ? `₹${(number / 1000).toFixed(0)}K` : '—';
 }
 
 function formatMaybePnl(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? fmtPnl(n) : '—';
+  const number = Number(value);
+  return Number.isFinite(number) ? fmtPnl(number) : '—';
 }
 
 function metricClass(value, good, neutral) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return 'neutral';
-  if (n >= good) return 'positive';
-  if (n >= neutral) return 'neutral';
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return 'neutral';
+  if (number >= good) return 'positive';
+  if (number >= neutral) return 'neutral';
+
   return 'negative';
 }
 
@@ -698,15 +964,19 @@ async function stopBot() {
 
 async function setMode(mode) {
   await apiPost('/api/trading-mode', { mode });
+
   document.getElementById('btn-paper').className = mode === 'PAPER' ? 'btn btn--active' : 'btn';
   document.getElementById('btn-live').className = mode === 'LIVE' ? 'btn btn--active' : 'btn';
+
   showAlert(`Mode set to ${mode}`, mode === 'LIVE' ? 'error' : 'info');
 }
 
 async function toggleTrading() {
   const enabled = !tradingEnabled;
+
   await apiPost('/api/trading-enabled', { enabled });
   showAlert(enabled ? 'Trading resumed' : 'Trading paused', 'info');
+
   setTimeout(poll, 300);
 }
 
@@ -714,12 +984,14 @@ async function flattenPosition() {
   if (!confirm('Flatten ALL open positions now?')) return;
 
   const res = await apiPost('/api/trade/flatten');
+
   showAlert(
     res.status === 'flattened'
       ? `Flattened ${res.symbol || 'position'}`
       : (res.message || res.status || 'Flatten request sent'),
     'info',
   );
+
   setTimeout(poll, 500);
 }
 
@@ -740,6 +1012,7 @@ async function apiPost(endpoint, body = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+
     return await res.json();
   } catch {
     return {};
@@ -748,23 +1021,26 @@ async function apiPost(endpoint, body = {}) {
 
 function showAlert(msg, type = 'info') {
   const el = document.getElementById('alert-banner');
+
   el.textContent = msg;
   el.className = `alert-banner ${type}`;
+
   setTimeout(() => {
     el.className = 'alert-banner hidden';
   }, 3200);
 }
 
-function fmtNum(n) {
-  return Number(n).toLocaleString('en-IN', {
+function fmtNum(value) {
+  return Number(value).toLocaleString('en-IN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 }
 
-function fmtPnl(n) {
-  const value = Number(n || 0);
-  return `${value >= 0 ? '+' : '-'}₹${Math.abs(value).toLocaleString('en-IN', {
+function fmtPnl(value) {
+  const number = Number(value || 0);
+
+  return `${number >= 0 ? '+' : '-'}₹${Math.abs(number).toLocaleString('en-IN', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })}`;

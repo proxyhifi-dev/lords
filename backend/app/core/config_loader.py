@@ -1,3 +1,4 @@
+# backend/app/core/config_loader.py
 from __future__ import annotations
 
 import os
@@ -20,8 +21,8 @@ def _strip_value(value: Any) -> str:
     ):
         text = text[1:-1].strip()
 
-    if " #" in text:
-        text = text.split(" #", 1)[0].strip()
+    if "#" in text:
+        text = text.split("#", 1)[0].strip()
 
     return text
 
@@ -35,9 +36,10 @@ def _parse_bool(value: Any, default: bool = False) -> bool:
 
     text = _strip_value(value).lower()
 
-    if text in ("1", "true", "yes", "on", "y"):
+    if text in {"1", "true", "yes", "on", "y"}:
         return True
-    if text in ("0", "false", "no", "off", "n"):
+
+    if text in {"0", "false", "no", "off", "n"}:
         return False
 
     return default
@@ -71,10 +73,9 @@ def _load_env() -> dict[str, str]:
 
         key, _, value = line.partition("=")
         key = key.strip()
-        value = _strip_value(value)
 
         if key:
-            env[key] = value
+            env[key] = _strip_value(value)
 
     return env
 
@@ -82,12 +83,14 @@ def _load_env() -> dict[str, str]:
 def _get(combined: dict[str, Any], *keys: str, default: Any = None) -> Any:
     for key in keys:
         value = combined.get(key)
+
         if value is not None and str(value).strip() != "":
             return value
+
     return default
 
 
-@dataclass
+@dataclass(frozen=True)
 class Settings:
     samco_user_id: str = ""
     samco_password: str = ""
@@ -101,39 +104,67 @@ class Settings:
     capital: float = 50000.0
     max_daily_loss: float = 3000.0
     max_trades: int = 10
-    order_qty: int = 50
+    order_qty: int = 65
+
     strategy_type: str = "iron_condor"
-
     iron_condor_enabled: bool = True
-    ic_monthly_only: bool = False
 
+    market_open_time: str = "09:15"
+    market_close_time: str = "15:30"
+    closed_log_interval_seconds: int = 60
+    signal_cooldown_seconds: int = 86400
+    startup_reconcile_timeout_seconds: int = 30
+    broker_quote_timeout_seconds: int = 3
+    daily_reset_check_interval_seconds: int = 10
+    manual_flatten_cooldown_seconds: int = 180
+    scheduler_stall_warn_seconds: float = 10.0
+    reconciliation_interval_seconds: int = 300
+
+    ic_monthly_only: bool = False
     ic_entry_day_start: int = 1
     ic_entry_day_end: int = 5
     ic_entry_window_start: str = "10:00"
-    ic_entry_window_end: str = "10:05"
+    ic_entry_window_end: str = "12:30"
     ic_exit_time: str = "15:00"
 
-    ic_target_profit_pct: float = 0.13
-    ic_stop_loss_multiple: float = 2.10
+    ic_target_profit_pct: float = 0.35
+    ic_stop_loss_multiple: float = 1.60
+    ic_extreme_loss_multiple: float = 2.40
 
-    ic_short_distance: int = 600
-    ic_wing_width: int = 300
+    ic_short_distance: int = 200
+    ic_wing_width: int = 50
     ic_strike_rounding: int = 50
 
     ic_skip_gap_pct: float = 0.007
     ic_skip_open_range_pct: float = 0.007
 
-    ic_min_entry_premium: float = 80.0
+    ic_min_entry_premium: float = 40.0
+    ic_min_option_premium: float = 0.05
+    ic_min_reward_risk: float = 0.35
+    ic_min_net_after_cost_buffer: float = 80.0
+    ic_min_credit_to_cost_ratio: float = 2.0
+    ic_entry_cost_buffer_pct: float = 0.10
+
     ic_margin_required: float = 40000.0
     ic_max_loss_per_trade: float = 3000.0
 
     ic_days_to_expiry: int = 30
     ic_decay_rate: float = 0.15
+    ic_min_decay_factor: float = 0.70
     ic_short_otm_pct: float = 0.024
     ic_long_otm_pct: float = 0.036
     ic_assumed_iv: float = 0.15
+
+    ic_brokerage_per_order: float = 20.0
+    ic_entry_order_count: int = 4
+    ic_exit_order_count: int = 4
     ic_platform_charges: float = 100.0
     ic_stt_rate: float = 0.0015
+    ic_stt_sell_rate: float = 0.0005
+    ic_exchange_txn_rate: float = 0.00053
+    ic_sebi_rate: float = 0.000001
+    ic_gst_rate: float = 0.18
+    ic_stamp_duty_rate: float = 0.00003
 
     stop_loss_pct: float = 0.45
     t1_pct: float = 0.50
@@ -144,8 +175,11 @@ class Settings:
     min_option_volume: int = 500
     otm_distance: int = 1
     max_spread_pct: float = 0.04
+    dynamic_spread_max_pct: float = 0.12
+    dynamic_spread_vol_multiplier: float = 2.0
     min_dte: int = 2
     max_dte: int = 7
+
     orb_duration_seconds: int = 900
     min_orb_range_pct: float = 0.0020
     max_orb_range_pct: float = 0.0080
@@ -153,21 +187,23 @@ class Settings:
     breakout_buffer: float = 5.0
     max_breakout_extension_pct: float = 0.05
     max_option_spike_pct: float = 0.20
+
     max_consecutive_losses: int = 3
     max_drawdown_pct: float = 0.20
+
     min_orb_range: float = 50.0
     min_volume_spike: float = 1.5
     max_iv_percentile: float = 70.0
 
     nifty_symbol: str = "NIFTY 50"
     nifty_exchange: str = "NSE"
-    poll_seconds: int = 1
 
+    poll_seconds: int = 1
     signal_cooldown: int = 86400
     gap_threshold: float = 5.0
     trend_filter_enabled: bool = False
     skip_first_candle: bool = True
-    no_entry_after: str = "14:30"
+    no_entry_after: str = "12:30"
     square_off: str = "14:55"
 
     reconnect_max_attempts: int = 5
@@ -179,14 +215,13 @@ class Settings:
     trades_file: str = "data/trades.csv"
     state_file: str = "data/runtime_state.json"
     log_file: str = "logs/bot.log"
-
     dashboard_host: str = "0.0.0.0"
     dashboard_port: int = 8000
     frontend_dir: str = "frontend"
 
     @property
     def is_live(self) -> bool:
-        return str(self.mode).strip().lower() == "live"
+        return self.mode.strip().lower() == "live"
 
     @property
     def is_paper(self) -> bool:
@@ -225,51 +260,103 @@ def get_settings() -> Settings:
         samco_access_token=_strip_value(_get(combined, "SAMCO_ACCESS_TOKEN", default="")),
 
         mode=_strip_value(_get(combined, "MODE", default="paper")).lower(),
-        paper_mode_use_broker=_parse_bool(
-            _get(combined, "PAPER_MODE_USE_BROKER", default=True),
-            True,
-        ),
+        paper_mode_use_broker=_parse_bool(_get(combined, "PAPER_MODE_USE_BROKER", default=True), True),
         use_redis=_parse_bool(_get(combined, "USE_REDIS", default=False), False),
 
         capital=_parse_float(_get(combined, "CAPITAL", default=50000.0), 50000.0),
         max_daily_loss=_parse_float(_get(combined, "MAX_DAILY_LOSS", default=3000.0), 3000.0),
-        max_trades=_parse_int(_get(combined, "MAX_TRADES", default=1), 1),
-        order_qty=_parse_int(_get(combined, "ORDER_QTY", default=50), 50),
+        max_trades=_parse_int(_get(combined, "MAX_TRADES", default=10), 10),
+        order_qty=_parse_int(_get(combined, "ORDER_QTY", default=65), 65),
+
         strategy_type=_strip_value(_get(combined, "STRATEGY_TYPE", default="iron_condor")).lower(),
-
         iron_condor_enabled=_parse_bool(_get(combined, "IRON_CONDOR_ENABLED", default=True), True),
-        ic_monthly_only=_parse_bool(_get(combined, "IC_MONTHLY_ONLY", default=False), False),
 
+        market_open_time=_strip_value(_get(combined, "MARKET_OPEN_TIME", default="09:15")),
+        market_close_time=_strip_value(_get(combined, "MARKET_CLOSE_TIME", default="15:30")),
+        closed_log_interval_seconds=_parse_int(_get(combined, "CLOSED_LOG_INTERVAL_SECONDS", default=60), 60),
+        signal_cooldown_seconds=_parse_int(
+            _get(combined, "SIGNAL_COOLDOWN_SECONDS", "SIGNAL_COOLDOWN", default=86400),
+            86400,
+        ),
+        startup_reconcile_timeout_seconds=_parse_int(
+            _get(combined, "STARTUP_RECONCILE_TIMEOUT_SECONDS", default=30),
+            30,
+        ),
+        broker_quote_timeout_seconds=_parse_int(_get(combined, "BROKER_QUOTE_TIMEOUT_SECONDS", default=3), 3),
+        daily_reset_check_interval_seconds=_parse_int(
+            _get(combined, "DAILY_RESET_CHECK_INTERVAL_SECONDS", default=10),
+            10,
+        ),
+        manual_flatten_cooldown_seconds=_parse_int(
+            _get(combined, "MANUAL_FLATTEN_COOLDOWN_SECONDS", default=180),
+            180,
+        ),
+        scheduler_stall_warn_seconds=_parse_float(
+            _get(combined, "SCHEDULER_STALL_WARN_SECONDS", default=10.0),
+            10.0,
+        ),
+        reconciliation_interval_seconds=_parse_int(
+            _get(combined, "RECONCILIATION_INTERVAL_SECONDS", default=300),
+            300,
+        ),
+
+        ic_monthly_only=_parse_bool(_get(combined, "IC_MONTHLY_ONLY", default=False), False),
         ic_entry_day_start=_parse_int(_get(combined, "IC_ENTRY_DAY_START", default=1), 1),
         ic_entry_day_end=_parse_int(_get(combined, "IC_ENTRY_DAY_END", default=5), 5),
         ic_entry_window_start=_strip_value(_get(combined, "IC_ENTRY_WINDOW_START", default="10:00")),
-        ic_entry_window_end=_strip_value(_get(combined, "IC_ENTRY_WINDOW_END", default="10:05")),
+        ic_entry_window_end=_strip_value(_get(combined, "IC_ENTRY_WINDOW_END", default="12:30")),
         ic_exit_time=_strip_value(_get(combined, "IC_EXIT_TIME", "SQUARE_OFF", default="15:00")),
 
         ic_target_profit_pct=_parse_float(
-            _get(combined, "IC_TARGET_PROFIT_PCT", "IC_TARGET_PROFIT", default=0.13),
-            0.13,
+            _get(combined, "IC_TARGET_PROFIT_PCT", "IC_TARGET_PROFIT", default=0.35),
+            0.35,
         ),
-        ic_stop_loss_multiple=_parse_float(_get(combined, "IC_STOP_LOSS_MULTIPLE", default=2.10), 2.10),
+        ic_stop_loss_multiple=_parse_float(_get(combined, "IC_STOP_LOSS_MULTIPLE", default=1.60), 1.60),
+        ic_extreme_loss_multiple=_parse_float(_get(combined, "IC_EXTREME_LOSS_MULTIPLE", default=2.40), 2.40),
 
-        ic_short_distance=_parse_int(_get(combined, "IC_SHORT_DISTANCE", default=600), 600),
-        ic_wing_width=_parse_int(_get(combined, "IC_WING_WIDTH", default=300), 300),
+        ic_short_distance=_parse_int(_get(combined, "IC_SHORT_DISTANCE", default=200), 200),
+        ic_wing_width=_parse_int(_get(combined, "IC_WING_WIDTH", default=50), 50),
         ic_strike_rounding=_parse_int(_get(combined, "IC_STRIKE_ROUNDING", default=50), 50),
 
         ic_skip_gap_pct=_parse_float(_get(combined, "IC_SKIP_GAP_PCT", default=0.007), 0.007),
         ic_skip_open_range_pct=_parse_float(_get(combined, "IC_SKIP_OPEN_RANGE_PCT", default=0.007), 0.007),
 
-        ic_min_entry_premium=_parse_float(_get(combined, "IC_MIN_ENTRY_PREMIUM", default=80.0), 80.0),
+        ic_min_entry_premium=_parse_float(_get(combined, "IC_MIN_ENTRY_PREMIUM", default=40.0), 40.0),
+        ic_min_option_premium=_parse_float(_get(combined, "IC_MIN_OPTION_PREMIUM", default=0.05), 0.05),
+        ic_min_reward_risk=_parse_float(_get(combined, "IC_MIN_REWARD_RISK", default=0.35), 0.35),
+        ic_min_net_after_cost_buffer=_parse_float(
+            _get(combined, "IC_MIN_NET_AFTER_COST_BUFFER", default=80.0),
+            80.0,
+        ),
+        ic_min_credit_to_cost_ratio=_parse_float(
+            _get(combined, "IC_MIN_CREDIT_TO_COST_RATIO", default=2.0),
+            2.0,
+        ),
+        ic_entry_cost_buffer_pct=_parse_float(_get(combined, "IC_ENTRY_COST_BUFFER_PCT", default=0.10), 0.10),
+
         ic_margin_required=_parse_float(_get(combined, "IC_MARGIN_REQUIRED", default=40000.0), 40000.0),
         ic_max_loss_per_trade=_parse_float(_get(combined, "IC_MAX_LOSS_PER_TRADE", default=3000.0), 3000.0),
 
         ic_days_to_expiry=_parse_int(_get(combined, "IC_DAYS_TO_EXPIRY", default=30), 30),
         ic_decay_rate=_parse_float(_get(combined, "IC_DECAY_RATE", default=0.15), 0.15),
+        ic_min_decay_factor=_parse_float(_get(combined, "IC_MIN_DECAY_FACTOR", default=0.70), 0.70),
         ic_short_otm_pct=_parse_float(_get(combined, "IC_SHORT_OTM_PCT", default=0.024), 0.024),
         ic_long_otm_pct=_parse_float(_get(combined, "IC_LONG_OTM_PCT", default=0.036), 0.036),
         ic_assumed_iv=_parse_float(_get(combined, "IC_ASSUMED_IV", default=0.15), 0.15),
+
+        ic_brokerage_per_order=_parse_float(_get(combined, "IC_BROKERAGE_PER_ORDER", default=20.0), 20.0),
+        ic_entry_order_count=_parse_int(_get(combined, "IC_ENTRY_ORDER_COUNT", default=4), 4),
+        ic_exit_order_count=_parse_int(_get(combined, "IC_EXIT_ORDER_COUNT", default=4), 4),
         ic_platform_charges=_parse_float(_get(combined, "IC_PLATFORM_CHARGES", default=100.0), 100.0),
         ic_stt_rate=_parse_float(_get(combined, "IC_STT_RATE", default=0.0015), 0.0015),
+        ic_stt_sell_rate=_parse_float(
+            _get(combined, "IC_STT_SELL_RATE", "IC_STT_RATE", default=0.0005),
+            0.0005,
+        ),
+        ic_exchange_txn_rate=_parse_float(_get(combined, "IC_EXCHANGE_TXN_RATE", default=0.00053), 0.00053),
+        ic_sebi_rate=_parse_float(_get(combined, "IC_SEBI_RATE", default=0.000001), 0.000001),
+        ic_gst_rate=_parse_float(_get(combined, "IC_GST_RATE", default=0.18), 0.18),
+        ic_stamp_duty_rate=_parse_float(_get(combined, "IC_STAMP_DUTY_RATE", default=0.00003), 0.00003),
 
         stop_loss_pct=_parse_float(_get(combined, "STOP_LOSS_PCT", default=0.45), 0.45),
         t1_pct=_parse_float(_get(combined, "T1_PCT", default=0.50), 0.50),
@@ -280,30 +367,41 @@ def get_settings() -> Settings:
         min_option_volume=_parse_int(_get(combined, "MIN_OPTION_VOLUME", default=500), 500),
         otm_distance=_parse_int(_get(combined, "OTM_DISTANCE", default=1), 1),
         max_spread_pct=_parse_float(_get(combined, "MAX_SPREAD_PCT", default=0.04), 0.04),
+        dynamic_spread_max_pct=_parse_float(_get(combined, "DYNAMIC_SPREAD_MAX_PCT", default=0.12), 0.12),
+        dynamic_spread_vol_multiplier=_parse_float(
+            _get(combined, "DYNAMIC_SPREAD_VOL_MULTIPLIER", default=2.0),
+            2.0,
+        ),
         min_dte=_parse_int(_get(combined, "MIN_DTE", default=2), 2),
         max_dte=_parse_int(_get(combined, "MAX_DTE", default=7), 7),
+
         orb_duration_seconds=_parse_int(_get(combined, "ORB_DURATION_SECONDS", default=900), 900),
         min_orb_range_pct=_parse_float(_get(combined, "MIN_ORB_RANGE_PCT", default=0.0020), 0.0020),
         max_orb_range_pct=_parse_float(_get(combined, "MAX_ORB_RANGE_PCT", default=0.0080), 0.0080),
         orb_atr_multiplier=_parse_float(_get(combined, "ORB_ATR_MULTIPLIER", default=1.0), 1.0),
         breakout_buffer=_parse_float(_get(combined, "BREAKOUT_BUFFER", default=5.0), 5.0),
-        max_breakout_extension_pct=_parse_float(_get(combined, "MAX_BREAKOUT_EXTENSION_PCT", default=0.05), 0.05),
+        max_breakout_extension_pct=_parse_float(
+            _get(combined, "MAX_BREAKOUT_EXTENSION_PCT", default=0.05),
+            0.05,
+        ),
         max_option_spike_pct=_parse_float(_get(combined, "MAX_OPTION_SPIKE_PCT", default=0.20), 0.20),
+
         max_consecutive_losses=_parse_int(_get(combined, "MAX_CONSECUTIVE_LOSSES", default=3), 3),
         max_drawdown_pct=_parse_float(_get(combined, "MAX_DRAWDOWN_PCT", default=0.20), 0.20),
+
         min_orb_range=_parse_float(_get(combined, "MIN_ORB_RANGE", default=50.0), 50.0),
         min_volume_spike=_parse_float(_get(combined, "MIN_VOLUME_SPIKE", default=1.5), 1.5),
         max_iv_percentile=_parse_float(_get(combined, "MAX_IV_PERCENTILE", default=70.0), 70.0),
 
         nifty_symbol=_strip_value(_get(combined, "NIFTY_SYMBOL", default="NIFTY 50")),
         nifty_exchange=_strip_value(_get(combined, "NIFTY_EXCHANGE", default="NSE")),
-        poll_seconds=_parse_int(_get(combined, "POLL_SECONDS", default=1), 1),
 
+        poll_seconds=_parse_int(_get(combined, "POLL_SECONDS", default=1), 1),
         signal_cooldown=_parse_int(_get(combined, "SIGNAL_COOLDOWN", default=86400), 86400),
         gap_threshold=_parse_float(_get(combined, "GAP_THRESHOLD", default=5.0), 5.0),
         trend_filter_enabled=_parse_bool(_get(combined, "TREND_FILTER_ENABLED", default=False), False),
         skip_first_candle=_parse_bool(_get(combined, "SKIP_FIRST_CANDLE", default=True), True),
-        no_entry_after=_strip_value(_get(combined, "NO_ENTRY_AFTER", default="14:30")),
+        no_entry_after=_strip_value(_get(combined, "NO_ENTRY_AFTER", default="12:30")),
         square_off=_strip_value(_get(combined, "SQUARE_OFF", default="14:55")),
 
         reconnect_max_attempts=_parse_int(_get(combined, "RECONNECT_MAX_ATTEMPTS", default=5), 5),
@@ -315,7 +413,6 @@ def get_settings() -> Settings:
         trades_file=_strip_value(_get(combined, "TRADES_FILE", default="data/trades.csv")),
         state_file=_strip_value(_get(combined, "STATE_FILE", default="data/runtime_state.json")),
         log_file=_strip_value(_get(combined, "LOG_FILE", default="logs/bot.log")),
-
         dashboard_host=_strip_value(_get(combined, "DASHBOARD_HOST", default="0.0.0.0")),
         dashboard_port=_parse_int(_get(combined, "DASHBOARD_PORT", default=8000), 8000),
         frontend_dir=_strip_value(_get(combined, "FRONTEND_DIR", default="frontend")),
