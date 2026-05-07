@@ -35,6 +35,27 @@ logger = get_logger("samco_client")
 _paper_counter = 0
 
 
+def _extract_filled_qty(data: dict) -> int:
+    if not isinstance(data, dict):
+        return 0
+    for key in (
+        "filledShares",
+        "tradedQty",
+        "filledQty",
+        "executedQty",
+        "filled_quantity",
+        "tradedQuantity",
+    ):
+        value = data.get(key)
+        try:
+            qty = int(float(str(value).replace(",", "").strip()))
+        except (TypeError, ValueError):
+            continue
+        if qty > 0:
+            return qty
+    return 0
+
+
 def _next_paper_id() -> str:
     global _paper_counter
     _paper_counter += 1
@@ -465,7 +486,8 @@ class SamcoClient:
 
                 if status in {"PARTIAL", "PARTIALLY_FILLED"}:
                     avg = await self.get_actual_fill_price(order_id)
-                    return "PARTIAL", 0, avg
+                    partial_qty = _extract_filled_qty(data)
+                    return "PARTIAL", partial_qty, avg
             except Exception as exc:
                 logger.warning("confirm_fill attempt=%d error=%s", attempt, exc)
 
@@ -474,14 +496,14 @@ class SamcoClient:
         logger.error("confirm_fill timeout order=%s", order_id)
         return "UNKNOWN", 0, None
 
-    async def place_order_and_wait_fill(
+    async def place_order_with_fill_info(
         self,
         symbol: str,
         side: str,
         quantity: int,
         exchange: str = "NFO",
         max_fill_wait: int = 10,
-    ) -> tuple[str | None, float | None]:
+    ) -> tuple[str | None, float | None, str, int]:
         resp = await self.place_order(
             symbol=symbol,
             side=side,
@@ -491,21 +513,40 @@ class SamcoClient:
         order_id = resp.get("orderNumber") or resp.get("orderId") or resp.get("order_id")
         if not order_id:
             logger.error(
-                "place_order_and_wait_fill no order_id side=%s symbol=%s resp=%s",
+                "place_order_with_fill_info no order_id side=%s symbol=%s resp=%s",
                 side,
                 symbol,
                 resp,
             )
-            return None, None
+            return None, None, "NO_ORDER_ID", 0
 
-        fill_state, _, fill_price = await self.confirm_fill(
+        fill_state, filled_qty, fill_price = await self.confirm_fill(
             order_id,
             requested_qty=quantity,
             max_attempts=max_fill_wait,
         )
+        return str(order_id), fill_price, fill_state, filled_qty
+
+    async def place_order_and_wait_fill(
+        self,
+        symbol: str,
+        side: str,
+        quantity: int,
+        exchange: str = "NFO",
+        max_fill_wait: int = 10,
+    ) -> tuple[str | None, float | None]:
+        order_id, fill_price, fill_state, _ = await self.place_order_with_fill_info(
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            exchange=exchange,
+            max_fill_wait=max_fill_wait,
+        )
+        if not order_id:
+            return None, None
         if fill_state != "FILLED":
-            return str(order_id), None
-        return str(order_id), fill_price
+            return order_id, None
+        return order_id, fill_price
 
     async def place_stop_loss_order(
         self,
