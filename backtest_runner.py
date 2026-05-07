@@ -17,12 +17,19 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import pandas as pd
 
+from backend.app.core.config_loader import get_settings
+from backend.app.strategy.iron_condor_strategy import IronCondorStrategy
 from option_pricing_engine import estimate_dynamic_entry_credit, estimate_ic_debit
+
+
+_SETTINGS = get_settings()
+_STRATEGY = IronCondorStrategy()
 
 
 @dataclass
@@ -48,11 +55,13 @@ class Trade:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Realistic Iron Condor backtest")
+    p = argparse.ArgumentParser(
+        description="Realistic Iron Condor backtest. Defaults read from .env (bot config)."
+    )
 
     p.add_argument("--file", default="data/nifty_1min_20260504.csv")
-    p.add_argument("--capital", type=float, default=50000)
-    p.add_argument("--lot-size", type=int, default=50)
+    p.add_argument("--capital", type=float, default=float(_SETTINGS.capital))
+    p.add_argument("--lot-size", type=int, default=int(_SETTINGS.order_qty))
 
     # Compatibility args. These are accepted so old commands do not fail.
     p.add_argument("--strategy", default="iron_condor")
@@ -64,19 +73,51 @@ def parse_args() -> argparse.Namespace:
         default="realistic",
     )
 
-    p.add_argument("--entry-time", default="09:20")
-    p.add_argument("--exit-time", default="15:20")
+    p.add_argument(
+        "--entry-time",
+        default=str(getattr(_SETTINGS, "ic_entry_window_start", "09:30")),
+    )
+    p.add_argument(
+        "--exit-time",
+        default=str(getattr(_SETTINGS, "ic_exit_time", "15:00")),
+    )
 
-    # Calibrated safe defaults.
-    p.add_argument("--short-distance", type=int, default=350)
-    p.add_argument("--wing-width", type=int, default=300)
-    p.add_argument("--rounding", type=int, default=50)
-    p.add_argument("--target-pct", type=float, default=0.30)
-    p.add_argument("--stop-loss-mult", type=float, default=1.80)
+    p.add_argument(
+        "--short-distance",
+        type=int,
+        default=int(getattr(_SETTINGS, "ic_short_distance", 250)),
+    )
+    p.add_argument(
+        "--wing-width",
+        type=int,
+        default=int(getattr(_SETTINGS, "ic_wing_width", 100)),
+    )
+    p.add_argument(
+        "--rounding",
+        type=int,
+        default=int(getattr(_SETTINGS, "ic_strike_rounding", 50)),
+    )
+    p.add_argument(
+        "--target-pct",
+        type=float,
+        default=float(getattr(_SETTINGS, "ic_target_profit_pct", 0.50)),
+    )
+    p.add_argument(
+        "--stop-loss-mult",
+        type=float,
+        default=float(getattr(_SETTINGS, "ic_stop_loss_multiple", 1.60)),
+    )
 
-    # Filters.
-    p.add_argument("--skip-gap-pct", type=float, default=0.012)
-    p.add_argument("--skip-open-range-pct", type=float, default=0.012)
+    p.add_argument(
+        "--skip-gap-pct",
+        type=float,
+        default=float(getattr(_SETTINGS, "ic_skip_gap_pct", 0.012)),
+    )
+    p.add_argument(
+        "--skip-open-range-pct",
+        type=float,
+        default=float(getattr(_SETTINGS, "ic_skip_open_range_pct", 0.012)),
+    )
 
     p.add_argument("--output", default="data/backtest_results.csv")
     p.add_argument("--summary-output", default="data/backtest_summary.json")
@@ -149,20 +190,19 @@ def calculate_strikes(
 
 def calculate_charges(entry_credit: float, exit_debit: float, qty: int) -> float:
     """
-    Approx Indian options charges.
-    Adjust these if your broker/charges differ.
+    Reuses the production IronCondorStrategy charge model so backtest P&L
+    is directly comparable to live trading. Charges scale by .env config
+    (IC_BROKERAGE_PER_ORDER, IC_STT_SELL_RATE, IC_EXCHANGE_TXN_RATE, etc.)
     """
+    if entry_credit <= 0 or exit_debit < 0 or qty <= 0:
+        return 0.0
 
-    turnover = (entry_credit + exit_debit) * qty
-
-    brokerage = 100.0
-    stt = exit_debit * qty * 0.00125
-    exchange_txn = turnover * 0.00053
-    sebi = turnover * 0.000001
-    stamp = entry_credit * qty * 0.00003
-    gst = (brokerage + exchange_txn) * 0.18
-
-    return round(brokerage + stt + exchange_txn + sebi + stamp + gst, 2)
+    charges = _STRATEGY.estimate_round_trip_charges(
+        entry_premium=entry_credit,
+        exit_premium=exit_debit,
+        qty=qty,
+    )
+    return round(float(charges.get("total_charges", 0.0)), 2)
 
 
 def should_skip_day(
@@ -471,12 +511,36 @@ def main() -> None:
     file_path = Path(args.file)
 
     if not file_path.exists():
-        fallback = Path("data/nifty_1min_20260501.csv")
-        if fallback.exists():
-            print(f"WARNING: {file_path} not found. Using fallback: {fallback}")
-            file_path = fallback
+        data_dir = Path("data")
+        candidates = sorted(data_dir.glob("nifty_1min*.csv")) if data_dir.exists() else []
+
+        if candidates:
+            file_path = candidates[0]
+            print(f"WARNING: {args.file} not found. Using available file: {file_path}")
         else:
-            raise FileNotFoundError(f"Missing file: {file_path}")
+            print(f"ERROR: Backtest data file not found: {file_path}\n", file=sys.stderr)
+            print("This backtest needs a NIFTY 1-min OHLC CSV with one of:", file=sys.stderr)
+            print("  columns: datetime, open, high, low, close", file=sys.stderr)
+            print("  or:      date, time, close (open/high/low optional)", file=sys.stderr)
+            print("\nProvide via --file=path/to/your.csv", file=sys.stderr)
+
+            if data_dir.exists():
+                all_csvs = sorted(p.name for p in data_dir.glob("*.csv"))
+                if all_csvs:
+                    print(f"\nCSVs found in data/: {all_csvs}", file=sys.stderr)
+                else:
+                    print("\nNo CSVs found in data/. Add a NIFTY 1-min CSV first.", file=sys.stderr)
+            else:
+                print("\ndata/ directory does not exist.", file=sys.stderr)
+
+            raise SystemExit(1)
+
+    print(
+        f"Backtest config: short_distance={args.short_distance} "
+        f"wing_width={args.wing_width} target_pct={args.target_pct} "
+        f"stop_loss_mult={args.stop_loss_mult} lot_size={args.lot_size} "
+        f"entry={args.entry_time} exit={args.exit_time} mode={args.mode}"
+    )
 
     raw = pd.read_csv(file_path)
     df = normalize_data(raw)
