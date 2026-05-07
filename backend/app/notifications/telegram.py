@@ -56,6 +56,8 @@ class TelegramNotifier:
         logger.info("Telegram notifier started chat=%s", self._mask(self.chat_id))
         self._client = httpx.AsyncClient(timeout=SEND_TIMEOUT_SECONDS)
 
+        queue = self.event_bus.subscribe()
+
         try:
             await self._send(
                 "[INFO] LORDS bot started\n"
@@ -63,7 +65,6 @@ class TelegramNotifier:
                 f"  strategy: {str(getattr(settings, 'strategy_type', '')).upper()}"
             )
 
-            queue = self.event_bus.subscribe()
             async for event in self.event_bus.iter_events(queue):
                 await self._handle_event(event)
         finally:
