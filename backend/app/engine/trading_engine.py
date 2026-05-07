@@ -910,11 +910,8 @@ class TradingEngine:
 
             charge_breakdown = {
                 "brokerage": round(float(pnl.get("platform_charges", 0.0)), 2),
-                "brokerage_total": round(float(pnl.get("platform_charges", 0.0)), 2),
                 "stt": round(float(pnl.get("stt", 0.0)), 2),
-                "stt_sell": round(float(pnl.get("stt", 0.0)), 2),
                 "exchange_txn": round(float(pnl.get("exchange_txn", 0.0)), 2),
-                "exch_txn_total": round(float(pnl.get("exchange_txn", 0.0)), 2),
                 "sebi": round(float(pnl.get("sebi", 0.0)), 2),
                 "gst": round(float(pnl.get("gst", 0.0)), 2),
                 "stamp_duty": round(float(pnl.get("stamp_duty", 0.0)), 2),
