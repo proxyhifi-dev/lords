@@ -7,6 +7,10 @@ const ANALYTICS_POLL_MS = 15000;
 let prevSpot = null;
 let tradingEnabled = true;
 let icData = null;
+let pollInFlight = false;
+let icPollInFlight = false;
+let analyticsPollInFlight = false;
+let spotColorTimeout = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   poll();
@@ -19,6 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function poll() {
+  if (pollInFlight) return;
+  pollInFlight = true;
   try {
     const res = await fetch(`${API}/api/dashboard`);
     if (!res.ok) throw new Error(res.statusText);
@@ -27,6 +33,8 @@ async function poll() {
     renderMain(data);
   } catch {
     setOffline();
+  } finally {
+    pollInFlight = false;
   }
 }
 
@@ -72,8 +80,10 @@ function updateHeader(data) {
       delta.className = `spot-delta ${change >= 0 ? 'up' : 'down'}`;
 
       el.style.color = change >= 0 ? 'var(--green)' : 'var(--red)';
-      setTimeout(() => {
+      if (spotColorTimeout) clearTimeout(spotColorTimeout);
+      spotColorTimeout = setTimeout(() => {
         el.style.color = 'var(--accent)';
+        spotColorTimeout = null;
       }, 600);
     }
 
@@ -91,7 +101,7 @@ function updateKPIs(data) {
   dailyEl.textContent = fmtPnl(dailyPnl);
   dailyEl.className = `kpi-value ${dailyPnl >= 0 ? 'positive' : 'negative'}`;
 
-  const maxLoss = 5000;
+  const maxLoss = Number(data.max_daily_loss) > 0 ? Number(data.max_daily_loss) : 3000;
   const bar = document.getElementById('pnl-bar');
   bar.style.width = `${Math.min((Math.abs(dailyPnl) / maxLoss) * 100, 100)}%`;
   bar.style.background = dailyPnl >= 0 ? 'var(--green)' : 'var(--red)';
@@ -602,6 +612,8 @@ function renderPayoff(trade, spot) {
 }
 
 async function loadICStats() {
+  if (icPollInFlight) return;
+  icPollInFlight = true;
   try {
     const res = await fetch(`${API}/api/iron-condor/stats`);
     if (!res.ok) return;
@@ -609,6 +621,8 @@ async function loadICStats() {
     icData = await res.json();
   } catch {
     icData = null;
+  } finally {
+    icPollInFlight = false;
   }
 }
 
@@ -870,6 +884,8 @@ function formatStrikeFromTrade(trade) {
 }
 
 async function loadAnalytics() {
+  if (analyticsPollInFlight) return;
+  analyticsPollInFlight = true;
   const grid = document.getElementById('analytics-grid');
   grid.innerHTML = '<div class="analytics-placeholder">Loading...</div>';
 
@@ -907,6 +923,8 @@ async function loadAnalytics() {
     `).join('');
   } catch {
     grid.innerHTML = '<div class="analytics-placeholder">Error loading analytics</div>';
+  } finally {
+    analyticsPollInFlight = false;
   }
 }
 
