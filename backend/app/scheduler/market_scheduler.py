@@ -382,17 +382,37 @@ class MarketScheduler:
 
     async def _rejection_watcher(self) -> None:
         logger.info("Scheduler rejection watcher started")
-        queue = self.event_bus.subscribe("IC_ENTRY_REJECTED")
 
-        async for event in self.event_bus.iter_events(queue):
+        ic_queue = self.event_bus.subscribe("IC_ENTRY_REJECTED")
+        risk_queue = self.event_bus.subscribe("RISK_BLOCKED")
+
+        # RISK_BLOCKED reasons the scheduler doesn't already gate on, but which
+        # won't recover within the standard 60s cooldown window.
+        persistent_risk_reasons = {"late_entry", "max_trades_hit"}
+
+        def _extend(source: str, reason: str) -> None:
             cooldown = self.signal_rejection_cooldown_seconds
             self._signal_block_until = wall_time.time() + cooldown
-            payload = event.payload or {}
             logger.info(
-                "IC entry rejected reason=%s — extending cooldown by %ds",
-                payload.get("reason", "unknown"),
+                "Signal cooldown extended by %ds source=%s reason=%s",
                 cooldown,
+                source,
+                reason,
             )
+
+        async def _watch_ic() -> None:
+            async for event in self.event_bus.iter_events(ic_queue):
+                payload = event.payload or {}
+                _extend("IC_ENTRY_REJECTED", str(payload.get("reason") or "unknown"))
+
+        async def _watch_risk() -> None:
+            async for event in self.event_bus.iter_events(risk_queue):
+                payload = event.payload or {}
+                reason = str(payload.get("reason") or "")
+                if reason in persistent_risk_reasons:
+                    _extend("RISK_BLOCKED", reason)
+
+        await asyncio.gather(_watch_ic(), _watch_risk())
 
     async def _loop(self) -> None:
         logger.info("MARKET LOOP TASK STARTED")
