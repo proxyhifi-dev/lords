@@ -67,7 +67,11 @@ def build_dashboard_router(
             }
         
         trade = state.active_trade
-        entry_time = datetime.fromisoformat(trade['entry_time'])
+        try:
+            entry_time = datetime.fromisoformat(str(trade.get('entry_time') or ''))
+        except (TypeError, ValueError) as exc:
+            logger.warning("Dashboard IC stats: invalid entry_time=%r (%s)", trade.get('entry_time'), exc)
+            entry_time = current_time
         
         # Calculate current premium
         current_prem = trading_engine.iron_condor_strategy.estimate_current_premium(
