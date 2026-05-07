@@ -889,6 +889,7 @@ async def get_iron_condor_stats():
             "current_time": current_time.isoformat(),
             "pricing_source": premium_source,
             "current_legs": current_legs,
+            "current_iv": getattr(state, "current_iv", None),
         }
     )
 
