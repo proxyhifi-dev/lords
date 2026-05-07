@@ -160,7 +160,7 @@ class ExecutionManager:
                     if fill_state == "FILLED":
                         self._transition(exec_ctx, OrderState.FILLED)
                         return ExecutionResult(oid, fqty, avg, OrderState.FILLED, False)
-                    if fill_state == "PARTIAL_FILL":
+                    if fill_state == "PARTIAL":
                         self._transition(exec_ctx, OrderState.PARTIAL_FILL)
                         await self._mark_uncertain(exec_ctx, reason="partial_fill_not_resolved")
                         return ExecutionResult(
