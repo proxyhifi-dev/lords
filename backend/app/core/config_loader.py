@@ -97,6 +97,9 @@ class Settings:
     samco_yob: str = ""
     samco_access_token: str = ""
 
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+
     mode: str = "paper"
     paper_mode_use_broker: bool = True
     use_redis: bool = False
@@ -259,6 +262,9 @@ def get_settings() -> Settings:
         samco_password=_strip_value(_get(combined, "SAMCO_PASSWORD", default="")),
         samco_yob=_strip_value(_get(combined, "SAMCO_YOB", default="")),
         samco_access_token=_strip_value(_get(combined, "SAMCO_ACCESS_TOKEN", default="")),
+
+        telegram_bot_token=_strip_value(_get(combined, "TELEGRAM_BOT_TOKEN", default="")),
+        telegram_chat_id=_strip_value(_get(combined, "TELEGRAM_CHAT_ID", default="")),
 
         mode=_strip_value(_get(combined, "MODE", default="paper")).lower(),
         paper_mode_use_broker=_parse_bool(_get(combined, "PAPER_MODE_USE_BROKER", default=True), True),
