@@ -113,6 +113,7 @@ class Settings:
     market_close_time: str = "15:30"
     closed_log_interval_seconds: int = 60
     signal_cooldown_seconds: int = 86400
+    signal_rejection_cooldown_seconds: int = 300
     startup_reconcile_timeout_seconds: int = 30
     broker_quote_timeout_seconds: int = 3
     daily_reset_check_interval_seconds: int = 10
@@ -277,6 +278,10 @@ def get_settings() -> Settings:
         signal_cooldown_seconds=_parse_int(
             _get(combined, "SIGNAL_COOLDOWN_SECONDS", "SIGNAL_COOLDOWN", default=86400),
             86400,
+        ),
+        signal_rejection_cooldown_seconds=_parse_int(
+            _get(combined, "SIGNAL_REJECTION_COOLDOWN_SECONDS", default=300),
+            300,
         ),
         startup_reconcile_timeout_seconds=_parse_int(
             _get(combined, "STARTUP_RECONCILE_TIMEOUT_SECONDS", default=30),
