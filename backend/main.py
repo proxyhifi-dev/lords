@@ -576,6 +576,7 @@ async def dashboard():
                 "trading_mode": state.trading_mode,
                 "trading_enabled": state.trading_enabled,
                 "nifty_spot": state.spot_price,
+                "current_iv": getattr(state, "current_iv", None),
                 "signal": state.signal,
                 "active_trade": state.active_trade,
                 "daily_pnl": round(state.daily_pnl, 2),
