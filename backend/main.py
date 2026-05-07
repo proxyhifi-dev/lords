@@ -815,7 +815,11 @@ async def get_iron_condor_stats():
         )
 
     trade = state.active_trade
-    entry_time = datetime.fromisoformat(trade["entry_time"])
+    try:
+        entry_time = datetime.fromisoformat(str(trade.get("entry_time") or ""))
+    except (TypeError, ValueError) as exc:
+        logger.warning("IC stats: invalid entry_time=%r (%s)", trade.get("entry_time"), exc)
+        entry_time = current_time
 
     if entry_time.tzinfo is None:
         entry_time = entry_time.replace(tzinfo=current_time.tzinfo)
@@ -849,8 +853,8 @@ async def get_iron_condor_stats():
 
     entry_premium = float(trade["entry_price"])
     qty = int(trade["qty"])
-    target_profit_pct = float(getattr(settings, "ic_target_profit_pct", 0.13))
-    stop_loss_multiple = float(getattr(settings, "ic_stop_loss_multiple", 2.10))
+    target_profit_pct = float(getattr(settings, "ic_target_profit_pct", 0.35))
+    stop_loss_multiple = float(getattr(settings, "ic_stop_loss_multiple", 1.60))
 
     target_close_premium = round(entry_premium * (1 - target_profit_pct), 2)
     target_profit_amount = round(entry_premium * target_profit_pct * qty, 2)
