@@ -801,7 +801,7 @@ async def get_iron_condor_stats():
         )
 
     state = await scheduler.state.snapshot()
-    current_time = datetime.now(timezone.utc).astimezone()
+    current_time = datetime.now(IST)
 
     if not state.active_trade or state.active_trade.get("strategy") != "IRON_CONDOR":
         return _safe_json_response(
