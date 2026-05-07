@@ -203,6 +203,16 @@ class IronCondorStrategy:
             return None
         return text[:10]
 
+    def _effective_iv(self, live_iv: float | None) -> float:
+        if live_iv is not None and live_iv > 0:
+            return float(live_iv)
+        return self.assumed_iv
+
+    def _iv_factor(self, live_iv: float | None) -> float:
+        if not self.assumed_iv or self.assumed_iv <= 0:
+            return 1.0
+        return self._effective_iv(live_iv) / self.assumed_iv
+
     def _ceil_to_step(self, value: float, step: int) -> int:
         return int(math.ceil(value / step) * step)
 
@@ -339,7 +349,11 @@ class IronCondorStrategy:
         logger.info("IC strikes calculated for spot=%.2f -> %s", spot, strikes)
         return strikes
 
-    def estimate_dynamic_entry_credit(self, spot: float) -> float:
+    def estimate_dynamic_entry_credit(
+        self,
+        spot: float,
+        live_iv: float | None = None,
+    ) -> float:
         if not spot or spot <= 0:
             return 0.0
 
@@ -361,6 +375,7 @@ class IronCondorStrategy:
         width_adjustment = max(0.80, min(wing_width / 300.0, 1.25))
 
         credit = base_credit * (0.85 + distance_adjustment) * width_adjustment
+        credit *= self._iv_factor(live_iv)
 
         mode = str(getattr(self.settings, "mode", "paper")).lower()
         if mode == "conservative":
@@ -376,6 +391,7 @@ class IronCondorStrategy:
         strike: float,
         opt_type: str,
         days: int = 30,
+        live_iv: float | None = None,
     ) -> float:
         if not spot or spot <= 0:
             logger.warning("Invalid spot: %s", spot)
@@ -397,20 +413,26 @@ class IronCondorStrategy:
             intrinsic = max(0.0, strike - spot)
             otm_pct = max(0.0, (spot - strike) / spot)
 
+        iv = self._effective_iv(live_iv)
         sqrt_t = math.sqrt(days / 365.0)
-        base_time_value = spot * self.assumed_iv * sqrt_t
+        base_time_value = spot * iv * sqrt_t
         distance_discount = math.exp(-otm_pct * 18.0)
         time_value = base_time_value * distance_discount
         premium = intrinsic + time_value
 
         return round(max(self.min_option_premium, premium), 2)
 
-    def estimate_leg_premiums(self, spot: float, days: int = 30) -> dict[str, float]:
+    def estimate_leg_premiums(
+        self,
+        spot: float,
+        days: int = 30,
+        live_iv: float | None = None,
+    ) -> dict[str, float]:
         strikes = self.calculate_strikes(spot)
         if not strikes:
             return {}
 
-        net_credit = self.estimate_dynamic_entry_credit(spot)
+        net_credit = self.estimate_dynamic_entry_credit(spot, live_iv=live_iv)
         if net_credit <= 0:
             return {}
 
@@ -433,8 +455,13 @@ class IronCondorStrategy:
 
         return premiums
 
-    def estimate_net_premium(self, spot: float, days: int = 30) -> float:
-        net = self.estimate_dynamic_entry_credit(spot)
+    def estimate_net_premium(
+        self,
+        spot: float,
+        days: int = 30,
+        live_iv: float | None = None,
+    ) -> float:
+        net = self.estimate_dynamic_entry_credit(spot, live_iv=live_iv)
         if net <= 0:
             logger.warning("Invalid net credit: %.2f", net)
             return 0.0
@@ -756,12 +783,13 @@ class IronCondorStrategy:
         spot: float,
         qty: int,
         days: int = 30,
+        live_iv: float | None = None,
     ) -> dict[str, Any]:
         strikes = self.calculate_strikes(spot)
         if not strikes:
             return {}
 
-        net_credit = self.estimate_net_premium(spot, days)
+        net_credit = self.estimate_net_premium(spot, days, live_iv=live_iv)
         if net_credit <= 0:
             return {}
 
@@ -783,7 +811,7 @@ class IronCondorStrategy:
             "lower_breakeven": round(strikes["short_put"] - net_credit, 2),
             "reward_risk": round(max_profit / max_loss, 3) if max_loss > 0 else 0.0,
             "strikes": strikes,
-            "premiums": self.estimate_leg_premiums(spot, days),
+            "premiums": self.estimate_leg_premiums(spot, days, live_iv=live_iv),
             "entry_viable": viable,
             "entry_viability_reason": viability_reason,
             "entry_viability": viability,
