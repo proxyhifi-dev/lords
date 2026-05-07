@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +30,7 @@ configure_logging()
 
 logger = get_logger("main")
 settings = get_settings()
+IST = ZoneInfo("Asia/Kolkata")
 
 
 def _safe_number(value: Any) -> Any:
@@ -886,7 +888,7 @@ async def get_iron_condor_stats():
 
 
 def _days_until_next_entry() -> int:
-    now = datetime.now()
+    now = datetime.now(IST)
 
     if bool(getattr(settings, "ic_monthly_only", False)):
         start_day = int(getattr(settings, "ic_entry_day_start", 1))
@@ -905,11 +907,8 @@ def _days_until_next_entry() -> int:
 
 
 def _mins_until(target_time: time, current_time: datetime) -> int:
-    from zoneinfo import ZoneInfo
-
-    ist = ZoneInfo("Asia/Kolkata")
-    current_ist = current_time.astimezone(ist)
-    target_dt = datetime.combine(current_ist.date(), target_time, tzinfo=ist)
+    current_ist = current_time.astimezone(IST)
+    target_dt = datetime.combine(current_ist.date(), target_time, tzinfo=IST)
 
     if target_dt <= current_ist:
         return 0
