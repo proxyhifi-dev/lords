@@ -504,7 +504,10 @@ class MarketScheduler:
             self._iv_history.append(iv)
 
         try:
-            await self.state.update(spot_price=spot)
+            updates: dict[str, Any] = {"spot_price": spot}
+            if iv is not None:
+                updates["current_iv"] = iv
+            await self.state.update(**updates)
         except Exception as exc:
             logger.error("state.update spot_price failed: %s", exc, exc_info=True)
             return
