@@ -130,8 +130,8 @@ def get_days_until_next_entry() -> int:
     """Calculate days until next Iron Condor entry window."""
     from datetime import datetime
     from calendar import monthrange
-    
-    now = datetime.now()
+
+    now = datetime.now(ZoneInfo("Asia/Kolkata"))
     current_day = now.day
     
     # If we're past day 5, next entry is day 1 of next month
