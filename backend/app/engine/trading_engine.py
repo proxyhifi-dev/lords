@@ -182,6 +182,30 @@ class TradingEngine:
 
         self.ws_resilience = None
 
+        try:
+            sq_h, sq_m = map(int, str(settings.square_off).strip().split(":")[:2])
+            self._square_off_time = dtime(sq_h, sq_m)
+        except (TypeError, ValueError, AttributeError) as exc:
+            logger.error(
+                "Invalid SQUARE_OFF=%r in settings — falling back to 15:25 (%s)",
+                getattr(settings, "square_off", None),
+                exc,
+            )
+            self._square_off_time = dtime(15, 25)
+
+        no_entry_raw = getattr(settings, "no_entry_after", None)
+        self._no_entry_after_time: dtime | None = None
+        if no_entry_raw:
+            try:
+                ne_h, ne_m = map(int, str(no_entry_raw).strip().split(":")[:2])
+                self._no_entry_after_time = dtime(ne_h, ne_m)
+            except (TypeError, ValueError, AttributeError) as exc:
+                logger.error(
+                    "Invalid NO_ENTRY_AFTER=%r in settings — disabling no-entry cutoff (%s)",
+                    no_entry_raw,
+                    exc,
+                )
+
         logger.info(
             "TradingEngine initialized mode=%s broker_connected=%s paper_mode_use_broker=%s",
             str(getattr(settings, "mode", "paper")).upper(),
@@ -771,7 +795,7 @@ class TradingEngine:
             "entry_price": round(actual_net_premium, 2),
             "entry_ltp": round(actual_net_premium, 2),
             "quote_net_premium": round(snapshot_net_premium, 2),
-            "entry_time": current_time.isoformat(),
+            "entry_time": datetime.now(timezone.utc).isoformat(),
             "status": "OPEN",
             "size_label": payload.get("size_label", "FULL"),
             "order_ids": order_ids,
@@ -1039,11 +1063,9 @@ class TradingEngine:
             if state.active_trade or state.spot_price is None or not state.trading_enabled:
                 return
 
-            if getattr(settings, "no_entry_after", None):
-                no_h, no_m = map(int, str(settings.no_entry_after).split(":"))
-                if datetime.now(IST).time() >= dtime(no_h, no_m):
-                    logger.info("Past no-entry time — skipping")
-                    return
+            if self._no_entry_after_time and datetime.now(IST).time() >= self._no_entry_after_time:
+                logger.info("Past no-entry time — skipping")
+                return
 
             raw_signal = payload.get("signal")
             size_label = payload.get("size_label", "FULL")
@@ -1363,7 +1385,15 @@ class TradingEngine:
             return
 
         current_time = datetime.now(IST)
-        entry_time = datetime.fromisoformat(trade["entry_time"])
+        try:
+            entry_time = datetime.fromisoformat(str(trade.get("entry_time") or ""))
+        except (TypeError, ValueError) as exc:
+            logger.error(
+                "IC monitor: invalid entry_time=%r — using current_time as fallback (%s)",
+                trade.get("entry_time"),
+                exc,
+            )
+            entry_time = current_time
 
         try:
             current_premium, current_legs, pricing_source = await self._get_live_iron_condor_close_snapshot(trade)
@@ -1482,7 +1512,6 @@ class TradingEngine:
 
             trail_sl = round(trade["max_price"] * (1 - settings.trailing_pct), 2)
 
-            sq_h, sq_m = map(int, settings.square_off.split(":"))
             now = datetime.now(IST)
 
             if ltp <= sl_price:
@@ -1502,7 +1531,7 @@ class TradingEngine:
                     await self._exit_remaining(trade, "TRAIL_STOP", ltp)
                     return
 
-            if now.time() >= dtime(sq_h, sq_m):
+            if now.time() >= self._square_off_time:
                 await self._exit_trade(trade, "EOD_SQUAREOFF", ltp)
                 return
 
