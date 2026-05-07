@@ -280,13 +280,15 @@ class IronCondorStrategy:
         logger.info("Iron Condor entry allowed")
         return True
 
-    def calculate_strikes(self, spot: float) -> dict[str, int]:
+    def calculate_strikes(self, spot: float, live_iv: float | None = None) -> dict[str, int]:
         if not spot or spot <= 0:
             logger.error("Invalid spot price: %s", spot)
             return {}
 
         rounding = self.strike_rounding
-        short_distance = max(0, self.short_distance)
+        iv_factor = self._iv_factor(live_iv)
+        scaled = int(round(self.short_distance * iv_factor))
+        short_distance = max(0, (scaled // rounding) * rounding) if rounding > 0 else max(0, scaled)
         wing_width = max(rounding, self.wing_width)
 
         if short_distance > 0 and wing_width > 0:
@@ -643,6 +645,33 @@ class IronCondorStrategy:
             "stamp_duty": round(stamp_duty, 2),
             "gst": round(gst, 2),
             "total_charges": round(total_charges, 2),
+        }
+
+    def is_expected_move_safe(
+        self,
+        spot: float,
+        short_distance: float,
+        live_iv: float | None = None,
+        days: int = 1,
+    ) -> tuple[bool, dict[str, float]]:
+        iv = self._effective_iv(live_iv)
+        if iv <= 0 or short_distance <= 0:
+            return True, {"expected_move": 0.0, "short_distance": float(short_distance)}
+
+        expected_move = spot * iv * math.sqrt(max(days, 1) / 365.0)
+        buffer = self._safe_float(
+            getattr(self.settings, "ic_expected_move_buffer", 1.30),
+            1.30,
+        )
+        required_distance = expected_move * buffer
+        is_safe = float(short_distance) >= required_distance
+
+        return is_safe, {
+            "expected_move": round(expected_move, 2),
+            "short_distance": round(float(short_distance), 2),
+            "buffer": round(buffer, 3),
+            "required_distance": round(required_distance, 2),
+            "iv": round(iv, 4),
         }
 
     def is_entry_credit_viable(
