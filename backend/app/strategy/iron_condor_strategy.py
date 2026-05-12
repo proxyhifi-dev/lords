@@ -660,8 +660,8 @@ class IronCondorStrategy:
 
         expected_move = spot * iv * math.sqrt(max(days, 1) / 365.0)
         buffer = self._safe_float(
-            getattr(self.settings, "ic_expected_move_buffer", 1.30),
-            1.30,
+            getattr(self.settings, "ic_expected_move_buffer", 1.10),
+            1.10,
         )
         required_distance = expected_move * buffer
         is_safe = float(short_distance) >= required_distance

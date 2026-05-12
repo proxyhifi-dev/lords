@@ -222,6 +222,16 @@ class TradingEngine:
     def _broker_available(self) -> bool:
         return self.broker is not None
 
+    def _broker_position_checks_enabled(self) -> bool:
+        """
+        Broker position validation must run in live mode and in paper mode when
+        PAPER_MODE_USE_BROKER=true. Only pure offline paper mode skips broker
+        position APIs.
+        """
+        return self._broker_available() and (
+            not self._is_paper_mode() or self._paper_mode_use_broker()
+        )
+
     def _ic_quote_cache_ttl_seconds(self) -> int:
         return int(getattr(settings, "ic_quote_cache_ttl_seconds", 20) or 20)
 
@@ -1896,6 +1906,108 @@ class TradingEngine:
 
             await self.event_bus.publish("TRADE_CLOSED", {"trade": closed})
 
+    async def _buy_with_retry(self, symbol: str, qty: int) -> tuple[str | None, float | None, int]:
+        """
+        Place a BUY order with retry, fill confirmation, partial-fill handling,
+        and safe cancellation of unfilled remainder.
+
+        Returns: (order_id, fill_price, filled_qty). If no quantity is safely
+        filled, returns (None, None, 0).
+        """
+        requested_qty = _to_int(qty, 0)
+        if requested_qty <= 0:
+            logger.error("BUY rejected locally: invalid qty=%s symbol=%s", qty, symbol)
+            return None, None, 0
+
+        if not self._broker_available():
+            if self._is_paper_mode():
+                fill = await self._paper_quote_price(symbol, fallback=0.0)
+                return self._paper_safe_order_id("BUY", symbol), fill, requested_qty
+            logger.error("BUY failed: broker unavailable symbol=%s qty=%d", symbol, requested_qty)
+            return None, None, 0
+
+        for attempt in range(1, _SELL_MAX_RETRIES + 1):
+            order_id: str | None = None
+            immediate_fill: float | None = None
+
+            try:
+                order_id, immediate_fill = await self.broker.place_order_and_wait_fill(
+                    symbol=symbol,
+                    side="BUY",
+                    quantity=requested_qty,
+                )
+            except Exception as exc:
+                logger.error(
+                    "BUY attempt %d/%d exception symbol=%s qty=%d err=%s",
+                    attempt,
+                    _SELL_MAX_RETRIES,
+                    symbol,
+                    requested_qty,
+                    exc,
+                )
+
+            if not order_id:
+                if attempt < _SELL_MAX_RETRIES:
+                    await asyncio.sleep(_SELL_RETRY_DELAY)
+                continue
+
+            status, filled_qty, avg_price = await self._await_fill_confirmation(
+                order_id,
+                requested_qty,
+                "BUY",
+            )
+            data = status.get("orderDetails") or status.get("data") or status
+            if isinstance(data, list):
+                data = data[0] if data else {}
+            broker_state = str(data.get("orderStatus") or data.get("status") or "").upper()
+
+            fill_price = avg_price if avg_price is not None else immediate_fill
+
+            if filled_qty >= requested_qty or broker_state in {"COMPLETE", "FILLED", "TRADED"}:
+                logger.info(
+                    "BUY filled attempt=%d order=%s qty=%d/%d fill=%s",
+                    attempt,
+                    order_id,
+                    min(filled_qty or requested_qty, requested_qty),
+                    requested_qty,
+                    f"{fill_price:.2f}" if fill_price is not None else "N/A",
+                )
+                return order_id, fill_price, min(filled_qty or requested_qty, requested_qty)
+
+            if filled_qty > 0:
+                logger.warning(
+                    "BUY partial fill accepted order=%s filled=%d/%d; cancelling remainder",
+                    order_id,
+                    filled_qty,
+                    requested_qty,
+                )
+                await self._safe_cancel_order(order_id)
+                return order_id, fill_price, filled_qty
+
+            if broker_state in {"REJECTED", "CANCELLED", "CANCELED"}:
+                logger.warning(
+                    "BUY terminal state attempt=%d/%d order=%s state=%s; retrying if allowed",
+                    attempt,
+                    _SELL_MAX_RETRIES,
+                    order_id,
+                    broker_state,
+                )
+            else:
+                logger.warning(
+                    "BUY not filled attempt=%d/%d order=%s state=%s; cancelling before retry",
+                    attempt,
+                    _SELL_MAX_RETRIES,
+                    order_id,
+                    broker_state or "UNKNOWN",
+                )
+                await self._safe_cancel_order(order_id)
+
+            if attempt < _SELL_MAX_RETRIES:
+                await asyncio.sleep(_SELL_RETRY_DELAY)
+
+        logger.error("BUY failed after retries symbol=%s qty=%d", symbol, requested_qty)
+        return None, None, 0
+
     async def _sell_with_retry(
         self, symbol: str, qty: int, reason: str
     ) -> tuple[str | None, float | None, str, int]:
@@ -2220,8 +2332,12 @@ class TradingEngine:
         return latest_status, latest_filled, latest_avg
 
     async def _safe_cancel_order(self, order_id: str) -> None:
-        if self._is_paper_mode():
-            logger.info("PAPER MODE: skipping cancel order=%s", order_id)
+        if not self._broker_available():
+            logger.info("No broker available: skipping cancel order=%s", order_id)
+            return
+
+        if self._is_paper_mode() and not self._paper_mode_use_broker():
+            logger.info("PURE PAPER MODE: skipping cancel order=%s", order_id)
             return
 
         try:
@@ -2230,9 +2346,9 @@ class TradingEngine:
             logger.warning("Cancel failed order=%s err=%s", order_id, exc)
 
     async def _ensure_position_closed(self, symbol: str, reason: str, fallback_qty: int) -> bool:
-        if self._is_paper_mode():
+        if not self._broker_position_checks_enabled():
             logger.info(
-                "PAPER MODE: treating position as closed symbol=%s reason=%s fallback_qty=%d",
+                "Broker position validation skipped symbol=%s reason=%s fallback_qty=%d",
                 symbol,
                 reason,
                 fallback_qty,
@@ -2266,7 +2382,7 @@ class TradingEngine:
         return False
 
     async def _get_open_position_qty(self, symbol: str) -> int:
-        if self._is_paper_mode():
+        if not self._broker_position_checks_enabled():
             return 0
 
         try:
@@ -2293,8 +2409,8 @@ class TradingEngine:
         return max(total, 0)
 
     async def _validate_post_order_position(self, symbol: str, expected_qty: int, context: str) -> None:
-        if self._is_paper_mode():
-            logger.info("PAPER MODE: skipping post-order position validation symbol=%s", symbol)
+        if not self._broker_position_checks_enabled():
+            logger.info("Broker position validation skipped symbol=%s", symbol)
             return
 
         if expected_qty <= 0:

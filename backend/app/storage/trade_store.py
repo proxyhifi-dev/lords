@@ -112,6 +112,13 @@ class TradeStore:
             return False
 
     @staticmethod
+    def _format_money(value: Any) -> str:
+        number = TradeStore._to_float(value, None)
+        if number is None:
+            return ""
+        return f"{round(number, 2):.2f}"
+
+    @staticmethod
     def _setting_float(name: str, fallback: float | None = None) -> float:
         value = getattr(settings, name, fallback)
         if value is None or str(value).strip() == "":
@@ -293,10 +300,10 @@ class TradeStore:
         gross_pnl: Any,
         net_pnl: Any,
         explicit_total_charges: Any,
-    ) -> float | str:
+    ) -> str:
         explicit = self._to_float(explicit_total_charges, None)
         if explicit is not None and explicit > 0:
-            return round(explicit, 2)
+            return self._format_money(explicit)
 
         gross = self._to_float(gross_pnl, None)
         net = self._to_float(net_pnl, None)
@@ -305,7 +312,7 @@ class TradeStore:
             return ""
 
         derived = abs(gross - net)
-        return round(derived, 2) if derived > 0 else ""
+        return self._format_money(derived) if derived > 0 else ""
 
     def _estimate_intraday_charges(
         self,
@@ -468,7 +475,7 @@ class TradeStore:
         repaired["exchange_fee"] = estimated["exchange_fee"]
         repaired["gst"] = estimated["gst"]
         repaired["stamp_duty"] = estimated["stamp_duty"]
-        repaired["total_charges"] = estimated["total_charges"]
+        repaired["total_charges"] = self._format_money(estimated["total_charges"])
 
         if net is None or abs(net - gross) < 0.0001:
             repaired["net_pnl"] = round(gross - estimated["total_charges"], 2)
@@ -732,7 +739,7 @@ class TradeStore:
                 "stamp_duty": estimated["stamp_duty"],
                 "total_charges": estimated["total_charges"],
             }
-            total_charges = estimated["total_charges"]
+            total_charges = self._format_money(estimated["total_charges"])
 
             if net_float is None or abs(net_float - gross_float) < 0.0001:
                 net_pnl = round(gross_float - estimated["total_charges"], 2)

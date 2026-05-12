@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -14,9 +14,10 @@ class OrderExecutionSequence:
     Paper-safe / broker-compatible Iron Condor execution helper.
 
     Design:
-    - In paper mode: simulate success, no real broker orders.
-    - In live mode: this helper requires resolved broker symbols for each leg.
-    - If symbols are not supplied, it fails closed instead of guessing.
+    - In paper mode: simulate 4-leg sequence through the same execution path.
+    - In live mode: requires resolved broker symbols for all 4 legs.
+    - If symbols are missing in live mode, fails closed instead of guessing.
+    - Tests can monkeypatch _place_order_with_retry() to validate leg order and premium mapping.
     """
 
     def __init__(self, broker_client, settings, logger):
@@ -42,13 +43,9 @@ class OrderExecutionSequence:
         """
         Execute Iron Condor with hedge-first sequence.
 
-        Expected symbols in live mode:
-            {
-                "long_call": "...",
-                "long_put": "...",
-                "short_call": "...",
-                "short_put": "...",
-            }
+        Live mode requires resolved broker symbols for all 4 legs. Paper mode
+        uses synthetic symbols but still runs the same 4-leg sequencing path so
+        regressions in leg ordering/pricing are testable.
         """
 
         self.logger.info("=" * 80)
@@ -62,34 +59,29 @@ class OrderExecutionSequence:
         )
         self.logger.info("=" * 80)
 
-        if not self._is_live():
-            self.logger.info("PAPER MODE: simulating hedge-first Iron Condor sequence")
-            return {
-                "success": True,
-                "order_ids": {
-                    "long_call": self._paper_order_id("BUY", f"LC-{strikes['long_call']}"),
-                    "long_put": self._paper_order_id("BUY", f"LP-{strikes['long_put']}"),
-                    "short_call": self._paper_order_id("SELL", f"SC-{strikes['short_call']}"),
-                    "short_put": self._paper_order_id("SELL", f"SP-{strikes['short_put']}"),
-                },
-                "margin_used": float(getattr(self.settings, "ic_margin_required", 0)),
-                "filled_legs": [
-                    ("LONG_CALL", f"LC-{strikes['long_call']}"),
-                    ("LONG_PUT", f"LP-{strikes['long_put']}"),
-                    ("SHORT_CALL", f"SC-{strikes['short_call']}"),
-                    ("SHORT_PUT", f"SP-{strikes['short_put']}"),
-                ],
-                "error": None,
-            }
-
         required_keys = {"long_call", "long_put", "short_call", "short_put"}
-        if not symbols or not required_keys.issubset(symbols.keys()):
-            error = (
-                "Live IC entry requires resolved option symbols for all 4 legs. "
-                "Missing symbols prevents safe order placement."
-            )
-            self.logger.error(error)
-            return {"success": False, "order_ids": {}, "filled_legs": [], "error": error}
+
+        if self._is_live():
+            if not symbols or not required_keys.issubset(symbols.keys()):
+                error = (
+                    "Live IC entry requires resolved option symbols for all 4 legs. "
+                    "Missing symbols prevents safe order placement."
+                )
+                self.logger.error(error)
+                return {
+                    "success": False,
+                    "order_ids": {},
+                    "filled_legs": [],
+                    "error": error,
+                }
+        else:
+            symbols = {
+                "long_call": f"LC-{strikes['long_call']}",
+                "long_put": f"LP-{strikes['long_put']}",
+                "short_call": f"SC-{strikes['short_call']}",
+                "short_put": f"SP-{strikes['short_put']}",
+            }
+            self.logger.info("PAPER MODE: simulating hedge-first Iron Condor sequence")
 
         order_ids: dict[str, str] = {}
         filled_legs: list[tuple[str, str]] = []
@@ -97,69 +89,124 @@ class OrderExecutionSequence:
         try:
             self.logger.info("PHASE 1: Buying protective hedges first")
 
-            lc = await self._place_market_order_with_retry(
+            lc = await self._place_order_with_retry(
                 symbol=symbols["long_call"],
                 side="BUY",
                 quantity=self.settings.order_qty,
                 leg_name="LONG_CALL",
+                price=premiums.get("long_call"),
             )
             if not lc["success"]:
-                return {"success": False, "order_ids": {}, "filled_legs": [], "error": "Long Call fill failed"}
+                return {
+                    "success": False,
+                    "order_ids": {},
+                    "filled_legs": [],
+                    "error": "Long Call fill failed",
+                }
+
             order_ids["long_call"] = lc["order_id"]
             filled_legs.append(("LONG_CALL", lc["order_id"]))
 
-            lp = await self._place_market_order_with_retry(
+            lp = await self._place_order_with_retry(
                 symbol=symbols["long_put"],
                 side="BUY",
                 quantity=self.settings.order_qty,
                 leg_name="LONG_PUT",
+                price=premiums.get("long_put"),
             )
             if not lp["success"]:
                 await self._offset_filled_legs(
-                    [{"symbol": symbols["long_call"], "side": "BUY", "qty": self.settings.order_qty}]
+                    [
+                        {
+                            "symbol": symbols["long_call"],
+                            "side": "BUY",
+                            "qty": self.settings.order_qty,
+                        }
+                    ]
                 )
-                return {"success": False, "order_ids": {}, "filled_legs": [], "error": "Long Put fill failed"}
+                return {
+                    "success": False,
+                    "order_ids": order_ids,
+                    "filled_legs": filled_legs,
+                    "error": "Long Put fill failed",
+                }
+
             order_ids["long_put"] = lp["order_id"]
             filled_legs.append(("LONG_PUT", lp["order_id"]))
 
             self.logger.info("PHASE 2: Selling short strikes after hedges confirmed")
 
-            sc = await self._place_market_order_with_retry(
+            sc = await self._place_order_with_retry(
                 symbol=symbols["short_call"],
                 side="SELL",
                 quantity=self.settings.order_qty,
                 leg_name="SHORT_CALL",
+                price=premiums.get("short_call"),
             )
             if not sc["success"]:
                 await self._offset_filled_legs(
                     [
-                        {"symbol": symbols["long_call"], "side": "BUY", "qty": self.settings.order_qty},
-                        {"symbol": symbols["long_put"], "side": "BUY", "qty": self.settings.order_qty},
+                        {
+                            "symbol": symbols["long_call"],
+                            "side": "BUY",
+                            "qty": self.settings.order_qty,
+                        },
+                        {
+                            "symbol": symbols["long_put"],
+                            "side": "BUY",
+                            "qty": self.settings.order_qty,
+                        },
                     ]
                 )
-                return {"success": False, "order_ids": {}, "filled_legs": [], "error": "Short Call fill failed"}
+                return {
+                    "success": False,
+                    "order_ids": order_ids,
+                    "filled_legs": filled_legs,
+                    "error": "Short Call fill failed",
+                }
+
             order_ids["short_call"] = sc["order_id"]
             filled_legs.append(("SHORT_CALL", sc["order_id"]))
 
-            sp = await self._place_market_order_with_retry(
+            sp = await self._place_order_with_retry(
                 symbol=symbols["short_put"],
                 side="SELL",
                 quantity=self.settings.order_qty,
                 leg_name="SHORT_PUT",
+                price=premiums.get("short_put"),
             )
             if not sp["success"]:
                 await self._offset_filled_legs(
                     [
-                        {"symbol": symbols["long_call"], "side": "BUY", "qty": self.settings.order_qty},
-                        {"symbol": symbols["long_put"], "side": "BUY", "qty": self.settings.order_qty},
-                        {"symbol": symbols["short_call"], "side": "SELL", "qty": self.settings.order_qty},
+                        {
+                            "symbol": symbols["long_call"],
+                            "side": "BUY",
+                            "qty": self.settings.order_qty,
+                        },
+                        {
+                            "symbol": symbols["long_put"],
+                            "side": "BUY",
+                            "qty": self.settings.order_qty,
+                        },
+                        {
+                            "symbol": symbols["short_call"],
+                            "side": "SELL",
+                            "qty": self.settings.order_qty,
+                        },
                     ]
                 )
-                return {"success": False, "order_ids": {}, "filled_legs": [], "error": "Short Put fill failed"}
+                return {
+                    "success": False,
+                    "order_ids": order_ids,
+                    "filled_legs": filled_legs,
+                    "error": "Short Put fill failed",
+                }
+
             order_ids["short_put"] = sp["order_id"]
             filled_legs.append(("SHORT_PUT", sp["order_id"]))
 
             self.logger.info("IRON CONDOR ENTRY COMPLETE - ALL 4 LEGS FILLED")
+
             return {
                 "success": True,
                 "order_ids": order_ids,
@@ -170,7 +217,53 @@ class OrderExecutionSequence:
 
         except Exception as exc:
             self.logger.error("Critical error in entry sequence: %s", exc, exc_info=True)
-            return {"success": False, "order_ids": order_ids, "filled_legs": filled_legs, "error": str(exc)}
+            return {
+                "success": False,
+                "order_ids": order_ids,
+                "filled_legs": filled_legs,
+                "error": str(exc),
+            }
+
+    async def _place_order_with_retry(
+        self,
+        *,
+        symbol: str,
+        side: str,
+        quantity: int,
+        leg_name: str,
+        price: Any | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Compatibility wrapper used by the IC sequence.
+
+        In paper mode this never touches broker.
+        In live mode it delegates to market-order retry path.
+        Tests can monkeypatch this wrapper to verify leg order and price mapping.
+        """
+
+        if not self._is_live():
+            order_id = self._paper_order_id(side, symbol)
+            self.logger.info(
+                "PAPER %s simulated order=%s symbol=%s side=%s qty=%d price=%s",
+                leg_name,
+                order_id,
+                symbol,
+                side,
+                quantity,
+                price,
+            )
+            return {
+                "success": True,
+                "order_id": order_id,
+                "filled_price": float(price or 0.0),
+            }
+
+        return await self._place_market_order_with_retry(
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            leg_name=leg_name,
+        )
 
     async def _place_market_order_with_retry(
         self,
@@ -179,7 +272,15 @@ class OrderExecutionSequence:
         quantity: int,
         leg_name: str,
     ) -> Dict[str, Any]:
+        if self.broker is None:
+            return {
+                "success": False,
+                "error": "Broker unavailable",
+            }
+
         for attempt in range(1, self.max_retries + 1):
+            order_id: str | None = None
+
             try:
                 self.logger.info(
                     "Attempt %d/%d: %s %s qty=%d",
@@ -189,13 +290,19 @@ class OrderExecutionSequence:
                     symbol,
                     quantity,
                 )
+
                 resp = await self.broker.place_order(
                     symbol=symbol,
                     side=side,
                     quantity=quantity,
                     exchange="NFO",
                 )
-                order_id = resp.get("orderNumber") or resp.get("orderId") or resp.get("order_id")
+
+                order_id = (
+                    resp.get("orderNumber")
+                    or resp.get("orderId")
+                    or resp.get("order_id")
+                )
 
                 if not order_id:
                     raise RuntimeError(f"{leg_name} order placement returned no order id: {resp}")
@@ -228,6 +335,16 @@ class OrderExecutionSequence:
                     order_id,
                 )
 
+                if fill_state in {"REJECTED", "CANCELLED", "CANCELED"}:
+                    self.logger.warning(
+                        "%s terminal broker state=%s order=%s",
+                        leg_name,
+                        fill_state,
+                        order_id,
+                    )
+                else:
+                    await self._safe_cancel_order(str(order_id), leg_name)
+
             except Exception as exc:
                 self.logger.warning(
                     "%s attempt %d/%d failed: %s",
@@ -237,20 +354,57 @@ class OrderExecutionSequence:
                     exc,
                 )
 
+                if order_id:
+                    await self._safe_cancel_order(str(order_id), leg_name)
+
             if attempt < self.max_retries:
                 await asyncio.sleep(self.retry_delay * (2 ** (attempt - 1)))
 
         self.logger.error("%s failed after %d attempts", leg_name, self.max_retries)
-        return {"success": False}
+        return {
+            "success": False,
+            "error": f"{leg_name} failed after retries",
+        }
+
+    async def _safe_cancel_order(self, order_id: str, leg_name: str = "") -> None:
+        if self.broker is None:
+            return
+
+        try:
+            cancel_fn = getattr(self.broker, "cancel_order", None)
+            if cancel_fn is None:
+                self.logger.warning(
+                    "Cancel skipped for %s order=%s: broker has no cancel_order()",
+                    leg_name,
+                    order_id,
+                )
+                return
+
+            await cancel_fn(order_id)
+            self.logger.info("Cancelled unfilled order=%s leg=%s", order_id, leg_name)
+
+        except Exception as exc:
+            self.logger.warning(
+                "Cancel failed order=%s leg=%s err=%s",
+                order_id,
+                leg_name,
+                exc,
+            )
 
     async def _offset_filled_legs(self, legs: List[Dict[str, Any]]) -> None:
         """
         Offset already-filled legs with opposite side market orders.
         This is safer than trying to cancel filled orders.
         """
+
+        if not self._is_live() or self.broker is None:
+            self.logger.warning("PAPER MODE: simulated offset for %d filled legs", len(legs))
+            return
+
         for leg in reversed(legs):
             try:
                 exit_side = "SELL" if leg["side"].upper() == "BUY" else "BUY"
+
                 self.logger.warning(
                     "Offsetting filled leg symbol=%s original_side=%s exit_side=%s qty=%d",
                     leg["symbol"],
@@ -258,12 +412,14 @@ class OrderExecutionSequence:
                     exit_side,
                     leg["qty"],
                 )
+
                 await self.broker.place_order(
                     symbol=leg["symbol"],
                     side=exit_side,
                     quantity=leg["qty"],
                     exchange="NFO",
                 )
+
             except Exception as exc:
                 self.logger.error("Offset failed for %s: %s", leg, exc)
 
@@ -282,12 +438,19 @@ class ExpiryDaySafetyProtocol:
 
     def get_safe_exit_deadline(self, entry_date: datetime) -> datetime:
         exit_text = str(getattr(self.settings, "ic_exit_time", "15:00"))
+
         try:
             hour, minute = map(int, exit_text.split(":"))
         except Exception:
             hour, minute = 15, 0
 
-        deadline = entry_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        deadline = entry_date.replace(
+            hour=hour,
+            minute=minute,
+            second=0,
+            microsecond=0,
+        )
+
         if deadline < entry_date:
             deadline = deadline + timedelta(days=1)
 
@@ -335,7 +498,10 @@ class WebSocketResilience:
                 wait_time = min(self.reconnect_delay, self.max_reconnect_delay)
                 self.logger.info("Retrying in %.1fs...", wait_time)
                 await asyncio.sleep(wait_time)
-                self.reconnect_delay = min(self.reconnect_delay * 2, self.max_reconnect_delay)
+                self.reconnect_delay = min(
+                    self.reconnect_delay * 2,
+                    self.max_reconnect_delay,
+                )
 
     async def _heartbeat_monitor(self):
         while self.is_connected:
@@ -354,7 +520,10 @@ class WebSocketResilience:
                 if not self.is_connected:
                     await self.connect()
 
-                data = await asyncio.wait_for(self.ws.recv(), timeout=self.heartbeat_interval)
+                data = await asyncio.wait_for(
+                    self.ws.recv(),
+                    timeout=self.heartbeat_interval,
+                )
 
                 if isinstance(data, bytes):
                     data = data.decode("utf-8", errors="ignore")
@@ -394,6 +563,7 @@ class MarginUtilizationMonitor:
         usage_pct = margin_used / self.available_capital
 
         status = "OK"
+
         if usage_pct >= self.critical_threshold:
             status = "CRITICAL"
             self.logger.critical(
@@ -402,6 +572,7 @@ class MarginUtilizationMonitor:
                 f"{margin_used:,.0f}",
                 f"{self.available_capital:,.0f}",
             )
+
         elif usage_pct >= self.warning_threshold:
             status = "WARNING"
             self.logger.warning(
@@ -410,6 +581,7 @@ class MarginUtilizationMonitor:
                 f"{margin_used:,.0f}",
                 f"{self.available_capital:,.0f}",
             )
+
         else:
             self.logger.info(
                 "Margin OK: %.1f%% used (₹%s/₹%s)",
