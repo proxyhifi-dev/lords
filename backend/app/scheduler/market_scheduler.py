@@ -8,7 +8,7 @@ from datetime import datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from backend.app.broker.samco_client import SamcoClient
+from backend.app.broker.samco_client import SamcoClient, get_weekly_expiry
 from backend.app.core.config_loader import get_settings
 from backend.app.core.event_bus import EventBus
 from backend.app.engine.reconciliation import ReconciliationEngine
@@ -107,6 +107,35 @@ def is_iron_condor_trade(trade: dict[str, Any] | None) -> bool:
     return strategy == "IRON_CONDOR"
 
 
+def _order_status_text(payload: Any) -> str:
+    data = payload
+    if isinstance(data, dict):
+        data = data.get("orderDetails") or data.get("data") or data
+    if isinstance(data, list):
+        data = data[0] if data else {}
+    if not isinstance(data, dict):
+        return ""
+    return str(data.get("orderStatus") or data.get("status") or "").strip().upper()
+
+
+def _order_filled_qty(payload: Any) -> int:
+    data = payload
+    if isinstance(data, dict):
+        data = data.get("orderDetails") or data.get("data") or data
+    if isinstance(data, list):
+        data = data[0] if data else {}
+    if not isinstance(data, dict):
+        return 0
+    for key in ("filledQty", "filledShares", "tradedQty", "executedQty", "tradedQuantity"):
+        try:
+            qty = int(float(str(data.get(key, 0)).replace(",", "").strip()))
+        except (TypeError, ValueError):
+            continue
+        if qty > 0:
+            return qty
+    return 0
+
+
 class MarketScheduler:
     def __init__(self) -> None:
         self.state = state_manager
@@ -150,6 +179,68 @@ class MarketScheduler:
 
         self._entry_window_start = setting_time("ic_entry_window_start")
         self._entry_window_end = setting_time("ic_entry_window_end")
+
+        self._current_candle_minute: datetime | None = None
+        self._current_candle: dict[str, Any] | None = None
+
+    def get_status_summary(self) -> dict[str, Any]:
+        now_ts = wall_time.time()
+        return {
+            "running": self.running,
+            "last_tick_age_sec": round(max(0.0, now_ts - self._last_tick_time), 2),
+            "last_good_quote_age_sec": round(max(0.0, now_ts - self._last_good_quote_time), 2),
+            "consecutive_quote_failures": int(self._consecutive_quote_failures),
+            "signal_cooldown_active": bool(
+                self._last_signal_time
+                and (now_ist().timestamp() - self._last_signal_time) < self.signal_cooldown_seconds
+            ),
+            "manual_flatten_cooldown_active": bool(
+                self._last_manual_flatten_time
+                and (now_ts - self._last_manual_flatten_time) < self.manual_flatten_cooldown_seconds
+            ),
+            "scheduler_stall_warn_seconds": self.scheduler_stall_warn_seconds,
+            "scheduler_stall_hard_seconds": setting_float("scheduler_stall_hard_seconds"),
+        }
+
+    def _update_candle(self, price: float, timestamp: datetime) -> dict[str, Any] | None:
+        """
+        Build completed 1-minute candles from tick prices.
+
+        Returns None while the current minute is still forming.
+        Returns the just-closed candle when a new minute starts.
+        """
+        minute = timestamp.replace(second=0, microsecond=0)
+        price = float(price)
+
+        if self._current_candle is None or self._current_candle_minute is None:
+            self._current_candle_minute = minute
+            self._current_candle = {
+                "time": minute,
+                "open": price,
+                "high": price,
+                "low": price,
+                "close": price,
+            }
+            return None
+
+        if minute == self._current_candle_minute:
+            self._current_candle["high"] = max(float(self._current_candle["high"]), price)
+            self._current_candle["low"] = min(float(self._current_candle["low"]), price)
+            self._current_candle["close"] = price
+            return None
+
+        closed = dict(self._current_candle)
+
+        self._current_candle_minute = minute
+        self._current_candle = {
+            "time": minute,
+            "open": price,
+            "high": price,
+            "low": price,
+            "close": price,
+        }
+
+        return closed
 
     @property
     def closed_log_interval_seconds(self) -> int:
@@ -383,6 +474,8 @@ class MarketScheduler:
                 self._last_manual_flatten_time = 0.0
                 self._latest_iv = None
                 self._iv_history.clear()
+                self._current_candle_minute = None
+                self._current_candle = None
 
                 logger.info("=== DAILY RESET COMPLETE ===")
 
@@ -394,8 +487,6 @@ class MarketScheduler:
         ic_queue = self.event_bus.subscribe("IC_ENTRY_REJECTED")
         risk_queue = self.event_bus.subscribe("RISK_BLOCKED")
 
-        # RISK_BLOCKED reasons the scheduler doesn't already gate on, but which
-        # won't recover within the standard 60s cooldown window.
         persistent_risk_reasons = {"late_entry", "max_trades_hit"}
 
         def _extend(source: str, reason: str) -> None:
@@ -437,19 +528,30 @@ class MarketScheduler:
             await asyncio.sleep(settings.poll_seconds)
 
     async def _handle_open_market_cycle(self) -> None:
-        delay = wall_time.time() - self._last_tick_time
+        current_ts = wall_time.time()
+        delay = current_ts - self._last_tick_time
 
         if delay > self.scheduler_stall_warn_seconds:
             logger.error("Scheduler stalled! delay=%.2fs", delay)
 
-        data_stale = wall_time.time() - self._last_good_quote_time
+        hard_stall_seconds = float(getattr(settings, "scheduler_stall_hard_seconds", 60) or 60)
+        if delay > hard_stall_seconds:
+            logger.critical(
+                "Scheduler hard stall detected delay=%.2fs threshold=%.2fs — triggering fail-safe",
+                delay,
+                hard_stall_seconds,
+            )
+            await self._fail_safe_on_data_loss(reason=f"scheduler_stall_{delay:.0f}s")
+            return
+
+        data_stale = current_ts - self._last_good_quote_time
 
         if data_stale > settings.deadman_timeout:
             logger.critical(
                 "Dead-man switch: market data stale for %.1fs",
                 data_stale,
             )
-            await self._fail_safe_on_data_loss()
+            await self._fail_safe_on_data_loss(reason=f"data_stale_{data_stale:.0f}s")
             return
 
         await self._tick()
@@ -504,6 +606,10 @@ class MarketScheduler:
             return
 
         logger.info("TICK: spot=%.2f", spot)
+
+        closed_candle = self._update_candle(spot, now_ist())
+        if closed_candle:
+            await self.event_bus.publish("CANDLE_CLOSED", closed_candle)
 
         iv = self._extract_iv(index_quote)
 
@@ -571,6 +677,12 @@ class MarketScheduler:
             logger.info("IC gate blocked: weekend")
             return False
 
+        if bool(getattr(settings, "ic_skip_expiry_day_entry", True)):
+            current_day = current_time.date()
+            if get_weekly_expiry(current_day) == current_day:
+                logger.info("IC gate blocked: expiry day %s", current_day.isoformat())
+                return False
+
         if not state.trading_enabled:
             logger.info("IC gate blocked: trading_enabled=False")
             return False
@@ -616,7 +728,8 @@ class MarketScheduler:
             return False
 
         logger.info(
-            "IC gate passed: monthly_only=%s time=%s spot=%.2f",
+            "IC gate passed: one_per_day=%s monthly_only=%s time=%s spot=%.2f",
+            bool(getattr(settings, "ic_one_per_day", True)),
             bool(settings.ic_monthly_only),
             current_time.strftime("%H:%M:%S"),
             spot,
@@ -625,6 +738,18 @@ class MarketScheduler:
         return True
 
     def _passes_cycle_limit(self, current_time: datetime, state: Any) -> bool:
+        today = current_time.date().isoformat()
+
+        if bool(getattr(settings, "ic_one_per_day", True)):
+            for value in (
+                getattr(state, "last_trade_date", None),
+                getattr(state, "last_ic_trade_date", None),
+                getattr(state, "iron_condor_trade_date", None),
+            ):
+                if value and str(value)[:10] == today:
+                    logger.info("IC gate blocked: one-per-day lock value=%s", value)
+                    return False
+
         if settings.ic_monthly_only:
             start_day = settings.ic_entry_day_start
             end_day = settings.ic_entry_day_end
@@ -646,17 +771,6 @@ class MarketScheduler:
                 return False
 
             return True
-
-        today = current_time.date().isoformat()
-
-        for value in (
-            getattr(state, "last_trade_date", None),
-            getattr(state, "last_ic_trade_date", None),
-            getattr(state, "iron_condor_trade_date", None),
-        ):
-            if value and str(value)[:10] == today:
-                logger.info("IC gate blocked: already traded today value=%s", value)
-                return False
 
         return True
 
@@ -680,14 +794,32 @@ class MarketScheduler:
 
         return None
 
-    async def _fail_safe_on_data_loss(self) -> None:
+    async def _fail_safe_on_data_loss(self, reason: str = "stale_quote_stream") -> None:
         state = await self.state.snapshot()
 
         if not state.trading_enabled:
             return
 
-        await self.state.update(trading_enabled=False)
-        logger.critical("Trading disabled due to stale quote stream")
+        await self.state.update(
+            trading_enabled=False,
+            last_order_failed=True,
+            last_risk_breach=reason,
+        )
+        logger.critical("Trading disabled due to %s", reason)
+
+        if not state.active_trade:
+            return
+
+        try:
+            result = await self.flatten_position()
+            logger.critical("Fail-safe flatten attempted reason=%s result=%s", reason, result)
+        except Exception as exc:
+            logger.critical(
+                "Fail-safe flatten failed reason=%s err=%s",
+                reason,
+                exc,
+                exc_info=True,
+            )
 
     async def flatten_position(self) -> dict[str, Any]:
         state = await self.state.snapshot()
@@ -701,6 +833,218 @@ class MarketScheduler:
             return await self._flatten_iron_condor_trade(trade)
 
         return await self._flatten_directional_trade(trade)
+
+    async def _broker_leg_position_map(self, trade: dict[str, Any]) -> dict[str, int]:
+        if settings.is_paper:
+            return {}
+
+        positions = await self.broker.get_positions()
+        leg_symbols = {
+            str(leg.get("symbol")).strip()
+            for leg in (trade.get("legs") or [])
+            if str(leg.get("symbol") or "").strip()
+        }
+        result: dict[str, int] = {}
+        for pos in positions:
+            symbol = str(pos.get("tradingSymbol") or pos.get("symbolName") or "").strip()
+            if not symbol or symbol not in leg_symbols:
+                continue
+            result[symbol] = to_int(
+                pos.get("netQty") or pos.get("netQuantity") or pos.get("net_qty"),
+                0,
+            )
+        return result
+
+    async def _verify_flatten_order_statuses(
+        self,
+        trade: dict[str, Any],
+    ) -> tuple[bool, list[dict[str, Any]], str | None]:
+        exit_legs = [
+            leg for leg in (trade.get("exit_legs") or [])
+            if isinstance(leg, dict) and str(leg.get("exit_order_id") or "").strip()
+        ]
+        if not exit_legs:
+            return False, [], "missing_exit_order_proof"
+
+        if not hasattr(self.broker, "get_order_status"):
+            return False, [], "broker_order_status_api_unavailable"
+
+        proof: list[dict[str, Any]] = []
+        for leg in exit_legs:
+            order_id = str(leg.get("exit_order_id") or "").strip()
+            symbol = str(leg.get("symbol") or "").strip()
+            try:
+                status_payload = await self.broker.get_order_status(order_id)
+            except Exception as exc:
+                return False, proof, f"order_status_lookup_failed:{symbol}:{exc}"
+
+            status = _order_status_text(status_payload)
+            filled_qty = _order_filled_qty(status_payload)
+            avg_fill = None
+            if hasattr(self.broker, "get_actual_fill_price"):
+                try:
+                    avg_fill = await self.broker.get_actual_fill_price(order_id)
+                except Exception:
+                    avg_fill = None
+
+            proof.append(
+                {
+                    "symbol": symbol,
+                    "order_id": order_id,
+                    "status": status,
+                    "filled_qty": filled_qty,
+                    "avg_fill_price": avg_fill,
+                }
+            )
+
+            if status not in {"COMPLETE", "FILLED", "TRADED", "EXECUTED"}:
+                return False, proof, f"ambiguous_exit_order_status:{symbol}:{status or 'UNKNOWN'}"
+
+        return True, proof, None
+
+    async def _verify_iron_condor_flatten(
+        self,
+        trade: dict[str, Any],
+        *,
+        max_attempts: int = 3,
+        retry_delay: float = 1.0,
+    ) -> dict[str, Any]:
+        last_open: dict[str, int] = {}
+        before = await self._broker_leg_position_map(trade)
+        attempts_used = 0
+        order_proof: list[dict[str, Any]] = []
+        order_proof_ok, order_proof, proof_error = await self._verify_flatten_order_statuses(trade)
+        if not order_proof_ok:
+            unclosed_symbols = sorted(before.keys())
+            await self.state.update(
+                trading_enabled=False,
+                circuit_breaker_open=True,
+                last_order_failed=True,
+                last_risk_breach="emergency_flatten_order_proof_failed",
+                manual_intervention_required=True,
+                emergency_flatten_verified=False,
+                emergency_flatten_attempts=0,
+                emergency_flatten_unclosed_symbols=unclosed_symbols,
+                emergency_flatten_last_error=proof_error,
+                emergency_flatten_order_proof=order_proof,
+                active_trade={
+                    **trade,
+                    "manual_intervention_required": True,
+                    "emergency_flatten_verified": False,
+                    "remaining_broker_positions": before,
+                    "emergency_flatten_order_proof": order_proof,
+                },
+            )
+            await self.event_bus.publish(
+                "EMERGENCY_FLATTEN_UNVERIFIED",
+                {
+                    "remaining_positions": before,
+                    "last_error": proof_error,
+                    "order_proof": order_proof,
+                },
+            )
+            return {
+                "verified": False,
+                "attempts": 0,
+                "before_positions": before,
+                "remaining_positions": before,
+                "last_error": proof_error,
+                "order_proof": order_proof,
+            }
+
+        for attempt in range(1, max_attempts + 1):
+            attempts_used = attempt
+            current = await self._broker_leg_position_map(trade)
+            open_positions = {symbol: qty for symbol, qty in current.items() if qty != 0}
+            if not open_positions:
+                await self.state.update(
+                    emergency_flatten_verified=True,
+                    manual_intervention_required=False,
+                    emergency_flatten_attempts=attempt,
+                    emergency_flatten_unclosed_symbols=[],
+                    emergency_flatten_last_error=None,
+                    emergency_flatten_order_proof=order_proof,
+                )
+                return {
+                    "verified": True,
+                    "attempts": attempt,
+                    "before_positions": before,
+                    "remaining_positions": {},
+                    "last_error": None,
+                    "order_proof": order_proof,
+                }
+
+            last_open = dict(open_positions)
+            if attempt < max_attempts:
+                for symbol, qty in open_positions.items():
+                    side = "SELL" if qty > 0 else "BUY"
+                    order_id = None
+                    fill_state = None
+                    avg_fill = None
+                    if hasattr(self.broker, "place_order_with_fill_info"):
+                        try:
+                            order_id, avg_fill, fill_state, _ = await self.broker.place_order_with_fill_info(
+                                symbol=symbol,
+                                side=side,
+                                quantity=abs(qty),
+                            )
+                        except Exception:
+                            order_id = None
+                    if order_id is None:
+                        resp = await self.broker.place_order(symbol=symbol, side=side, quantity=abs(qty))
+                        if isinstance(resp, dict):
+                            order_id = resp.get("orderNumber") or resp.get("orderId") or resp.get("order_id")
+                            fill_state = resp.get("status")
+                    order_proof.append(
+                        {
+                            "symbol": symbol,
+                            "order_id": order_id,
+                            "status": str(fill_state or "SUBMITTED").upper(),
+                            "filled_qty": abs(qty),
+                            "avg_fill_price": avg_fill,
+                            "phase": "retry_close",
+                            "attempt": attempt,
+                        }
+                    )
+                await asyncio.sleep(retry_delay)
+
+        unclosed_symbols = sorted(last_open.keys())
+        last_error = "remaining_broker_positions_after_flatten"
+        await self.state.update(
+            trading_enabled=False,
+            circuit_breaker_open=True,
+            last_order_failed=True,
+            last_risk_breach="emergency_flatten_unverified",
+            manual_intervention_required=True,
+            emergency_flatten_verified=False,
+            emergency_flatten_attempts=attempts_used,
+            emergency_flatten_unclosed_symbols=unclosed_symbols,
+            emergency_flatten_last_error=last_error,
+            emergency_flatten_order_proof=order_proof,
+            active_trade={
+                **trade,
+                "manual_intervention_required": True,
+                "emergency_flatten_verified": False,
+                "remaining_broker_positions": last_open,
+                "emergency_flatten_order_proof": order_proof,
+            },
+        )
+        await self.event_bus.publish(
+            "EMERGENCY_FLATTEN_UNVERIFIED",
+            {
+                "remaining_positions": last_open,
+                "last_error": last_error,
+                "order_proof": order_proof,
+            },
+        )
+        return {
+            "verified": False,
+            "attempts": attempts_used,
+            "before_positions": before,
+            "remaining_positions": last_open,
+            "last_error": last_error,
+            "order_proof": order_proof,
+        }
 
     async def _flatten_iron_condor_trade(self, trade: dict[str, Any]) -> dict[str, Any]:
         qty = to_int(trade.get("qty"), 0)
@@ -768,25 +1112,33 @@ class MarketScheduler:
                 "exit_premium": round(current_premium, 2),
                 "pnl": round(net_pnl, 2),
                 "order_id": f"PAPER-FLATTEN-IC-{int(wall_time.time())}",
+                "emergency_flatten_verified": True,
             }
 
         if not self.engine:
             return {"status": "error", "message": "trading_engine_unavailable"}
 
-        await self.engine._exit_iron_condor_trade(
+        closed_trade = await self.engine._exit_iron_condor_trade(
             trade=trade,
             reason="MANUAL_FLATTEN",
             current_premium=current_premium,
         )
+        verification_trade = closed_trade if isinstance(closed_trade, dict) else trade
+        verification = await self._verify_iron_condor_flatten(verification_trade)
 
         self._last_manual_flatten_time = wall_time.time()
         self._last_signal_time = now_ist().timestamp()
 
         return {
-            "status": "flattened",
+            "status": "flattened" if verification["verified"] else "manual_intervention_required",
             "symbol": symbol,
             "qty": qty,
             "exit_premium": round(current_premium, 2),
+            "emergency_flatten_verified": bool(verification["verified"]),
+            "emergency_flatten_attempts": int(verification["attempts"]),
+            "remaining_positions": verification["remaining_positions"],
+            "emergency_flatten_last_error": verification.get("last_error"),
+            "emergency_flatten_order_proof": verification.get("order_proof", []),
         }
 
     def _build_paper_closed_iron_condor_trade(

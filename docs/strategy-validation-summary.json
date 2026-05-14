@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-05-14T07:38:13.708091Z",
+  "total_trades": 11,
+  "win_rate_pct": 45.45,
+  "gross_pnl": 2387.45,
+  "total_charges": 1487.1,
+  "net_pnl": 1257.06,
+  "profit_factor": 1.77,
+  "max_drawdown": 1238.35,
+  "average_win": 579.55,
+  "average_loss": -273.44,
+  "expectancy_per_trade": 114.28,
+  "target_trades_net_negative": 2,
+  "stop_loss_trades": 1,
+  "eod_trades": 3,
+  "expiry_forced_exits": 2,
+  "best_day": "2026-05-05",
+  "best_day_pnl": 1220.03,
+  "worst_day": "2026-05-07",
+  "worst_day_pnl": -221.78,
+  "charges_aware_target_blocks": 2
+}

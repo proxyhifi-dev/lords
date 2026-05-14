@@ -46,6 +46,10 @@ class IronCondorStrategy:
             getattr(self.settings, "ic_target_profit_pct", 0.13),
             0.13,
         )
+        self.one_per_day = bool(getattr(self.settings, "ic_one_per_day", True))
+        self.skip_expiry_day_entry = bool(
+            getattr(self.settings, "ic_skip_expiry_day_entry", True)
+        )
         self.stop_loss_multiple = self._safe_float(
             getattr(self.settings, "ic_stop_loss_multiple", 2.10),
             2.10,
@@ -81,6 +85,22 @@ class IronCondorStrategy:
             getattr(self.settings, "ic_min_entry_premium", 8.0),
             8.0,
         )
+        self.min_gross_profit = self._safe_float(
+            getattr(self.settings, "ic_min_gross_profit", 250.0),
+            250.0,
+        )
+        self.min_gross_target_profit = self._safe_float(
+            getattr(self.settings, "ic_min_gross_target_profit", self.min_gross_profit),
+            self.min_gross_profit,
+        )
+        self.min_net_target_profit = self._safe_float(
+            getattr(self.settings, "ic_min_net_target_profit", 100.0),
+            100.0,
+        )
+        self.charges_buffer_multiplier = self._safe_float(
+            getattr(self.settings, "ic_charges_buffer_multiplier", 1.25),
+            1.25,
+        )
         self.min_reward_risk = self._safe_float(
             getattr(self.settings, "ic_min_reward_risk", 0.20),
             0.20,
@@ -101,6 +121,22 @@ class IronCondorStrategy:
         self.assumed_iv = self._safe_float(
             getattr(self.settings, "ic_assumed_iv", 0.15),
             0.15,
+        )
+        self.high_probability_mode = bool(
+            getattr(self.settings, "ic_high_probability_mode", True)
+        )
+        self.require_live_iv = bool(getattr(self.settings, "ic_require_live_iv", False))
+        self.min_live_iv = self._safe_float(
+            getattr(self.settings, "ic_min_live_iv", 0.12),
+            0.12,
+        )
+        self.max_live_iv = self._safe_float(
+            getattr(self.settings, "ic_max_live_iv", 0.24),
+            0.24,
+        )
+        self.min_safety_buffer_points = self._safe_float(
+            getattr(self.settings, "ic_min_safety_buffer_points", 40.0),
+            40.0,
         )
         self.decay_rate = self._safe_float(
             getattr(self.settings, "ic_decay_rate", 0.15),
@@ -208,6 +244,18 @@ class IronCondorStrategy:
             return float(live_iv)
         return self.assumed_iv
 
+    def is_expiry_day(self, current_time: datetime | date | None = None) -> bool:
+        from backend.app.broker.samco_client import get_weekly_expiry
+
+        if current_time is None:
+            day = datetime.now(IST).date()
+        elif isinstance(current_time, datetime):
+            day = self._to_ist(current_time).date()
+        else:
+            day = current_time
+
+        return get_weekly_expiry(day) == day
+
     def _iv_factor(self, live_iv: float | None) -> float:
         if not self.assumed_iv or self.assumed_iv <= 0:
             return 1.0
@@ -233,6 +281,10 @@ class IronCondorStrategy:
             logger.debug("Weekend blocked: %s", current_time.strftime("%A"))
             return False
 
+        if self.skip_expiry_day_entry and self.is_expiry_day(current_time):
+            logger.info("Expiry-day entry blocked for %s", current_time.date().isoformat())
+            return False
+
         now_time = current_time.time()
         if not (self.entry_window_start <= now_time < self.entry_window_end):
             logger.debug(
@@ -246,6 +298,19 @@ class IronCondorStrategy:
         if getattr(state, "active_trade", None) is not None:
             logger.debug("Active trade exists; entry blocked")
             return False
+
+        today_key = current_time.date().isoformat()
+        if self.one_per_day:
+            possible_last_dates = [
+                getattr(state, "last_iron_condor_date", None),
+                getattr(state, "last_trade_date", None),
+                getattr(state, "last_ic_trade_date", None),
+                getattr(state, "iron_condor_trade_date", None),
+            ]
+            for last_value in possible_last_dates:
+                if self._date_key(last_value) == today_key:
+                    logger.debug("One-IC-per-day lock blocked entry")
+                    return False
 
         monthly_only = bool(getattr(self.settings, "ic_monthly_only", False))
         if monthly_only:
@@ -264,21 +329,98 @@ class IronCondorStrategy:
             if getattr(state, "last_iron_condor_month", None) == current_time.month:
                 logger.debug("Already traded this month; entry blocked")
                 return False
-        else:
-            today_key = current_time.date().isoformat()
-            possible_last_dates = [
-                getattr(state, "last_iron_condor_date", None),
-                getattr(state, "last_trade_date", None),
-                getattr(state, "last_ic_trade_date", None),
-                getattr(state, "iron_condor_trade_date", None),
-            ]
-            for last_value in possible_last_dates:
-                if self._date_key(last_value) == today_key:
-                    logger.debug("Already traded today; entry blocked")
-                    return False
 
         logger.info("Iron Condor entry allowed")
         return True
+
+    def evaluate_entry_regime(
+        self,
+        *,
+        spot: float,
+        live_iv: float | None = None,
+    ) -> tuple[bool, str, dict[str, float | bool | None]]:
+        iv = live_iv if live_iv is not None and live_iv > 0 else None
+        diagnostics: dict[str, float | bool | None] = {
+            "spot": round(float(spot or 0.0), 2),
+            "live_iv": round(float(iv), 4) if iv is not None else None,
+            "effective_iv": round(float(self._effective_iv(live_iv)), 4),
+            "high_probability_mode": self.high_probability_mode,
+            "require_live_iv": self.require_live_iv,
+            "min_live_iv": round(self.min_live_iv, 4),
+            "max_live_iv": round(self.max_live_iv, 4),
+        }
+
+        if not self.high_probability_mode:
+            return True, "ok", diagnostics
+
+        if self.require_live_iv and iv is None:
+            return False, "live_iv_required", diagnostics
+
+        if iv is not None and iv < self.min_live_iv:
+            diagnostics["threshold"] = round(self.min_live_iv, 4)
+            return False, "iv_too_low_for_premium_selling", diagnostics
+
+        if iv is not None and iv > self.max_live_iv:
+            diagnostics["threshold"] = round(self.max_live_iv, 4)
+            return False, "iv_too_high_for_high_probability_entry", diagnostics
+
+        return True, "ok", diagnostics
+
+    def calculate_target_metrics(self, entry_premium: float, qty: int) -> dict[str, float]:
+        entry_premium = float(entry_premium or 0.0)
+        qty = int(qty or 0)
+        if entry_premium <= 0 or qty <= 0:
+            return {
+                "target_close_premium": 0.0,
+                "target_net_profit": 0.0,
+                "target_gross_profit": 0.0,
+                "estimated_charges": 0.0,
+                "required_gross_profit": 0.0,
+                "charges_buffer_multiplier": round(self.charges_buffer_multiplier, 2),
+                "target_possible": 0.0,
+            }
+
+        target_net_profit = max(
+            entry_premium * self.target_profit_pct * qty,
+            self.min_net_target_profit,
+            0.0,
+        )
+        target_close = max(entry_premium * (1 - self.target_profit_pct), 0.05)
+
+        for _ in range(6):
+            charges = self.estimate_round_trip_charges(entry_premium, target_close, qty)
+            charge_buffer = float(charges["total_charges"]) * max(self.charges_buffer_multiplier, 1.0)
+            required_gross_profit = max(
+                target_net_profit + charge_buffer,
+                self.min_gross_target_profit,
+            )
+            next_close = max(entry_premium - (required_gross_profit / qty), 0.05)
+            if abs(next_close - target_close) < 0.01:
+                target_close = next_close
+                break
+            target_close = next_close
+
+        pnl = self.compute_pnl(entry_premium, target_close, qty)
+        gross_profit = round(float(pnl.get("gross_pnl", 0.0)), 2)
+        estimated_charges = round(float(pnl.get("total_charges", 0.0)), 2)
+        net_profit = round(float(pnl.get("net_pnl", 0.0)), 2)
+        required_gross_profit = max(
+            self.min_gross_target_profit,
+            self.min_net_target_profit + (estimated_charges * max(self.charges_buffer_multiplier, 1.0)),
+        )
+        target_possible = 1.0 if (
+            gross_profit >= required_gross_profit
+            and net_profit >= self.min_net_target_profit
+        ) else 0.0
+        return {
+            "target_close_premium": round(target_close, 2),
+            "target_net_profit": round(target_net_profit, 2),
+            "target_gross_profit": gross_profit,
+            "estimated_charges": estimated_charges,
+            "required_gross_profit": round(required_gross_profit, 2),
+            "charges_buffer_multiplier": round(max(self.charges_buffer_multiplier, 1.0), 2),
+            "target_possible": target_possible,
+        }
 
     def calculate_strikes(self, spot: float, live_iv: float | None = None) -> dict[str, int]:
         if not spot or spot <= 0:
@@ -575,6 +717,7 @@ class IronCondorStrategy:
         current_time: datetime,
         entry_premium: float,
         current_premium: float,
+        qty: int = 1,
     ) -> str | None:
         if not entry_premium or entry_premium <= 0:
             return None
@@ -591,8 +734,14 @@ class IronCondorStrategy:
             )
             return "EXTREME_LOSS"
 
-        target_premium = entry_premium * (1 - self.target_profit_pct)
-        if current_premium <= target_premium:
+        target_metrics = self.calculate_target_metrics(entry_premium, qty)
+        target_premium = target_metrics["target_close_premium"]
+        if target_premium <= 0:
+            target_premium = entry_premium * (1 - self.target_profit_pct)
+        if (
+            target_metrics.get("target_possible", 0.0) >= 1.0
+            and current_premium <= target_premium
+        ):
             logger.info(
                 "TARGET hit current=%.2f target=%.2f",
                 current_premium,
@@ -664,13 +813,17 @@ class IronCondorStrategy:
             1.10,
         )
         required_distance = expected_move * buffer
-        is_safe = float(short_distance) >= required_distance
+        safety_buffer_points = max(0.0, self.min_safety_buffer_points)
+        actual_margin = float(short_distance) - required_distance
+        is_safe = actual_margin >= safety_buffer_points
 
         return is_safe, {
             "expected_move": round(expected_move, 2),
             "short_distance": round(float(short_distance), 2),
             "buffer": round(buffer, 3),
             "required_distance": round(required_distance, 2),
+            "actual_margin": round(actual_margin, 2),
+            "min_safety_buffer_points": round(safety_buffer_points, 2),
             "iv": round(iv, 4),
         }
 
@@ -699,11 +852,30 @@ class IronCondorStrategy:
             "net_after_costs": round(net_after_costs, 2),
             "cost_ratio": round(cost_ratio, 3) if math.isfinite(cost_ratio) else 999999.0,
             "min_entry_premium": round(self.min_entry_premium, 2),
+            "min_gross_profit": round(self.min_gross_profit, 2),
         }
+
+        target_metrics = self.calculate_target_metrics(entry_premium, qty)
+        diagnostics["target_close_premium"] = round(target_metrics["target_close_premium"], 2)
+        diagnostics["target_net_profit"] = round(target_metrics["target_net_profit"], 2)
+        diagnostics["target_gross_profit"] = round(target_metrics["target_gross_profit"], 2)
+        diagnostics["target_estimated_charges"] = round(target_metrics["estimated_charges"], 2)
+        diagnostics["required_gross_profit"] = round(target_metrics["required_gross_profit"], 2)
+        diagnostics["min_net_target_profit"] = round(self.min_net_target_profit, 2)
+        diagnostics["charges_buffer_multiplier"] = round(max(self.charges_buffer_multiplier, 1.0), 2)
+        diagnostics["target_possible"] = bool(target_metrics.get("target_possible", 0.0) >= 1.0)
 
         if entry_premium < self.min_entry_premium:
             diagnostics["reason_threshold"] = round(self.min_entry_premium, 2)
             return False, "credit_below_min_entry_premium", diagnostics
+
+        if target_metrics["target_gross_profit"] < self.min_gross_profit:
+            diagnostics["reason_threshold"] = round(self.min_gross_profit, 2)
+            return False, "target_gross_profit_below_minimum", diagnostics
+
+        if target_metrics.get("target_possible", 0.0) < 1.0:
+            diagnostics["reason_threshold"] = round(target_metrics["required_gross_profit"], 2)
+            return False, "target_not_net_positive_after_charges", diagnostics
 
         min_required_credit = max(
             self.min_entry_premium * qty,

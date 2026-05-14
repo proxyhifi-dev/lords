@@ -10,6 +10,7 @@ Dashboard:
 """
 from __future__ import annotations
 
+import json
 import math
 from contextlib import asynccontextmanager
 from datetime import datetime, time, timedelta, timezone
@@ -97,6 +98,60 @@ def _round_or_blank(value: Any) -> float | str:
     if parsed is None:
         return ""
     return round(parsed, 2)
+
+
+def _normalize_legs_for_dashboard(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return []
+        if isinstance(parsed, list):
+            return [item for item in parsed if isinstance(item, dict)]
+
+    return []
+
+
+def _derive_exit_premium_from_legs(row: dict[str, Any]) -> float | None:
+    exit_legs = _normalize_legs_for_dashboard(
+        row.get("exit_legs")
+        or row.get("current_legs")
+        or row.get("closed_legs")
+        or row.get("exit_legs_json")
+    )
+    if not exit_legs:
+        return None
+
+    close_premium = 0.0
+    seen_price = False
+
+    for leg in exit_legs:
+        side = _clean_text(leg.get("side")).upper()
+        exit_price = _to_float(
+            leg.get("exit_price")
+            or leg.get("current_close_price")
+            or leg.get("current_price"),
+            None,
+        )
+        if exit_price is None:
+            continue
+
+        seen_price = True
+        if side == "SELL":
+            close_premium += exit_price
+        elif side == "BUY":
+            close_premium -= exit_price
+
+    if not seen_price:
+        return None
+
+    return round(close_premium, 2)
 
 
 def _is_numeric_text(value: Any) -> bool:
@@ -318,6 +373,11 @@ def _normalize_dashboard_trade(trade: dict[str, Any]) -> dict[str, Any]:
     exit_premium = _round_or_blank(
         row.get("exit_premium") if row.get("exit_premium") not in ("", None) else exit_price
     )
+    derived_exit_premium = _derive_exit_premium_from_legs(row)
+    if exit_price == "" and derived_exit_premium is not None:
+        exit_price = round(derived_exit_premium, 2)
+    if exit_premium == "" and derived_exit_premium is not None:
+        exit_premium = round(derived_exit_premium, 2)
     gross_pnl = _round_or_blank(row.get("gross_pnl"))
     net_pnl = _round_or_blank(
         row.get("net_pnl") if row.get("net_pnl") not in ("", None) else row.get("pnl")
@@ -503,13 +563,13 @@ async def lifespan(app: FastAPI):
         if getattr(settings, "is_live", False):
             logger.critical("LIVE MODE: startup failed — trading must stay disabled")
 
-    await scheduler.start()
-
     if not startup_success:
         from backend.app.engine.state_manager import state_manager
 
-        await state_manager.update(trading_enabled=False)
+        await state_manager.update(trading_enabled=False, bot_running=False)
         logger.warning("Trading disabled due to startup synchronization failure")
+    else:
+        await scheduler.start()
 
     yield
 
@@ -528,6 +588,25 @@ app.add_middleware(
 )
 
 frontend_path = Path(settings.frontend_dir)
+docs_path = Path(__file__).resolve().parents[1] / "docs"
+
+
+def _load_optional_json_file(path: Path) -> dict[str, Any] | None:
+    try:
+        if not path.exists():
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def _load_strategy_validation_summary() -> dict[str, Any] | None:
+    return _load_optional_json_file(docs_path / "strategy-validation-summary.json")
+
+
+def _load_paper_readiness_summary() -> dict[str, Any] | None:
+    return _load_optional_json_file(docs_path / "paper-readiness-summary.json")
 
 if frontend_path.exists():
     app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
@@ -587,6 +666,28 @@ async def dashboard():
                 "active_trade_count": trade_counts["active_trade_count"],
                 "display_trade_count": trade_counts["display_trade_count"],
                 "last_ic_month": getattr(state, "last_iron_condor_month", None),
+                "last_ic_trade_date": getattr(state, "last_ic_trade_date", None),
+                "circuit_breaker_open": getattr(state, "circuit_breaker_open", False),
+                "last_risk_breach": getattr(state, "last_risk_breach", None),
+                "broker_position_count": getattr(state, "broker_position_count", 0),
+                "reconstructed_ic_status": getattr(state, "reconstructed_ic_status", None),
+                "hedge_integrity_status": getattr(state, "hedge_integrity_status", None),
+                "emergency_flatten_verified": getattr(state, "emergency_flatten_verified", False),
+                "emergency_flatten_attempts": getattr(state, "emergency_flatten_attempts", 0),
+                "emergency_flatten_unclosed_symbols": getattr(
+                    state,
+                    "emergency_flatten_unclosed_symbols",
+                    [],
+                ),
+                "emergency_flatten_last_error": getattr(state, "emergency_flatten_last_error", None),
+                "emergency_flatten_order_proof": getattr(state, "emergency_flatten_order_proof", []),
+                "manual_intervention_required": getattr(state, "manual_intervention_required", False),
+                "one_ic_per_day_enabled": bool(getattr(settings, "ic_one_per_day", True)),
+                "expiry_day_entry_blocked": bool(getattr(settings, "ic_skip_expiry_day_entry", True)),
+                "scheduler_status": scheduler.get_status_summary(),
+                "reconciliation_status": scheduler._reconciler.last_result,
+                "paper_readiness_summary": _load_paper_readiness_summary(),
+                "strategy_validation_summary": _load_strategy_validation_summary(),
                 "trades": trades[-50:],
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
@@ -633,7 +734,11 @@ async def analytics():
     try:
         trades = _normalize_dashboard_trades(scheduler.trade_store.get_all_trades())
         pnl_series = _extract_pnl_series(trades)
-        analytics_result = full_analytics(pnl_series, capital=settings.capital)
+        analytics_result = full_analytics(
+            pnl_series,
+            capital=settings.capital,
+            brokerage=0.0,
+        )
 
         payload = {
             "total_trades": analytics_result.total_trades,
@@ -810,6 +915,16 @@ async def get_iron_condor_stats():
             {
                 "status": "inactive",
                 "last_cycle_month": getattr(state, "last_iron_condor_month", None),
+                "last_trade_date": getattr(state, "last_ic_trade_date", None),
+                "one_ic_per_day_enabled": bool(getattr(settings, "ic_one_per_day", True)),
+                "one_trade_per_day_locked": bool(
+                    getattr(state, "last_ic_trade_date", None)
+                    and str(getattr(state, "last_ic_trade_date", ""))[:10]
+                    == current_time.date().isoformat()
+                ),
+                "expiry_day_entry_blocked": bool(
+                    getattr(settings, "ic_skip_expiry_day_entry", True)
+                ),
                 "next_entry_days": _days_until_next_entry(),
                 "current_time": current_time.isoformat(),
             }
@@ -854,11 +969,11 @@ async def get_iron_condor_stats():
 
     entry_premium = float(trade["entry_price"])
     qty = int(trade["qty"])
-    target_profit_pct = float(getattr(settings, "ic_target_profit_pct", 0.35))
     stop_loss_multiple = float(getattr(settings, "ic_stop_loss_multiple", 1.60))
-
-    target_close_premium = round(entry_premium * (1 - target_profit_pct), 2)
-    target_profit_amount = round(entry_premium * target_profit_pct * qty, 2)
+    target_metrics = engine.iron_condor_strategy.calculate_target_metrics(entry_premium, qty)
+    target_profit_pct = float(getattr(settings, "ic_target_profit_pct", 0.35))
+    target_close_premium = round(float(target_metrics["target_close_premium"]), 2)
+    target_profit_amount = round(float(target_metrics["target_net_profit"]), 2)
     stop_loss_premium = round(entry_premium * stop_loss_multiple, 2)
 
     pnl_dict = engine.iron_condor_strategy.compute_pnl(
@@ -880,9 +995,26 @@ async def get_iron_condor_stats():
             "charges": round(float(pnl_dict["total_charges"]), 2),
             "target_profit_pct": target_profit_pct,
             "stop_loss_multiple": stop_loss_multiple,
-            "target_pnl": target_close_premium,
+            "target_pnl": target_profit_amount,
             "target_close_premium": target_close_premium,
             "target_profit_amount": target_profit_amount,
+            "target_gross_profit_amount": round(
+                float(target_metrics["target_gross_profit"]),
+                2,
+            ),
+            "target_required_gross_profit": round(
+                float(target_metrics["required_gross_profit"]),
+                2,
+            ),
+            "target_estimated_charges": round(
+                float(target_metrics["estimated_charges"]),
+                2,
+            ),
+            "target_possible": bool(target_metrics.get("target_possible", 0.0) >= 1.0),
+            "charges_buffer_multiplier": round(
+                float(target_metrics.get("charges_buffer_multiplier", 1.0)),
+                2,
+            ),
             "stop_loss_prem": stop_loss_premium,
             "until_theta_peak": until_theta_peak,
             "until_eod": until_eod,
@@ -890,6 +1022,26 @@ async def get_iron_condor_stats():
             "pricing_source": premium_source,
             "current_legs": current_legs,
             "current_iv": getattr(state, "current_iv", None),
+            "quote_age_sec": max(
+                [float(leg.get("quote_age_sec") or 0.0) for leg in current_legs] or [0.0]
+            ),
+            "one_ic_per_day_enabled": bool(getattr(settings, "ic_one_per_day", True)),
+            "one_trade_per_day_locked": bool(
+                getattr(state, "last_ic_trade_date", None)
+                and str(getattr(state, "last_ic_trade_date", ""))[:10]
+                == current_time.date().isoformat()
+            ),
+            "expiry_day_entry_blocked": bool(getattr(settings, "ic_skip_expiry_day_entry", True)),
+            "quote_degraded": bool(trade.get("quote_degraded", False)),
+            "display_pnl_is_estimated": bool(trade.get("display_pnl_is_estimated", False)),
+            "requires_manual_review": bool(trade.get("requires_manual_review", False)),
+            "quote_warning": (
+                "stale_quote_alert"
+                if premium_source == "model_fallback"
+                else "cached_quote_warning"
+                if premium_source == "broker_quote_snapshot_cached"
+                else ""
+            ),
         }
     )
 

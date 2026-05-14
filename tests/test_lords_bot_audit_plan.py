@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 
 import asyncio
@@ -16,6 +17,7 @@ if str(ROOT) not in sys.path:
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.event_bus import EventBus
 from backend.app.risk.risk_manager import RiskManager
+from backend.app.scheduler import market_scheduler as market_scheduler_module
 from backend.app.scheduler.market_scheduler import MarketScheduler
 from backend.app.strategy.option_selector import OptionSelector
 
@@ -122,3 +124,41 @@ def test_scheduler_candle_completion() -> None:
     assert candle is not None
     assert candle["open"] == 100.0
     assert candle["close"] == 100.0
+
+
+def test_scheduler_hard_stall_disables_and_flattens(monkeypatch) -> None:
+    async def _run() -> None:
+        patched_settings = replace(
+            market_scheduler_module.settings,
+            scheduler_stall_warn_seconds=0.1,
+            scheduler_stall_hard_seconds=1.0,
+            deadman_timeout=999,
+        )
+        monkeypatch.setattr(market_scheduler_module, "settings", patched_settings)
+
+        state = _DummyState(
+            active_trade={"strategy": "IRON_CONDOR", "symbol": "NIFTY"},
+            trading_enabled=True,
+        )
+        sm = _DummyStateManager(state)
+        scheduler = MarketScheduler()
+        scheduler.state = sm
+        scheduler._last_tick_time = market_scheduler_module.wall_time.time() - 2.0
+        scheduler._last_good_quote_time = market_scheduler_module.wall_time.time()
+
+        flatten_calls = []
+
+        async def fake_flatten_position():
+            flatten_calls.append(True)
+            return {"status": "flattened"}
+
+        scheduler.flatten_position = fake_flatten_position
+
+        await scheduler._handle_open_market_cycle()
+
+        assert state.trading_enabled is False
+        assert state.last_order_failed is True
+        assert str(state.last_risk_breach).startswith("scheduler_stall_")
+        assert flatten_calls == [True]
+
+    asyncio.run(_run())

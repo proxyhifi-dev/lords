@@ -122,9 +122,12 @@ class Settings:
     daily_reset_check_interval_seconds: int = 10
     manual_flatten_cooldown_seconds: int = 180
     scheduler_stall_warn_seconds: float = 10.0
+    scheduler_stall_hard_seconds: float = 60.0
     reconciliation_interval_seconds: int = 300
 
     ic_monthly_only: bool = False
+    ic_one_per_day: bool = True
+    ic_skip_expiry_day_entry: bool = True
     ic_entry_day_start: int = 1
     ic_entry_day_end: int = 5
     ic_entry_window_start: str = "10:00"
@@ -143,6 +146,10 @@ class Settings:
     ic_skip_open_range_pct: float = 0.007
 
     ic_min_entry_premium: float = 40.0
+    ic_min_gross_profit: float = 250.0
+    ic_min_gross_target_profit: float = 250.0
+    ic_min_net_target_profit: float = 100.0
+    ic_charges_buffer_multiplier: float = 1.25
     ic_min_option_premium: float = 0.05
     ic_min_reward_risk: float = 0.35
     ic_min_net_after_cost_buffer: float = 80.0
@@ -158,6 +165,11 @@ class Settings:
     ic_short_otm_pct: float = 0.024
     ic_long_otm_pct: float = 0.036
     ic_assumed_iv: float = 0.15
+    ic_high_probability_mode: bool = True
+    ic_require_live_iv: bool = False
+    ic_min_live_iv: float = 0.12
+    ic_max_live_iv: float = 0.24
+    ic_min_safety_buffer_points: float = 40.0
 
     ic_brokerage_per_order: float = 20.0
     ic_entry_order_count: int = 4
@@ -306,12 +318,21 @@ def get_settings() -> Settings:
             _get(combined, "SCHEDULER_STALL_WARN_SECONDS", default=10.0),
             10.0,
         ),
+        scheduler_stall_hard_seconds=_parse_float(
+            _get(combined, "SCHEDULER_STALL_HARD_SECONDS", default=60.0),
+            60.0,
+        ),
         reconciliation_interval_seconds=_parse_int(
             _get(combined, "RECONCILIATION_INTERVAL_SECONDS", default=300),
             300,
         ),
 
         ic_monthly_only=_parse_bool(_get(combined, "IC_MONTHLY_ONLY", default=False), False),
+        ic_one_per_day=_parse_bool(_get(combined, "IC_ONE_PER_DAY", default=True), True),
+        ic_skip_expiry_day_entry=_parse_bool(
+            _get(combined, "IC_SKIP_EXPIRY_DAY_ENTRY", default=True),
+            True,
+        ),
         ic_entry_day_start=_parse_int(_get(combined, "IC_ENTRY_DAY_START", default=1), 1),
         ic_entry_day_end=_parse_int(_get(combined, "IC_ENTRY_DAY_END", default=5), 5),
         ic_entry_window_start=_strip_value(_get(combined, "IC_ENTRY_WINDOW_START", default="10:00")),
@@ -333,6 +354,19 @@ def get_settings() -> Settings:
         ic_skip_open_range_pct=_parse_float(_get(combined, "IC_SKIP_OPEN_RANGE_PCT", default=0.007), 0.007),
 
         ic_min_entry_premium=_parse_float(_get(combined, "IC_MIN_ENTRY_PREMIUM", default=40.0), 40.0),
+        ic_min_gross_profit=_parse_float(_get(combined, "IC_MIN_GROSS_PROFIT", default=250.0), 250.0),
+        ic_min_gross_target_profit=_parse_float(
+            _get(combined, "IC_MIN_GROSS_TARGET_PROFIT", default=250.0),
+            250.0,
+        ),
+        ic_min_net_target_profit=_parse_float(
+            _get(combined, "IC_MIN_NET_TARGET_PROFIT", default=100.0),
+            100.0,
+        ),
+        ic_charges_buffer_multiplier=_parse_float(
+            _get(combined, "IC_CHARGES_BUFFER_MULTIPLIER", default=1.25),
+            1.25,
+        ),
         ic_min_option_premium=_parse_float(_get(combined, "IC_MIN_OPTION_PREMIUM", default=0.05), 0.05),
         ic_min_reward_risk=_parse_float(_get(combined, "IC_MIN_REWARD_RISK", default=0.35), 0.35),
         ic_min_net_after_cost_buffer=_parse_float(
@@ -354,6 +388,17 @@ def get_settings() -> Settings:
         ic_short_otm_pct=_parse_float(_get(combined, "IC_SHORT_OTM_PCT", default=0.024), 0.024),
         ic_long_otm_pct=_parse_float(_get(combined, "IC_LONG_OTM_PCT", default=0.036), 0.036),
         ic_assumed_iv=_parse_float(_get(combined, "IC_ASSUMED_IV", default=0.15), 0.15),
+        ic_high_probability_mode=_parse_bool(
+            _get(combined, "IC_HIGH_PROBABILITY_MODE", default=True),
+            True,
+        ),
+        ic_require_live_iv=_parse_bool(_get(combined, "IC_REQUIRE_LIVE_IV", default=False), False),
+        ic_min_live_iv=_parse_float(_get(combined, "IC_MIN_LIVE_IV", default=0.12), 0.12),
+        ic_max_live_iv=_parse_float(_get(combined, "IC_MAX_LIVE_IV", default=0.24), 0.24),
+        ic_min_safety_buffer_points=_parse_float(
+            _get(combined, "IC_MIN_SAFETY_BUFFER_POINTS", default=40.0),
+            40.0,
+        ),
 
         ic_brokerage_per_order=_parse_float(_get(combined, "IC_BROKERAGE_PER_ORDER", default=20.0), 20.0),
         ic_entry_order_count=_parse_int(_get(combined, "IC_ENTRY_ORDER_COUNT", default=4), 4),

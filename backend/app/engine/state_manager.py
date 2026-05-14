@@ -80,6 +80,23 @@ def _safe_dict(value: Any) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def _safe_list_of_str(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        text = _safe_str(item)
+        if text:
+            result.append(text)
+    return result
+
+
+def _safe_list_of_dict(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
 def _safe_positions(value: Any) -> dict[str, float]:
     if not isinstance(value, dict):
         return {}
@@ -120,6 +137,15 @@ class RuntimeState:
     cooldown_until: str | None = None
     last_risk_breach: str | None = None
     consecutive_losses: int = 0
+    manual_intervention_required: bool = False
+    emergency_flatten_verified: bool = False
+    emergency_flatten_attempts: int = 0
+    emergency_flatten_unclosed_symbols: list[str] = field(default_factory=list)
+    emergency_flatten_last_error: str | None = None
+    emergency_flatten_order_proof: list[dict[str, Any]] = field(default_factory=list)
+    reconstructed_ic_status: str | None = None
+    hedge_integrity_status: str | None = None
+    broker_position_count: int = 0
 
     last_iron_condor_month: int | None = None
     last_trade_date: str | None = None
@@ -165,6 +191,19 @@ class RuntimeState:
         self.cooldown_until = _safe_str(self.cooldown_until)
         self.last_risk_breach = _safe_str(self.last_risk_breach)
         self.consecutive_losses = max(_safe_int(self.consecutive_losses, 0), 0)
+        self.manual_intervention_required = _safe_bool(self.manual_intervention_required, False)
+        self.emergency_flatten_verified = _safe_bool(self.emergency_flatten_verified, False)
+        self.emergency_flatten_attempts = max(_safe_int(self.emergency_flatten_attempts, 0), 0)
+        self.emergency_flatten_unclosed_symbols = _safe_list_of_str(
+            self.emergency_flatten_unclosed_symbols
+        )
+        self.emergency_flatten_last_error = _safe_str(self.emergency_flatten_last_error)
+        self.emergency_flatten_order_proof = _safe_list_of_dict(
+            self.emergency_flatten_order_proof
+        )
+        self.reconstructed_ic_status = _safe_str(self.reconstructed_ic_status)
+        self.hedge_integrity_status = _safe_str(self.hedge_integrity_status)
+        self.broker_position_count = max(_safe_int(self.broker_position_count, 0), 0)
 
         month_value = _safe_int(self.last_iron_condor_month, 0)
         self.last_iron_condor_month = month_value if 1 <= month_value <= 12 else None
@@ -230,6 +269,15 @@ class RuntimeState:
         self.cooldown_active = False
         self.cooldown_until = None
         self.last_order_failed = False
+        self.manual_intervention_required = False
+        self.emergency_flatten_verified = False
+        self.emergency_flatten_attempts = 0
+        self.emergency_flatten_unclosed_symbols = []
+        self.emergency_flatten_last_error = None
+        self.emergency_flatten_order_proof = []
+        self.reconstructed_ic_status = None
+        self.hedge_integrity_status = None
+        self.broker_position_count = 0
         self.trade_date = _today_iso()
         self.last_updated = _now_iso()
         self.normalize()

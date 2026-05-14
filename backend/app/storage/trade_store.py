@@ -585,6 +585,10 @@ class TradeStore:
             or row.get("closed_legs")
             or row.get("exit_legs_json")
         )
+        if not exit_price:
+            derived_exit_price = self._derive_exit_premium_from_legs(exit_legs)
+            if derived_exit_price is not None:
+                exit_price = self._format_money(derived_exit_price)
 
         legs_json = self._json_dumps(legs)
         exit_legs_json = self._json_dumps(exit_legs)
@@ -649,6 +653,35 @@ class TradeStore:
             or trade.get("exit_legs_json")
         )
         return self._normalize_legs(exit_legs)
+
+    def _derive_exit_premium_from_legs(self, exit_legs: list[dict[str, Any]]) -> float | None:
+        if not exit_legs:
+            return None
+
+        close_premium = 0.0
+        seen_price = False
+
+        for leg in exit_legs:
+            side = self._clean_text(leg.get("side")).upper()
+            exit_price = self._to_float(
+                leg.get("exit_price")
+                or leg.get("current_close_price")
+                or leg.get("current_price"),
+                None,
+            )
+            if exit_price is None:
+                continue
+
+            seen_price = True
+            if side == "SELL":
+                close_premium += exit_price
+            elif side == "BUY":
+                close_premium -= exit_price
+
+        if not seen_price:
+            return None
+
+        return round(close_premium, 2)
 
     def _build_row(self, trade: dict[str, Any], daily_pnl: float | None = None) -> dict[str, Any]:
         now = datetime.now(IST)
@@ -758,6 +791,11 @@ class TradeStore:
 
         legs = self._extract_trade_legs(trade)
         exit_legs = self._extract_trade_exit_legs(trade)
+        derived_exit_price = self._derive_exit_premium_from_legs(exit_legs)
+        if (exit_price in ("", None)) and derived_exit_price is not None:
+            exit_price = round(derived_exit_price, 2)
+        if (exit_premium in ("", None)) and derived_exit_price is not None:
+            exit_premium = round(derived_exit_price, 2)
 
         row = {
             "date": now.date().isoformat(),

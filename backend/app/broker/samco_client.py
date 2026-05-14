@@ -178,6 +178,38 @@ class SamcoClient:
         self._auth_failed_until = 0.0
         self._last_auth_error = ""
 
+    @staticmethod
+    def _looks_like_auth_error(payload: Any) -> bool:
+        if isinstance(payload, dict):
+            status = str(payload.get("status") or "").strip().lower()
+            message = str(
+                payload.get("statusMessage")
+                or payload.get("message")
+                or payload.get("error")
+                or ""
+            ).strip().lower()
+            combined = f"{status} {message}"
+        else:
+            combined = str(payload or "").strip().lower()
+
+        if not combined:
+            return False
+
+        tokens = (
+            "sessionexpired",
+            "session expired",
+            "invalid session",
+            "invalid token",
+            "access token",
+            "mismatched access token",
+            "token expired",
+            "unauthorized",
+            "authorisation failed",
+            "authorization failed",
+            "login required",
+        )
+        return any(token in combined for token in tokens)
+
     def _using_placeholder_credentials(self) -> bool:
         user = str(getattr(settings, "samco_user_id", "") or "")
         password = str(getattr(settings, "samco_password", "") or "")
@@ -266,6 +298,8 @@ class SamcoClient:
 
             await asyncio.to_thread(bridge.set_session_token, sessionToken=token)
             self._session_live = True
+            self._quote_cache.clear()
+            self._chain_cache.clear()
             self._auth_failed_until = 0.0
             self._last_auth_error = ""
             logger.info("SAMCO login successful")
@@ -906,15 +940,24 @@ class SamcoClient:
                 resp = self._parse_response(result)
                 self._breaker.record_success()
 
-                if isinstance(resp, dict) and resp.get("status") == "SessionExpired":
-                    logger.warning("Session expired. Re-logging in.")
+                if self._looks_like_auth_error(resp):
+                    logger.warning("SAMCO %s auth/session issue detected. Re-logging in.", api_name)
                     self._session_live = False
                     await self.login()
                     result = await asyncio.to_thread(fn)
                     resp = self._parse_response(result)
 
                 return resp
-            except RuntimeError:
+            except RuntimeError as exc:
+                self._breaker.record_failure()
+                if self._looks_like_auth_error(exc) and attempt < attempts:
+                    self._session_live = False
+                    logger.warning(
+                        "SAMCO %s runtime auth/session exception detected. Re-logging in before retry.",
+                        api_name,
+                    )
+                    await self.login()
+                    continue
                 raise
             except Exception as exc:
                 self._breaker.record_failure()
@@ -925,6 +968,15 @@ class SamcoClient:
                     attempts,
                     exc,
                 )
+                if self._looks_like_auth_error(exc):
+                    self._session_live = False
+                    if attempt < attempts:
+                        logger.warning(
+                            "SAMCO %s auth/session exception detected. Re-logging in before retry.",
+                            api_name,
+                        )
+                        await self.login()
+                        continue
                 if attempt < attempts:
                     await asyncio.sleep(delay)
                     delay = min(delay * 2, 60.0)

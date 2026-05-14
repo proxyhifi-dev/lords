@@ -11,6 +11,7 @@ let pollInFlight = false;
 let icPollInFlight = false;
 let analyticsPollInFlight = false;
 let spotColorTimeout = null;
+let latestDashboardData = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   poll();
@@ -39,8 +40,10 @@ async function poll() {
 }
 
 function renderMain(data) {
+  latestDashboardData = data;
   updateHeader(data);
   updateKPIs(data);
+  updateSystemStatus(data);
   updateICPosition(data);
   updateLog(data.trades || []);
   updateFooter(data);
@@ -105,7 +108,7 @@ function updateKPIs(data) {
   const dailyEl = document.getElementById('daily-pnl');
 
   dailyEl.textContent = fmtPnl(dailyPnl);
-  dailyEl.className = `kpi-value ${dailyPnl >= 0 ? 'positive' : 'negative'}`;
+  dailyEl.className = `kpi-value ${pnlToneClass(dailyPnl)}`;
 
   const maxLoss = Number(data.max_daily_loss) > 0 ? Number(data.max_daily_loss) : 3000;
   const bar = document.getElementById('pnl-bar');
@@ -123,7 +126,7 @@ function updateKPIs(data) {
   const liveEl = document.getElementById('live-pnl');
 
   liveEl.textContent = fmtPnl(livePnl);
-  liveEl.className = `kpi-value ${livePnl >= 0 ? 'positive' : 'negative'}`;
+  liveEl.className = `kpi-value ${pnlToneClass(livePnl)}`;
 
   const trade = data.active_trade;
   document.getElementById('live-symbol').textContent =
@@ -131,21 +134,21 @@ function updateKPIs(data) {
 
   const cycleEl = document.getElementById('cycle-status');
   const cycleMonth = document.getElementById('cycle-month');
-  const thisMonth = new Date().getMonth() + 1;
-  const lastMonth = data.last_ic_month;
+  const today = new Date().toISOString().slice(0, 10);
+  const lastTradeDate = String(data.last_ic_trade_date || '').slice(0, 10);
 
   if (trade && trade.strategy === 'IRON_CONDOR') {
     cycleEl.textContent = 'ACTIVE';
     cycleEl.className = 'kpi-value positive';
     cycleMonth.textContent = 'position open';
-  } else if (lastMonth === thisMonth) {
+  } else if (lastTradeDate && lastTradeDate === today) {
     cycleEl.textContent = 'TRADED';
     cycleEl.className = 'kpi-value neutral';
-    cycleMonth.textContent = 'already traded this month';
+    cycleMonth.textContent = 'one IC already taken today';
   } else {
     cycleEl.textContent = 'READY';
-    cycleEl.className = 'kpi-value';
-    cycleMonth.textContent = 'waiting for next entry';
+    cycleEl.className = 'kpi-value accent';
+    cycleMonth.textContent = 'entry window available';
   }
 
   const signalEl = document.getElementById('signal-display');
@@ -168,6 +171,66 @@ function updateKPIs(data) {
   const btn = document.getElementById('btn-trading');
   btn.textContent = tradingEnabled ? 'PAUSE' : 'RESUME';
   btn.className = tradingEnabled ? 'btn' : 'btn btn--yellow';
+}
+
+function updateSystemStatus(data) {
+  const schedulerEl = document.getElementById('scheduler-state');
+  const reconcileEl = document.getElementById('reconcile-state');
+  const breachEl = document.getElementById('risk-breach');
+  if (!schedulerEl || !reconcileEl || !breachEl) return;
+
+  const scheduler = data.scheduler_status || {};
+  const reconcile = data.reconciliation_status || {};
+  const tickAge = Number(scheduler.last_tick_age_sec || 0);
+  const hardStall = Number(scheduler.scheduler_stall_hard_seconds || 60);
+  const quoteAge = Number(scheduler.last_good_quote_age_sec || 0);
+  const circuitOpen = Boolean(data.circuit_breaker_open);
+  const lastRiskBreach = String(data.last_risk_breach || '').trim();
+  const brokerCount = Number(data.broker_position_count || 0);
+  const reconstructedStatus = String(data.reconstructed_ic_status || '').trim();
+  const hedgeStatus = String(data.hedge_integrity_status || '').trim();
+  const manualIntervention = Boolean(data.manual_intervention_required);
+  const flattenVerified = Boolean(data.emergency_flatten_verified);
+  const paperSummary = data.paper_readiness_summary || null;
+  const strategySummary = data.strategy_validation_summary || null;
+
+  if (circuitOpen) {
+    schedulerEl.textContent = 'LOCKDOWN';
+    schedulerEl.className = 'kpi-value negative';
+  } else if (tickAge > hardStall) {
+    schedulerEl.textContent = 'STALLED';
+    schedulerEl.className = 'kpi-value negative';
+  } else if (data.bot_running) {
+    schedulerEl.textContent = 'RUNNING';
+    schedulerEl.className = 'kpi-value positive';
+  } else {
+    schedulerEl.textContent = 'IDLE';
+    schedulerEl.className = 'kpi-value neutral';
+  }
+
+  const issuesFound = Number(reconcile.issues_found || 0);
+  const paperLabel = paperSummary && paperSummary.passed_checks !== undefined
+    ? `paper ${paperSummary.passed_checks}/${paperSummary.total_checks || 0}`
+    : '';
+  reconcileEl.textContent = issuesFound > 0
+    ? `recon ${issuesFound} | broker ${brokerCount} | ${reconstructedStatus || 'pending'}`
+    : [paperLabel, `quote ${quoteAge.toFixed(1)}s`, `hedge ${hedgeStatus || 'unknown'}`]
+      .filter(Boolean)
+      .join(' | ');
+  reconcileEl.className = `kpi-sub ${issuesFound > 0 ? 'negative' : ''}`;
+
+  const strategyLabel = strategySummary
+    ? `strategy PF ${Number(strategySummary.profit_factor || 0).toFixed(2)} | net ${fmtPnl(strategySummary.net_pnl || 0)}`
+    : '';
+  const extra = manualIntervention
+    ? 'manual intervention required'
+    : !flattenVerified && brokerCount > 0
+      ? 'flatten not verified'
+      : 'no active alert';
+  breachEl.textContent = lastRiskBreach
+    ? `alert: ${lastRiskBreach} | ${extra}${strategyLabel ? ` | ${strategyLabel}` : ''}`
+    : `${extra}${strategyLabel ? ` | ${strategyLabel}` : ''}`;
+  breachEl.className = `kpi-sub ${lastRiskBreach || manualIntervention ? 'negative' : ''}`;
 }
 
 function fallbackDisplayTradeCount(data) {
@@ -244,10 +307,6 @@ function updateICPosition(data) {
       ? Number(((entryPremium - currentPremium) * qty).toFixed(2))
       : null;
 
-  const thetaPeak = ic && Number.isFinite(Number(ic.until_theta_peak))
-    ? Number(ic.until_theta_peak)
-    : null;
-
   const targetProfitPct = Number.isFinite(Number(ic?.target_profit_pct))
     ? Number(ic.target_profit_pct)
     : 0.25;
@@ -257,8 +316,34 @@ function updateICPosition(data) {
     : 1.60;
 
   const targetProfitPerUnit = entryPremium * targetProfitPct;
-  const targetClosePremium = Math.max(entryPremium - targetProfitPerUnit, 0);
-  const targetProfitAmount = targetProfitPerUnit * qty;
+  const targetClosePremium = ic && Number.isFinite(Number(ic.target_close_premium))
+    ? Number(ic.target_close_premium)
+    : Math.max(entryPremium - targetProfitPerUnit, 0);
+  const targetProfitAmount = ic && Number.isFinite(Number(ic.target_profit_amount))
+    ? Number(ic.target_profit_amount)
+    : targetProfitPerUnit * qty;
+  const targetCharges = ic && Number.isFinite(Number(ic.target_estimated_charges))
+    ? Number(ic.target_estimated_charges)
+    : 0;
+  const targetRequiredGross = ic && Number.isFinite(Number(ic.target_required_gross_profit))
+    ? Number(ic.target_required_gross_profit)
+    : 0;
+  const targetPossible = Boolean(ic?.target_possible);
+  const quoteAgeSec = ic && Number.isFinite(Number(ic.quote_age_sec))
+    ? Number(ic.quote_age_sec)
+    : 0;
+  const quoteWarning = String(ic?.quote_warning || '').trim();
+  const estimatedFlag = Boolean(ic?.display_pnl_is_estimated);
+  const manualReview = Boolean(ic?.requires_manual_review);
+  const alertText = quoteWarning === 'stale_quote_alert'
+    ? 'STALE QUOTE ALERT'
+    : quoteWarning === 'cached_quote_warning'
+      ? 'USING FRESH CACHED QUOTE'
+      : estimatedFlag
+        ? 'LIVE P&L IS ESTIMATED'
+        : manualReview
+          ? 'MANUAL REVIEW REQUIRED'
+          : '';
 
   const stopLossClosePremium = ic && Number.isFinite(Number(ic.stop_loss_prem))
     ? Number(ic.stop_loss_prem)
@@ -305,6 +390,10 @@ function updateICPosition(data) {
         <div class="ic-field-value accent">${escapeHtml(pricingLabel)}</div>
       </div>
       <div class="ic-field">
+        <div class="ic-field-label">QUOTE AGE</div>
+        <div class="ic-field-value ${quoteAgeSec > 5 ? 'negative' : 'accent'}">${quoteAgeSec.toFixed(1)}s</div>
+      </div>
+      <div class="ic-field">
         <div class="ic-field-label">STRIKES (SC/SP)</div>
         <div class="ic-field-value accent">${escapeHtml(strikeLabel)}</div>
       </div>
@@ -314,7 +403,7 @@ function updateICPosition(data) {
       </div>
       <div class="ic-field">
         <div class="ic-field-label">CURRENT PREMIUM</div>
-        <div class="ic-field-value ${currentPremium !== null && currentPremium <= entryPremium ? 'positive' : 'negative'}">
+        <div class="ic-field-value ${premiumToneClass(currentPremium, entryPremium)}">
           ${currentPremium !== null ? `₹${currentPremium.toFixed(2)}` : '—'}
         </div>
       </div>
@@ -328,11 +417,11 @@ function updateICPosition(data) {
       </div>
       <div class="ic-field">
         <div class="ic-field-label">LIVE P&L</div>
-        <div class="ic-field-value ${livePnl >= 0 ? 'positive' : 'negative'}">${fmtPnl(livePnl)}</div>
+        <div class="ic-field-value ${pnlToneClass(livePnl)}">${fmtPnl(livePnl)}</div>
       </div>
       <div class="ic-field">
         <div class="ic-field-label">EST P&L</div>
-        <div class="ic-field-value ${estimatedPnl !== null && estimatedPnl >= 0 ? 'positive' : 'negative'}">
+        <div class="ic-field-value ${pnlToneClass(estimatedPnl)}">
           ${estimatedPnl !== null ? fmtPnl(estimatedPnl) : '—'}
         </div>
       </div>
@@ -345,16 +434,28 @@ function updateICPosition(data) {
         <div class="ic-field-value negative">₹${stopLossClosePremium.toFixed(2)}</div>
       </div>
       <div class="ic-field">
-        <div class="ic-field-label">TARGET PROFIT</div>
+        <div class="ic-field-label">TARGET NET</div>
         <div class="ic-field-value positive">${fmtPnl(targetProfitAmount)}</div>
       </div>
       <div class="ic-field">
-        <div class="ic-field-label">→ THETA PEAK</div>
-        <div class="ic-field-value ${thetaPeak !== null && thetaPeak < 30 ? 'positive' : ''}">
-          ${thetaPeak !== null ? `${thetaPeak} min` : '—'}
+        <div class="ic-field-label">TARGET POSSIBLE</div>
+        <div class="ic-field-value ${targetPossible ? 'positive' : 'negative'}">${targetPossible ? 'YES' : 'NO'}</div>
+      </div>
+      <div class="ic-field">
+        <div class="ic-field-label">TARGET CHARGES</div>
+        <div class="ic-field-value ${targetCharges > 0 ? 'negative' : 'neutral'}">
+          ${targetCharges > 0 ? `₹${targetCharges.toFixed(2)}` : '—'}
+        </div>
+      </div>
+      <div class="ic-field">
+        <div class="ic-field-label">REQ GROSS</div>
+        <div class="ic-field-value ${targetRequiredGross > 0 ? 'accent' : 'neutral'}">
+          ${targetRequiredGross > 0 ? `â‚¹${targetRequiredGross.toFixed(2)}` : 'â€”'}
         </div>
       </div>
     </div>
+
+    ${alertText ? `<div class="ic-alert-strip ${quoteWarning === 'stale_quote_alert' || manualReview ? 'negative' : 'neutral'}">${escapeHtml(alertText)}</div>` : ''}
 
     <div class="ic-decay-section">
       <div class="ic-field-label">PREMIUM DECAY PROGRESS</div>
@@ -682,6 +783,15 @@ function renderTradeHistoryRow(trade) {
 
   const pricingSource = formatPricingSource(resolveTradePricingSource(trade, trade.trading_mode || ''));
   const legCells = getHistoryLegCells(trade);
+  const rowCls = reason === 'OPEN'
+    ? 'history-row history-row--open'
+    : reason.includes('FORCE') || reason.includes('EXTREME')
+      ? 'history-row history-row--forced'
+    : pnl > 0
+      ? 'history-row history-row--win'
+      : pnl < 0
+        ? 'history-row history-row--loss'
+        : 'history-row history-row--flat';
 
   const reasonCls = reason.includes('TARGET')
     ? 't2'
@@ -694,24 +804,24 @@ function renderTradeHistoryRow(trade) {
           : 'eod';
 
   return `
-    <tr>
+    <tr class="${rowCls}">
       <td>${escapeHtml(date)}</td>
       <td class="td-signal ic">${escapeHtml(strategy)}</td>
       <td class="mono">${escapeHtml(symbol)}</td>
       <td class="mono">${escapeHtml(expiry)}</td>
       <td class="mono">${escapeHtml(strike || '—')}</td>
-      <td class="mono">${escapeHtml(pricingSource)}</td>
+      <td><span class="history-chip history-chip--source">${escapeHtml(pricingSource)}</span></td>
       <td>${qty || '—'}</td>
       <td class="mono">${legCells.sellCe}</td>
       <td class="mono">${legCells.buyCe}</td>
       <td class="mono">${legCells.sellPe}</td>
       <td class="mono">${legCells.buyPe}</td>
-      <td>₹${entryPrice.toFixed(2)}</td>
-      <td>${exitPrice !== null ? `₹${exitPrice.toFixed(2)}` : 'OPEN'}</td>
-      <td class="${grossPnl >= 0 ? 'positive' : 'negative'}">${fmtPnl(grossPnl)}</td>
-      <td class="negative">₹${charges.toFixed(2)}</td>
-      <td class="td-pnl ${pnl >= 0 ? 'positive' : 'negative'}">${fmtPnl(pnl)}</td>
-      <td class="td-reason ${reasonCls}">${escapeHtml(reason)}</td>
+      <td class="mono">${entryPrice > 0 ? `₹${entryPrice.toFixed(2)}` : '—'}</td>
+      <td class="mono">${exitPrice !== null ? `₹${exitPrice.toFixed(2)}` : '<span class="history-chip history-chip--open">OPEN</span>'}</td>
+      <td class="${pnlToneClass(grossPnl)}">${fmtPnl(grossPnl)}</td>
+      <td class="${charges > 0 ? 'negative' : 'neutral'}">${charges > 0 ? `₹${charges.toFixed(2)}` : '₹0'}</td>
+      <td class="td-pnl ${pnlToneClass(pnl)}">${fmtPnl(pnl)}</td>
+      <td class="td-reason ${reasonCls}"><span class="history-chip history-chip--reason">${escapeHtml(reason)}</span></td>
     </tr>
   `;
 }
@@ -923,6 +1033,15 @@ async function loadAnalytics() {
       { label: 'CAPITAL REC.', value: formatCapitalK(analytics.capital_recommended), cls: 'neutral' },
     ];
 
+    const strategySummary = latestDashboardData?.strategy_validation_summary || null;
+    if (strategySummary) {
+      items.push(
+        { label: 'REPORT PF', value: formatMultiple(strategySummary.profit_factor), cls: metricClass(strategySummary.profit_factor, 1.1, 1.0) },
+        { label: 'REPORT DD', value: formatMaybePnl(strategySummary.max_drawdown), cls: 'negative' },
+        { label: 'BAD TARGETS', value: String(strategySummary.target_trades_net_negative ?? 0), cls: Number(strategySummary.target_trades_net_negative || 0) > 0 ? 'negative' : 'positive' },
+      );
+    }
+
     grid.innerHTML = items.map((item) => `
       <div class="analytics-item">
         <div class="analytics-label">${item.label}</div>
@@ -964,6 +1083,21 @@ function formatCapitalK(value) {
 function formatMaybePnl(value) {
   const number = Number(value);
   return Number.isFinite(number) ? fmtPnl(number) : '—';
+}
+
+function pnlToneClass(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 'neutral';
+  if (number > 0) return 'positive';
+  if (number < 0) return 'negative';
+  return 'neutral';
+}
+
+function premiumToneClass(currentPremium, entryPremium) {
+  const current = Number(currentPremium);
+  const entry = Number(entryPremium);
+  if (!Number.isFinite(current) || !Number.isFinite(entry)) return 'neutral';
+  return pnlToneClass(entry - current);
 }
 
 function metricClass(value, good, neutral) {
