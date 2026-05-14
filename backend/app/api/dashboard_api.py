@@ -62,6 +62,10 @@ def build_dashboard_router(
             return {
                 "status": "inactive",
                 "last_cycle_month": state.last_iron_condor_month,
+                "last_trade_date": getattr(state, "last_ic_trade_date", None),
+                "expiry_day_entry_blocked": bool(
+                    getattr(trading_engine.iron_condor_strategy, "skip_expiry_day_entry", False)
+                ),
                 "next_entry_days": get_days_until_next_entry(),
                 "current_time": current_time.isoformat(),
             }
@@ -73,18 +77,24 @@ def build_dashboard_router(
             logger.warning("Dashboard IC stats: invalid entry_time=%r (%s)", trade.get('entry_time'), exc)
             entry_time = current_time
         
-        # Calculate current premium
-        current_prem = trading_engine.iron_condor_strategy.estimate_current_premium(
-            trade['entry_price'],
-            entry_time,
-            current_time
+        current_prem = float(
+            trade.get('current_premium')
+            or trading_engine.iron_condor_strategy.estimate_current_premium(
+                trade['entry_price'],
+                entry_time,
+                current_time
+            )
         )
-        
-        # Calculate estimated P&L
+        qty = int(trade.get('qty') or 0)
+
         pnl_dict = trading_engine.iron_condor_strategy.compute_pnl(
             trade['entry_price'],
             current_prem,
-            trade['qty']
+            qty
+        )
+        target_metrics = trading_engine.iron_condor_strategy.calculate_target_metrics(
+            trade['entry_price'],
+            qty,
         )
         
         # Calculate time metrics
@@ -100,8 +110,11 @@ def build_dashboard_router(
             "entry_strikes": trade['strike'],
             "hours_elapsed": hours_elapsed,
             "estimated_pnl": round(pnl_dict['net_pnl'], 2),
-            "target_pnl": round(trade['entry_price'] * 0.50, 2),
-            "stop_loss": round(trade['entry_price'] * 0.50, 2),  # 1.5x
+            "target_close_premium": target_metrics["target_close_premium"],
+            "target_profit_amount": target_metrics["target_net_profit"],
+            "target_gross_profit_amount": target_metrics["target_gross_profit"],
+            "target_estimated_charges": target_metrics["estimated_charges"],
+            "pricing_source": trade.get("current_pricing_source") or trade.get("pricing_source"),
             "until_theta_peak": until_theta_peak,
             "until_eod": until_eod,
             "current_time": current_time.isoformat(),

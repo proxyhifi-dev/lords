@@ -74627,3 +74627,72 @@ RuntimeError: SAMCO login failed: {'serverTime': '13/05/26 09:13:17', 'status': 
 2026-05-14 13:28:09  INFO      market_scheduler            TICK FUNCTION ENTERED
 2026-05-14 13:28:10  INFO      market_scheduler            TICK: spot=23728.40
 2026-05-14 13:28:10  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=123s
+2026-05-14 13:28:11  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:11  INFO      market_scheduler            TICK: spot=23724.65
+2026-05-14 13:28:11  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=124s
+2026-05-14 13:28:12  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:12  INFO      market_scheduler            TICK: spot=23723.20
+2026-05-14 13:28:12  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=125s
+2026-05-14 13:28:13  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:13  INFO      market_scheduler            TICK: spot=23723.80
+2026-05-14 13:28:13  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=126s
+2026-05-14 13:28:14  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:14  INFO      market_scheduler            TICK: spot=23722.60
+2026-05-14 13:28:14  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=128s
+2026-05-14 13:28:15  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:15  INFO      market_scheduler            TICK: spot=23723.30
+2026-05-14 13:28:15  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=129s
+2026-05-14 13:28:16  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:16  INFO      market_scheduler            TICK: spot=23724.25
+2026-05-14 13:28:16  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=130s
+2026-05-14 13:28:17  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:17  INFO      market_scheduler            TICK: spot=23723.20
+2026-05-14 13:28:17  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=131s
+2026-05-14 13:28:18  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:18  INFO      market_scheduler            TICK: spot=23719.90
+2026-05-14 13:28:18  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=132s
+2026-05-14 13:28:19  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:19  INFO      market_scheduler            TICK: spot=23720.10
+2026-05-14 13:28:20  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=133s
+2026-05-14 13:28:21  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:21  INFO      market_scheduler            TICK: spot=23719.45
+2026-05-14 13:28:21  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=134s
+2026-05-14 13:28:22  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:22  INFO      market_scheduler            TICK: spot=23721.50
+2026-05-14 13:28:22  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=135s
+2026-05-14 13:28:23  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:23  INFO      market_scheduler            TICK: spot=23722.40
+2026-05-14 13:28:23  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=136s
+2026-05-14 13:28:24  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:24  INFO      market_scheduler            TICK: spot=23722.25
+2026-05-14 13:28:24  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=137s
+2026-05-14 13:28:25  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:25  INFO      market_scheduler            TICK: spot=23723.60
+2026-05-14 13:28:25  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=139s
+2026-05-14 13:28:26  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:26  INFO      market_scheduler            TICK: spot=23724.10
+2026-05-14 13:28:26  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=140s
+2026-05-14 13:28:27  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:28  INFO      market_scheduler            TICK: spot=23724.90
+2026-05-14 13:28:28  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=141s
+2026-05-14 13:28:29  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:29  INFO      market_scheduler            TICK: spot=23724.75
+2026-05-14 13:28:29  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=142s
+2026-05-14 13:28:30  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:30  INFO      market_scheduler            TICK: spot=23726.15
+2026-05-14 13:28:30  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=143s
+2026-05-14 13:28:31  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:32  INFO      market_scheduler            TICK: spot=23726.80
+2026-05-14 13:28:32  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=145s
+2026-05-14 13:28:33  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:33  INFO      market_scheduler            TICK: spot=23726.40
+2026-05-14 13:28:33  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=146s
+2026-05-14 13:28:34  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:34  INFO      market_scheduler            TICK: spot=23725.45
+2026-05-14 13:28:34  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=148s
+2026-05-14 13:28:35  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:36  INFO      market_scheduler            TICK: spot=23725.15
+2026-05-14 13:28:36  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=149s
+2026-05-14 13:28:37  INFO      market_scheduler            TICK FUNCTION ENTERED
+2026-05-14 13:28:37  INFO      market_scheduler            TICK: spot=23723.65
+2026-05-14 13:28:37  INFO      market_scheduler            IC gate blocked: manual flatten cooldown active age=150s
