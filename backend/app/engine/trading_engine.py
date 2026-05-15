@@ -222,6 +222,18 @@ class TradingEngine:
     def _broker_available(self) -> bool:
         return self.broker is not None
 
+    def _broker_quote_timeout_seconds(self) -> float:
+        return float(getattr(settings, "broker_quote_timeout_seconds", 5) or 5)
+
+    async def _fetch_nfo_quote(self, symbol: str) -> dict:
+        if not self._broker_available():
+            raise RuntimeError("Broker unavailable for NFO quote")
+
+        return await asyncio.wait_for(
+            self.broker.get_quote(symbol_name=symbol, exchange="NFO"),
+            timeout=self._broker_quote_timeout_seconds(),
+        )
+
     def _broker_position_checks_enabled(self) -> bool:
         """
         Broker position validation must run in live mode and in paper mode when
@@ -233,7 +245,8 @@ class TradingEngine:
         )
 
     def _ic_quote_cache_ttl_seconds(self) -> int:
-        return int(getattr(settings, "ic_quote_cache_ttl_seconds", 20) or 20)
+        # IC exits may use cached quotes only briefly. Keep default tight for safety.
+        return int(getattr(settings, "ic_quote_cache_ttl_seconds", 5) or 5)
 
     def _is_valid_quote_prices(self, bid: float, ask: float, ltp: float) -> bool:
         return bid > 0 or ask > 0 or ltp > 0
@@ -257,7 +270,7 @@ class TradingEngine:
             "timestamp": datetime.now(timezone.utc),
         }
 
-    def _get_cached_ic_quote(self, symbol: str) -> tuple[dict, float, float, float] | None:
+    def _get_cached_ic_quote(self, symbol: str) -> tuple[dict, float, float, float, float] | None:
         cached = self._ic_quote_cache.get(symbol)
         if not cached:
             return None
@@ -267,7 +280,14 @@ class TradingEngine:
             return None
 
         age = (datetime.now(timezone.utc) - timestamp).total_seconds()
-        if age > self._ic_quote_cache_ttl_seconds():
+        ttl = self._ic_quote_cache_ttl_seconds()
+        if age > ttl:
+            logger.error(
+                "IC cached quote stale symbol=%s age=%.2fs ttl=%ss — not reusing",
+                symbol,
+                age,
+                ttl,
+            )
             return None
 
         return (
@@ -275,6 +295,7 @@ class TradingEngine:
             float(cached.get("bid") or 0.0),
             float(cached.get("ask") or 0.0),
             float(cached.get("ltp") or 0.0),
+            float(age),
         )
 
     def _paper_safe_order_id(self, prefix: str, symbol: str) -> str:
@@ -286,7 +307,7 @@ class TradingEngine:
             return fallback
 
         try:
-            quote = await self.broker.get_quote(symbol_name=symbol, exchange="NFO")
+            quote = await self._fetch_nfo_quote(symbol)
             ltp = self.broker.parse_ltp(quote)
             return float(ltp or fallback)
         except Exception as exc:
@@ -381,7 +402,7 @@ class TradingEngine:
         if not self._broker_available():
             raise RuntimeError("Broker unavailable for quote snapshot")
 
-        quote = await self.broker.get_quote(symbol_name=symbol, exchange="NFO")
+        quote = await self._fetch_nfo_quote(symbol)
         ltp = float(self.broker.parse_ltp(quote) or 0.0)
         bid, ask = self.broker.parse_bid_ask(quote)
         bid = float(bid or 0.0)
@@ -427,6 +448,7 @@ class TradingEngine:
 
             quote, bid, ask, ltp = await self._get_leg_quote_snapshot(symbol)
             price_source = "broker_quote_snapshot"
+            quote_age_sec = 0.0
 
             if not self._is_valid_quote_prices(bid, ask, ltp):
                 cached = self._get_cached_ic_quote(symbol)
@@ -435,12 +457,13 @@ class TradingEngine:
                         f"Invalid IC close quote for {symbol}: bid={bid} ask={ask} ltp={ltp}"
                     )
 
-                quote, bid, ask, ltp = cached
+                quote, bid, ask, ltp, quote_age_sec = cached
                 price_source = "broker_quote_snapshot_cached"
                 used_cached_quote = True
                 logger.warning(
-                    "IC zero quote reused last-good cache symbol=%s bid=%.2f ask=%.2f ltp=%.2f",
+                    "IC zero quote reused fresh last-good cache symbol=%s age=%.2fs bid=%.2f ask=%.2f ltp=%.2f",
                     symbol,
+                    quote_age_sec,
                     bid,
                     ask,
                     ltp,
@@ -478,6 +501,7 @@ class TradingEngine:
                     "exit_price": float(close_price or 0.0),
                     "current_quote": quote,
                     "price_source": price_source,
+                    "quote_age_sec": float(quote_age_sec),
                 }
             )
 
@@ -663,6 +687,27 @@ class TradingEngine:
         logger.info("IC can_enter_cycle=%s", allowed)
         if not allowed:
             logger.warning("IC entry blocked by can_enter_cycle()")
+            return
+
+        regime_ok, regime_reason, regime_diag = self.iron_condor_strategy.evaluate_entry_regime(
+            spot=spot,
+            live_iv=live_iv,
+        )
+        if not regime_ok:
+            logger.warning(
+                "IC entry rejected by regime filter reason=%s diag=%s",
+                regime_reason,
+                regime_diag,
+            )
+            await self.event_bus.publish(
+                "IC_ENTRY_REJECTED",
+                {
+                    "reason": regime_reason,
+                    "spot": spot,
+                    "live_iv": live_iv,
+                    "diagnostics": regime_diag,
+                },
+            )
             return
 
         soft_dd_pct = float(getattr(settings, "ic_drawdown_soft_pct", 0.12) or 0.12)
@@ -962,26 +1007,48 @@ class TradingEngine:
 
         return exit_legs
 
+    def _calculate_iron_condor_close_premium(
+        self,
+        exit_legs: list[dict[str, Any]],
+    ) -> float:
+        close_premium = 0.0
+
+        for leg in exit_legs:
+            side = str(leg.get("side", "")).upper()
+            exit_price = _to_float(
+                leg.get("exit_price")
+                or leg.get("current_close_price")
+                or leg.get("current_price"),
+                0.0,
+            )
+
+            if side == "SELL":
+                close_premium += exit_price
+            elif side == "BUY":
+                close_premium -= exit_price
+
+        return round(close_premium, 2)
+
     async def _exit_iron_condor_trade(
         self,
         trade: dict[str, Any],
         reason: str,
         current_premium: float,
-    ) -> None:
+    ) -> dict[str, Any] | None:
         if trade.get("status") == "CLOSED":
-            return
+            return dict(trade)
 
         async with self._trade_lock:
             state = await self.state_manager.snapshot()
             if not state.active_trade:
                 logger.warning("IRON_CONDOR exit skipped: no active trade")
-                return
+                return None
 
             active_trade = state.active_trade
             latest_trade = {**active_trade, **trade}
 
             logger.info(
-                "IRON_CONDOR exit triggered reason=%s premium=%.2f",
+                "IRON_CONDOR exit triggered reason=%s quote_premium=%.2f",
                 reason,
                 current_premium,
             )
@@ -992,15 +1059,16 @@ class TradingEngine:
                     "IRON_CONDOR_EXIT_FAILED",
                     RuntimeError("Iron Condor exit failed"),
                 )
-                return
+                return None
 
             if not self.iron_condor_strategy:
                 logger.error("IRON_CONDOR exit failed: strategy helper unavailable")
-                return
+                return None
 
+            actual_exit_premium = self._calculate_iron_condor_close_premium(exit_legs)
             pnl = self.iron_condor_strategy.compute_pnl(
                 float(latest_trade["entry_price"]),
-                float(current_premium),
+                float(actual_exit_premium),
                 int(latest_trade["qty"]),
             )
 
@@ -1037,9 +1105,10 @@ class TradingEngine:
                 "exit_time": now_utc,
                 "exit_reason": reason,
                 "reason": reason,
-                "exit_price": round(float(current_premium), 2),
-                "exit_premium": round(float(current_premium), 2),
-                "current_premium": round(float(current_premium), 2),
+                "exit_price": round(float(actual_exit_premium), 2),
+                "exit_premium": round(float(actual_exit_premium), 2),
+                "current_premium": round(float(actual_exit_premium), 2),
+                "quote_exit_premium": round(float(current_premium), 2),
                 "gross_pnl": gross_pnl,
                 "pnl": net_pnl,
                 "net_pnl": net_pnl,
@@ -1054,7 +1123,7 @@ class TradingEngine:
                 "pricing_source": pricing_source,
                 "current_pricing_source": pricing_source,
                 "legs": latest_trade.get("legs") or [],
-                "current_legs": latest_trade.get("current_legs") or exit_legs,
+                "current_legs": exit_legs,
                 "exit_legs": exit_legs,
             }
 
@@ -1087,6 +1156,7 @@ class TradingEngine:
             )
 
             await self.event_bus.publish("TRADE_CLOSED", {"trade": closed})
+            return closed
 
     async def run(self):
         logger.info("TradingEngine started")
@@ -1209,7 +1279,7 @@ class TradingEngine:
 
         logger.info("SYMBOL RESOLVED: %s", symbol)
 
-        quote = await self.broker.get_quote(symbol_name=symbol, exchange="NFO")
+        quote = await self._fetch_nfo_quote(symbol)
         ltp = self.broker.parse_ltp(quote)
         bid, ask = self.broker.parse_bid_ask(quote)
 
@@ -1440,6 +1510,50 @@ class TradingEngine:
             )
             setattr(self, level_attr, 1)
 
+    async def _escalate_iron_condor_quote_degradation(
+        self,
+        trade: dict[str, Any],
+        pricing_source: str,
+        current_premium: float,
+    ) -> None:
+        streak = int(getattr(self, "_ic_fallback_streak", 0) or 0)
+        degraded_trade = {
+            **trade,
+            "quote_degraded": True,
+            "quote_degraded_streak": streak,
+            "display_pnl_is_estimated": pricing_source == "model_fallback",
+            "requires_manual_review": pricing_source == "model_fallback",
+            "degraded_pricing_source": pricing_source,
+        }
+
+        updates: dict[str, Any] = {
+            "active_trade": degraded_trade,
+            "last_order_failed": pricing_source == "model_fallback",
+        }
+
+        if pricing_source == "model_fallback" and streak >= _QUOTE_DEGRADED_CRITICAL_TICKS:
+            updates.update(
+                trading_enabled=False,
+                circuit_breaker_open=True,
+                last_risk_breach="ic_quote_degradation_critical",
+            )
+            logger.critical(
+                "IC quote degradation reached critical threshold; trading disabled streak=%d premium=%.2f",
+                streak,
+                current_premium,
+            )
+            await self.event_bus.publish(
+                "IC_QUOTE_DEGRADATION_LOCKDOWN",
+                {
+                    "streak_ticks": streak,
+                    "pricing_source": pricing_source,
+                    "current_premium": float(current_premium),
+                    "symbol": trade.get("symbol"),
+                },
+            )
+
+        await self.state_manager.update(**updates)
+
     async def _monitor_loop(self):
         while True:
             await asyncio.sleep(2)
@@ -1483,10 +1597,12 @@ class TradingEngine:
             current_legs = trade.get("current_legs") or []
             pricing_source = "model_fallback"
 
-        live_pnl = round(
-            (float(trade["entry_price"]) - float(current_premium)) * float(trade.get("qty", 0)),
-            2,
+        pnl_snapshot = self.iron_condor_strategy.compute_pnl(
+            float(trade["entry_price"]),
+            float(current_premium),
+            int(trade.get("qty", 0) or 0),
         )
+        live_pnl = round(float(pnl_snapshot.get("net_pnl", 0.0)), 2)
 
         updated_trade = {
             **trade,
@@ -1518,30 +1634,49 @@ class TradingEngine:
                 "current_premium": float(current_premium),
             },
         )
-
-        if pricing_source == "broker_quote_snapshot":
-            reason = self.iron_condor_strategy.get_exit_reason(
-                entry_time,
-                current_time,
-                updated_trade["entry_price"],
-                current_premium,
-            )
-
-            if reason:
-                await self._exit_iron_condor_trade(updated_trade, reason, current_premium)
-        else:
-            logger.warning(
-                "IC auto-exit skipped because pricing_source=%s current_premium=%.2f",
+        if pricing_source != "broker_quote_snapshot":
+            await self._escalate_iron_condor_quote_degradation(
+                updated_trade,
                 pricing_source,
                 current_premium,
             )
+
+        allowed_exit_sources = {
+            "broker_quote_snapshot",
+            "broker_quote_snapshot_cached",
+        }
+
+        if pricing_source not in allowed_exit_sources:
+            logger.warning(
+                "IC auto-exit blocked because pricing_source=%s current_premium=%.2f",
+                pricing_source,
+                current_premium,
+            )
+            return
+
+        reason = self.iron_condor_strategy.get_exit_reason(
+            entry_time,
+            current_time,
+            updated_trade["entry_price"],
+            current_premium,
+            int(updated_trade.get("qty", 0) or 0),
+        )
+
+        if reason:
+            logger.info(
+                "IC auto-exit accepted source=%s reason=%s current_premium=%.2f",
+                pricing_source,
+                reason,
+                current_premium,
+            )
+            await self._exit_iron_condor_trade(updated_trade, reason, current_premium)
 
     async def _monitor_directional_trade(self, trade: dict[str, Any]) -> None:
         try:
             if not self._broker_available():
                 return
 
-            quote = await self.broker.get_quote(symbol_name=trade["symbol"], exchange="NFO")
+            quote = await self._fetch_nfo_quote(trade["symbol"])
             ltp = self.broker.parse_ltp(quote)
 
             if not ltp or ltp <= 0:
@@ -1678,7 +1813,7 @@ class TradingEngine:
                 )
                 return
 
-            quote = await self.broker.get_quote(symbol_name=symbol, exchange="NFO")
+            quote = await self._fetch_nfo_quote(symbol)
             bid, _ = self.broker.parse_bid_ask(quote)
             conservative_ltp = bid if bid else ltp
             exit_price = fill_price if fill_price else conservative_ltp
@@ -1760,7 +1895,7 @@ class TradingEngine:
                 )
                 return
 
-            quote = await self.broker.get_quote(symbol_name=symbol, exchange="NFO")
+            quote = await self._fetch_nfo_quote(symbol)
             bid, _ = self.broker.parse_bid_ask(quote)
             conservative_ltp = bid if bid else ltp
             exit_price = fill_price if fill_price else conservative_ltp
@@ -1857,7 +1992,7 @@ class TradingEngine:
                 )
                 return
 
-            quote = await self.broker.get_quote(symbol_name=symbol, exchange="NFO")
+            quote = await self._fetch_nfo_quote(symbol)
             bid, _ = self.broker.parse_bid_ask(quote)
             conservative_ltp = bid if bid else ltp
             exit_price = fill_price if fill_price else conservative_ltp
