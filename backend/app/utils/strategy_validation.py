@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +54,66 @@ def _is_closed_iron_condor_trade(trade: dict[str, Any]) -> bool:
     return any(_clean_text(trade.get(key)) for key in ("exit_time", "exit_reason", "reason"))
 
 
+def _normalize_trade_row(trade: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(trade)
+    reason = _clean_text(normalized.get("reason") or normalized.get("exit_reason"))
+    if reason:
+        normalized["reason"] = reason
+    if not _clean_text(normalized.get("status")):
+        normalized["status"] = "CLOSED"
+    if not _clean_text(normalized.get("strategy")) and _clean_text(normalized.get("signal")):
+        normalized["strategy"] = normalized.get("signal")
+    return normalized
+
+
+def _strictly_complete(trade: dict[str, Any]) -> bool:
+    required = ("entry_time", "exit_time", "gross_pnl", "total_charges", "net_pnl", "reason")
+    return all(_clean_text(trade.get(key)) for key in required)
+
+
+def _looks_repaired_or_malformed(trade: dict[str, Any]) -> bool:
+    if not _strictly_complete(trade):
+        return True
+    if _clean_text(trade.get("reason")).upper() in {"", "UNKNOWN"}:
+        return True
+    return False
+
+
+def _duplicate_key(trade: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        _clean_text(trade.get("entry_time"))[:19],
+        _clean_text(trade.get("symbol")).upper(),
+        _clean_text(trade.get("strike")),
+        _clean_text(trade.get("qty")),
+        _clean_text(trade.get("reason") or trade.get("exit_reason")).upper(),
+        round(_to_float(trade.get("entry_price") or trade.get("entry_premium")), 2),
+    )
+
+
+def _count_duplicate_trade_keys(trades: list[dict[str, Any]]) -> int:
+    seen: set[tuple[Any, ...]] = set()
+    duplicates = 0
+    for trade in trades:
+        key = _duplicate_key(trade)
+        if key in seen:
+            duplicates += 1
+        else:
+            seen.add(key)
+    return duplicates
+
+
+def _dedupe_trade_rows(trades: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[tuple[Any, ...]] = set()
+    deduped: list[dict[str, Any]] = []
+    for trade in trades:
+        key = _duplicate_key(trade)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(trade)
+    return deduped
+
+
 @dataclass
 class StrategyReport:
     total_trades: int
@@ -75,10 +135,14 @@ class StrategyReport:
     worst_day: str
     worst_day_pnl: float
     charges_aware_target_blocks: int
+    raw_rows: int
+    strict_complete_rows: int
+    malformed_rows: int
+    duplicate_rows: int
 
     def to_summary(self) -> dict[str, Any]:
         return {
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "total_trades": self.total_trades,
             "win_rate_pct": round(self.win_rate_pct, 2),
             "gross_pnl": round(self.gross_pnl, 2),
@@ -98,11 +162,18 @@ class StrategyReport:
             "worst_day": self.worst_day,
             "worst_day_pnl": round(self.worst_day_pnl, 2),
             "charges_aware_target_blocks": self.charges_aware_target_blocks,
+            "raw_rows": self.raw_rows,
+            "strict_complete_rows": self.strict_complete_rows,
+            "malformed_rows": self.malformed_rows,
+            "duplicate_rows": self.duplicate_rows,
         }
 
 
 def build_strategy_report(trades: list[dict[str, Any]]) -> StrategyReport:
-    closed = [trade for trade in trades if _is_closed_iron_condor_trade(trade)]
+    raw_closed = [trade for trade in trades if _is_closed_iron_condor_trade(trade)]
+    normalized = [_normalize_trade_row(trade) for trade in raw_closed]
+    duplicate_rows = _count_duplicate_trade_keys(normalized)
+    closed = _dedupe_trade_rows(normalized)
     net_values = [_to_float(trade.get("net_pnl") or trade.get("pnl"), 0.0) for trade in closed]
     gross_values = [_to_float(trade.get("gross_pnl"), 0.0) for trade in closed]
     charge_values = [_to_float(trade.get("total_charges"), 0.0) for trade in closed]
@@ -175,6 +246,10 @@ def build_strategy_report(trades: list[dict[str, Any]]) -> StrategyReport:
         worst_day=worst_day,
         worst_day_pnl=worst_day_pnl,
         charges_aware_target_blocks=charges_aware_target_blocks,
+        raw_rows=len(raw_closed),
+        strict_complete_rows=sum(1 for trade in normalized if _strictly_complete(trade)),
+        malformed_rows=sum(1 for trade in normalized if _looks_repaired_or_malformed(trade)),
+        duplicate_rows=duplicate_rows,
     )
 
 
@@ -202,6 +277,12 @@ def render_strategy_report_markdown(report: StrategyReport) -> str:
             f"- EOD trades: `{summary['eod_trades']}`",
             f"- Expiry forced exits: `{summary['expiry_forced_exits']}`",
             f"- Charges-aware target would likely have blocked: `{summary['charges_aware_target_blocks']}`",
+            "",
+            "## Data Quality",
+            f"- Raw closed rows: `{summary['raw_rows']}`",
+            f"- Strict complete rows: `{summary['strict_complete_rows']}`",
+            f"- Malformed / repaired rows: `{summary['malformed_rows']}`",
+            f"- Duplicate rows removed: `{summary['duplicate_rows']}`",
             "",
             "## Daily Range",
             f"- Best day: `{summary['best_day']}` (`Rs {summary['best_day_pnl']}`)",

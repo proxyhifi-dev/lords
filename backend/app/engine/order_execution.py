@@ -426,10 +426,7 @@ class OrderExecutionSequence:
 
 class ExpiryDaySafetyProtocol:
     """
-    Simple expiry safety gate.
-
-    For now, uses configured same-day IC_EXIT_TIME as the main intraday control.
-    This avoids overcomplicated monthly-expiry assumptions for a daily paper bot.
+    Intraday EOD safety plus explicit expiry-day hard exit semantics.
     """
 
     def __init__(self, settings, logger):
@@ -456,11 +453,38 @@ class ExpiryDaySafetyProtocol:
 
         return deadline
 
-    def should_force_exit(self, current_time: datetime, entry_time: datetime) -> Tuple[bool, str]:
+    def _parse_expiry_date(self, value: str | None):
+        text = str(value or "").strip()
+        if not text:
+            return None
+
+        for fmt in ("%Y-%m-%d", "%d-%b-%Y", "%d%b%Y", "%d%b%y"):
+            try:
+                return datetime.strptime(text.upper(), fmt).date()
+            except ValueError:
+                continue
+
+        try:
+            return datetime.fromisoformat(text).date()
+        except ValueError:
+            return None
+
+    def should_force_exit(
+        self,
+        current_time: datetime,
+        entry_time: datetime,
+        trade_expiry: str | None = None,
+    ) -> Tuple[bool, str]:
+        expiry_date = self._parse_expiry_date(trade_expiry)
+        if expiry_date and current_time.date() >= expiry_date:
+            reason = f"EXPIRY_DAY_HARD_EXIT reached expiry={expiry_date.isoformat()}"
+            self.logger.warning(reason)
+            return True, reason
+
         safe_deadline = self.get_safe_exit_deadline(entry_time)
 
         if current_time >= safe_deadline:
-            reason = f"EOD/expiry safety exit deadline reached: {safe_deadline.isoformat()}"
+            reason = f"EOD_SAFETY_EXIT deadline reached: {safe_deadline.isoformat()}"
             self.logger.warning(reason)
             return True, reason
 

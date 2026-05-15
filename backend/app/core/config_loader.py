@@ -133,6 +133,10 @@ class Settings:
     ic_entry_window_start: str = "10:00"
     ic_entry_window_end: str = "12:30"
     ic_exit_time: str = "15:00"
+    ic_eod_decision_time: str = "14:35"
+    ic_eod_min_net_profit: float = 75.0
+    ic_skip_one_day_before_expiry_after_time: str = "11:15"
+    ic_quote_cache_ttl_seconds: int = 3
 
     ic_target_profit_pct: float = 0.35
     ic_stop_loss_multiple: float = 1.60
@@ -338,6 +342,12 @@ def get_settings() -> Settings:
         ic_entry_window_start=_strip_value(_get(combined, "IC_ENTRY_WINDOW_START", default="10:00")),
         ic_entry_window_end=_strip_value(_get(combined, "IC_ENTRY_WINDOW_END", default="12:30")),
         ic_exit_time=_strip_value(_get(combined, "IC_EXIT_TIME", "SQUARE_OFF", default="15:00")),
+        ic_eod_decision_time=_strip_value(_get(combined, "IC_EOD_DECISION_TIME", default="14:35")),
+        ic_eod_min_net_profit=_parse_float(_get(combined, "IC_EOD_MIN_NET_PROFIT", default=75.0), 75.0),
+        ic_skip_one_day_before_expiry_after_time=_strip_value(
+            _get(combined, "IC_SKIP_ONE_DAY_BEFORE_EXPIRY_AFTER_TIME", default="11:15")
+        ),
+        ic_quote_cache_ttl_seconds=_parse_int(_get(combined, "IC_QUOTE_CACHE_TTL_SECONDS", default=3), 3),
 
         ic_target_profit_pct=_parse_float(
             _get(combined, "IC_TARGET_PROFIT_PCT", "IC_TARGET_PROFIT", default=0.35),

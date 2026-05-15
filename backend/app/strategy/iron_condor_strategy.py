@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import math
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -40,6 +40,18 @@ class IronCondorStrategy:
         self.exit_time = self._parse_time(
             getattr(self.settings, "ic_exit_time", "15:00"),
             default=time(15, 0),
+        )
+        self.eod_decision_time = self._parse_time(
+            getattr(self.settings, "ic_eod_decision_time", "14:35"),
+            default=time(14, 35),
+        )
+        self.eod_min_net_profit = self._safe_float(
+            getattr(self.settings, "ic_eod_min_net_profit", 75.0),
+            75.0,
+        )
+        self.skip_one_day_before_expiry_after_time = self._parse_time(
+            getattr(self.settings, "ic_skip_one_day_before_expiry_after_time", "11:15"),
+            default=time(11, 15),
         )
 
         self.target_profit_pct = self._safe_float(
@@ -256,6 +268,18 @@ class IronCondorStrategy:
 
         return get_weekly_expiry(day) == day
 
+    def _next_weekly_expiry(self, current_day: date) -> date | None:
+        from backend.app.broker.samco_client import get_weekly_expiry
+
+        try:
+            expiry = get_weekly_expiry(current_day)
+            if expiry < current_day:
+                expiry = get_weekly_expiry(current_day + timedelta(days=1))
+            return expiry
+        except Exception as exc:
+            logger.warning("Unable to calculate weekly expiry for %s: %s", current_day, exc)
+            return None
+
     def _iv_factor(self, live_iv: float | None) -> float:
         if not self.assumed_iv or self.assumed_iv <= 0:
             return 1.0
@@ -284,6 +308,17 @@ class IronCondorStrategy:
         if self.skip_expiry_day_entry and self.is_expiry_day(current_time):
             logger.info("Expiry-day entry blocked for %s", current_time.date().isoformat())
             return False
+
+        next_expiry = self._next_weekly_expiry(current_time.date())
+        if next_expiry and (next_expiry - current_time.date()).days == 1:
+            if current_time.time() >= self.skip_one_day_before_expiry_after_time:
+                logger.info(
+                    "Late pre-expiry entry blocked date=%s now=%s cutoff=%s",
+                    current_time.date().isoformat(),
+                    current_time.time(),
+                    self.skip_one_day_before_expiry_after_time,
+                )
+                return False
 
         now_time = current_time.time()
         if not (self.entry_window_start <= now_time < self.entry_window_end):
@@ -738,10 +773,15 @@ class IronCondorStrategy:
         target_premium = target_metrics["target_close_premium"]
         if target_premium <= 0:
             target_premium = entry_premium * (1 - self.target_profit_pct)
-        if (
-            target_metrics.get("target_possible", 0.0) >= 1.0
-            and current_premium <= target_premium
-        ):
+        if current_premium <= target_premium and target_metrics.get("target_possible", 0.0) < 1.0:
+            logger.info(
+                "TARGET blocked current=%.2f target=%.2f required_gross=%.2f est_charges=%.2f",
+                current_premium,
+                target_premium,
+                target_metrics.get("required_gross_profit", 0.0),
+                target_metrics.get("estimated_charges", 0.0),
+            )
+        elif current_premium <= target_premium:
             logger.info(
                 "TARGET hit current=%.2f target=%.2f",
                 current_premium,
@@ -757,6 +797,20 @@ class IronCondorStrategy:
                 stop_loss_premium,
             )
             return "STOP_LOSS"
+
+        pnl_now = self.compute_pnl(entry_premium, current_premium, qty)
+        if current_t >= self.eod_decision_time:
+            if float(pnl_now.get("net_pnl", 0.0)) >= self.eod_min_net_profit:
+                logger.info(
+                    "EOD profit-lock current=%.2f net_pnl=%.2f threshold=%.2f",
+                    current_premium,
+                    float(pnl_now.get("net_pnl", 0.0)),
+                    self.eod_min_net_profit,
+                )
+                return "EOD_PROFIT_LOCK"
+            if target_metrics.get("target_possible", 0.0) < 1.0:
+                logger.info("EOD no-positive-target exit current=%.2f", current_premium)
+                return "EOD_NO_POSITIVE_TARGET"
 
         if current_t >= self.exit_time:
             logger.info("EOD exit current_time=%s exit_time=%s", current_t, self.exit_time)

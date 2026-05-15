@@ -246,7 +246,7 @@ class TradingEngine:
 
     def _ic_quote_cache_ttl_seconds(self) -> int:
         # IC exits may use cached quotes only briefly. Keep default tight for safety.
-        return int(getattr(settings, "ic_quote_cache_ttl_seconds", 5) or 5)
+        return int(getattr(settings, "ic_quote_cache_ttl_seconds", 3) or 3)
 
     def _is_valid_quote_prices(self, bid: float, ask: float, ltp: float) -> bool:
         return bid > 0 or ask > 0 or ltp > 0
@@ -1037,6 +1037,9 @@ class TradingEngine:
     ) -> dict[str, Any] | None:
         if trade.get("status") == "CLOSED":
             return dict(trade)
+        if trade.get("exit_in_progress"):
+            logger.warning("IRON_CONDOR exit ignored; exit already in progress reason=%s", reason)
+            return None
 
         async with self._trade_lock:
             state = await self.state_manager.snapshot()
@@ -1046,6 +1049,13 @@ class TradingEngine:
 
             active_trade = state.active_trade
             latest_trade = {**active_trade, **trade}
+            if latest_trade.get("status") == "CLOSED":
+                return dict(latest_trade)
+            if latest_trade.get("exit_in_progress"):
+                logger.warning("IRON_CONDOR exit ignored inside lock; exit already in progress reason=%s", reason)
+                return None
+            latest_trade["exit_in_progress"] = True
+            await self.state_manager.update(active_trade=latest_trade)
 
             logger.info(
                 "IRON_CONDOR exit triggered reason=%s quote_premium=%.2f",
@@ -1613,12 +1623,19 @@ class TradingEngine:
 
         await self.state_manager.update(active_trade=updated_trade, live_pnl=live_pnl)
 
-        should_force_exit, reason = self.expiry_safety.should_force_exit(current_time, entry_time)
+        try:
+            should_force_exit, reason = self.expiry_safety.should_force_exit(
+                current_time,
+                entry_time,
+                trade_expiry=str(updated_trade.get("expiry") or ""),
+            )
+        except TypeError:
+            should_force_exit, reason = self.expiry_safety.should_force_exit(current_time, entry_time)
         if should_force_exit:
             logger.critical("FORCE CLOSING: %s", reason)
             await self._exit_iron_condor_trade(
                 updated_trade,
-                "EXPIRY_SAFETY_FORCED_EXIT",
+                reason,
                 current_premium,
             )
             return
@@ -2246,8 +2263,8 @@ class TradingEngine:
                 trade.get("current_premium") or trade.get("entry_price"),
                 0.0,
             )
-            await self._exit_iron_condor_trade(trade, reason, current_premium)
-            return True
+            closed = await self._exit_iron_condor_trade(trade, reason, current_premium)
+            return closed is not None
 
         symbol = trade.get("symbol")
         qty = trade.get("t2_qty", trade.get("qty", 0) // 2) if trade.get("t1_booked") else trade.get("qty", 0)
