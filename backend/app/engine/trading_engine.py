@@ -330,16 +330,26 @@ class TradingEngine:
             f"Invalid signal: {raw_signal}. Expected LONG, SHORT, CALL, PUT or IRON_CONDOR."
         )
 
-    async def _resolve_option_symbol(self, strike: int, option_type: str) -> str | None:
+    async def _resolve_option_symbol(
+        self,
+        strike: int,
+        option_type: str,
+        expiry: str | None = None,
+    ) -> str | None:
         if not self._broker_available():
             logger.error("Cannot resolve IC option symbol: broker unavailable")
             return None
 
-        key = f"{strike}_{option_type}"
+        key = f"{strike}_{option_type}_{expiry or 'default'}"
         if key in self._symbol_cache:
             return self._symbol_cache[key]
 
-        expiry = OptionSelector.get_expiry_api()
+        if expiry is None:
+            if self.iron_condor_strategy is not None:
+                expiry = self.iron_condor_strategy.resolve_entry_expiry(datetime.now(IST)).isoformat()
+            else:
+                expiry = OptionSelector.get_expiry_api()
+
         logger.info("IC SYMBOL LOOKUP: strike=%s type=%s expiry=%s", strike, option_type, expiry)
 
         chain = await self.broker.get_option_chain(
@@ -528,9 +538,9 @@ class TradingEngine:
         premiums: dict[str, float] = {}
 
         for name, side, option_type, strike in leg_specs:
-            symbol = await self._resolve_option_symbol(strike, option_type)
+            symbol = await self._resolve_option_symbol(strike, option_type, expiry)
             if not symbol:
-                logger.error("Failed to resolve IC leg symbol for %s strike=%s type=%s", name, strike, option_type)
+                logger.error("Failed to resolve IC leg symbol for %s strike=%s type=%s expiry=%s", name, strike, option_type, expiry)
                 return None, None, None
 
             quote, bid, ask, ltp = await self._get_leg_quote_snapshot(symbol)

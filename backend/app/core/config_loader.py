@@ -128,15 +128,22 @@ class Settings:
     ic_monthly_only: bool = False
     ic_one_per_day: bool = True
     ic_skip_expiry_day_entry: bool = True
+    ic_skip_expiry_day_entry_use_next_week: bool = True
     ic_entry_day_start: int = 1
     ic_entry_day_end: int = 5
     ic_entry_window_start: str = "10:00"
     ic_entry_window_end: str = "12:30"
     ic_exit_time: str = "15:00"
+
+    # -- IRON CONDOR SAFETY / PROFITABILITY -----------------
+    ic_expected_move_buffer: float = 1.10
+    ic_min_safety_buffer_points: float = 50.0
+    ic_quote_cache_ttl_seconds: int = 3
+
     ic_eod_decision_time: str = "14:35"
     ic_eod_min_net_profit: float = 75.0
+    ic_eod_max_acceptable_loss: float = 300.0
     ic_skip_one_day_before_expiry_after_time: str = "11:15"
-    ic_quote_cache_ttl_seconds: int = 3
 
     ic_target_profit_pct: float = 0.35
     ic_stop_loss_multiple: float = 1.60
@@ -173,7 +180,6 @@ class Settings:
     ic_require_live_iv: bool = False
     ic_min_live_iv: float = 0.12
     ic_max_live_iv: float = 0.24
-    ic_min_safety_buffer_points: float = 40.0
 
     ic_brokerage_per_order: float = 20.0
     ic_entry_order_count: int = 4
@@ -337,17 +343,33 @@ def get_settings() -> Settings:
             _get(combined, "IC_SKIP_EXPIRY_DAY_ENTRY", default=True),
             True,
         ),
+        ic_skip_expiry_day_entry_use_next_week=_parse_bool(
+            _get(combined, "IC_SKIP_EXPIRY_DAY_ENTRY_USE_NEXT_WEEK", default=True),
+            True,
+        ),
         ic_entry_day_start=_parse_int(_get(combined, "IC_ENTRY_DAY_START", default=1), 1),
         ic_entry_day_end=_parse_int(_get(combined, "IC_ENTRY_DAY_END", default=5), 5),
         ic_entry_window_start=_strip_value(_get(combined, "IC_ENTRY_WINDOW_START", default="10:00")),
         ic_entry_window_end=_strip_value(_get(combined, "IC_ENTRY_WINDOW_END", default="12:30")),
         ic_exit_time=_strip_value(_get(combined, "IC_EXIT_TIME", "SQUARE_OFF", default="15:00")),
+        ic_expected_move_buffer=_parse_float(
+            _get(combined, "IC_EXPECTED_MOVE_BUFFER", default=1.10),
+            1.10,
+        ),
+        ic_min_safety_buffer_points=_parse_float(
+            _get(combined, "IC_MIN_SAFETY_BUFFER_POINTS", default=50.0),
+            50.0,
+        ),
+        ic_quote_cache_ttl_seconds=_parse_int(_get(combined, "IC_QUOTE_CACHE_TTL_SECONDS", default=3), 3),
         ic_eod_decision_time=_strip_value(_get(combined, "IC_EOD_DECISION_TIME", default="14:35")),
         ic_eod_min_net_profit=_parse_float(_get(combined, "IC_EOD_MIN_NET_PROFIT", default=75.0), 75.0),
+        ic_eod_max_acceptable_loss=_parse_float(
+            _get(combined, "IC_EOD_MAX_ACCEPTABLE_LOSS", default=300.0),
+            300.0,
+        ),
         ic_skip_one_day_before_expiry_after_time=_strip_value(
             _get(combined, "IC_SKIP_ONE_DAY_BEFORE_EXPIRY_AFTER_TIME", default="11:15")
         ),
-        ic_quote_cache_ttl_seconds=_parse_int(_get(combined, "IC_QUOTE_CACHE_TTL_SECONDS", default=3), 3),
 
         ic_target_profit_pct=_parse_float(
             _get(combined, "IC_TARGET_PROFIT_PCT", "IC_TARGET_PROFIT", default=0.35),
@@ -405,10 +427,6 @@ def get_settings() -> Settings:
         ic_require_live_iv=_parse_bool(_get(combined, "IC_REQUIRE_LIVE_IV", default=False), False),
         ic_min_live_iv=_parse_float(_get(combined, "IC_MIN_LIVE_IV", default=0.12), 0.12),
         ic_max_live_iv=_parse_float(_get(combined, "IC_MAX_LIVE_IV", default=0.24), 0.24),
-        ic_min_safety_buffer_points=_parse_float(
-            _get(combined, "IC_MIN_SAFETY_BUFFER_POINTS", default=40.0),
-            40.0,
-        ),
 
         ic_brokerage_per_order=_parse_float(_get(combined, "IC_BROKERAGE_PER_ORDER", default=20.0), 20.0),
         ic_entry_order_count=_parse_int(_get(combined, "IC_ENTRY_ORDER_COUNT", default=4), 4),

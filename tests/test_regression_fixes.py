@@ -11,8 +11,10 @@ from backend.app.engine.order_execution import OrderExecutionSequence
 from backend.app.strategy.iron_condor_strategy import IronCondorStrategy
 
 import asyncio
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
+
+import pytest
 
 
 def test_trade_store_accepts_float_charges(tmp_path):
@@ -94,6 +96,8 @@ def test_ic_target_is_charges_aware():
     metrics = strategy.calculate_target_metrics(40.0, 50)
     pnl = strategy.compute_pnl(40.0, metrics["target_close_premium"], 50)
     assert pnl["net_pnl"] >= metrics["target_net_profit"] - 1.0
+    assert "required_gross_profit" in metrics
+    assert "estimated_charges" in metrics
 
 
 def test_ic_target_exit_blocked_when_not_net_positive_after_charges():
@@ -138,11 +142,63 @@ def test_ic_target_exit_allowed_when_net_positive_after_charges_buffer():
     assert reason == "TARGET"
 
 
+def test_iron_condor_strategy_has_entry_regime_filter():
+    strategy = IronCondorStrategy()
+
+    ok, reason, diag = strategy.evaluate_entry_regime(
+        spot=23700.0,
+        live_iv=None,
+    )
+
+    assert isinstance(ok, bool)
+    assert isinstance(reason, str)
+    assert isinstance(diag, dict)
+    assert "effective_iv" in diag
+
+
+def test_iron_condor_calculate_strikes_accepts_live_iv():
+    strategy = IronCondorStrategy()
+
+    strikes = strategy.calculate_strikes(
+        23756.30,
+        live_iv=0.15,
+    )
+
+    assert isinstance(strikes, dict)
+    assert "short_call" in strikes
+    assert "long_call" in strikes
+    assert "short_put" in strikes
+    assert "long_put" in strikes
+    assert strikes["long_call"] > strikes["short_call"]
+    assert strikes["long_put"] < strikes["short_put"]
+
+
+def test_expiry_day_uses_next_week_expiry_when_enabled(monkeypatch):
+    strategy = IronCondorStrategy()
+    strategy.skip_expiry_day_entry = True
+    strategy.skip_expiry_day_entry_use_next_week = True
+
+    def fake_weekly_expiry(day):
+        if day == date(2026, 5, 19):
+            return date(2026, 5, 19)
+        return date(2026, 5, 26)
+
+    monkeypatch.setattr(
+        "backend.app.broker.samco_client.get_weekly_expiry",
+        fake_weekly_expiry,
+    )
+
+    resolved = strategy.resolve_entry_expiry(date(2026, 5, 19))
+
+    assert resolved == date(2026, 5, 26)
+
+
 def test_ic_entry_blocks_on_expiry_day():
     strategy = IronCondorStrategy()
     strategy.entry_window_start = datetime.strptime("09:20", "%H:%M").time()
     strategy.entry_window_end = datetime.strptime("10:30", "%H:%M").time()
     strategy.skip_expiry_day_entry = True
+    strategy.skip_expiry_day_entry_use_next_week = False
     strategy.one_per_day = False
 
     class S:
@@ -154,6 +210,35 @@ def test_ic_entry_blocks_on_expiry_day():
 
     expiry_dt = datetime(2026, 5, 19, 9, 45, tzinfo=ZoneInfo("Asia/Kolkata"))
     assert strategy.can_enter_cycle(expiry_dt, S()) is False
+
+
+def test_ic_entry_allows_expiry_day_with_next_week_skip():
+    strategy = IronCondorStrategy()
+    strategy.entry_window_start = datetime.strptime("09:20", "%H:%M").time()
+    strategy.entry_window_end = datetime.strptime("10:30", "%H:%M").time()
+    strategy.skip_expiry_day_entry = False
+    strategy.skip_expiry_day_entry_use_next_week = True
+    strategy.one_per_day = False
+
+    class S:
+        active_trade = None
+        last_trade_date = None
+        last_ic_trade_date = None
+        iron_condor_trade_date = None
+        last_iron_condor_month = None
+
+    expiry_dt = datetime(2026, 5, 19, 9, 45, tzinfo=ZoneInfo("Asia/Kolkata"))
+    assert strategy.can_enter_cycle(expiry_dt, S()) is True
+
+
+def test_get_weekly_expiry_can_skip_today_expiry():
+    from backend.app.broker.samco_client import get_weekly_expiry
+
+    expiry_today = get_weekly_expiry(date(2026, 5, 19), skip_today_if_expiry=False)
+    expiry_next_week = get_weekly_expiry(date(2026, 5, 19), skip_today_if_expiry=True)
+
+    assert expiry_today == date(2026, 5, 19)
+    assert expiry_next_week == date(2026, 5, 26)
 
 
 def test_ic_entry_blocks_after_one_trade_today():
@@ -264,10 +349,10 @@ def test_trade_store_derives_missing_ic_exit_price_from_exit_legs(tmp_path):
             "net_pnl": 70.0,
             "total_charges": 30.0,
             "exit_legs": [
-                {"side": "SELL", "exit_price": 149.70},
-                {"side": "BUY", "exit_price": 115.30},
-                {"side": "SELL", "exit_price": 129.65},
-                {"side": "BUY", "exit_price": 103.75},
+                {"side": "SELL", "exit_price": 149.70, "price_source": "broker_quote_snapshot"},
+                {"side": "BUY", "exit_price": 115.30, "price_source": "broker_quote_snapshot"},
+                {"side": "SELL", "exit_price": 129.65, "price_source": "broker_quote_snapshot"},
+                {"side": "BUY", "exit_price": 103.75, "price_source": "broker_quote_snapshot"},
             ],
         },
         daily_pnl=70.0,
@@ -275,6 +360,202 @@ def test_trade_store_derives_missing_ic_exit_price_from_exit_legs(tmp_path):
     rows = store.get_all_trades()
     assert float(rows[-1]["exit_price"]) == 60.30
     assert float(rows[-1]["exit_premium"]) == 60.30
+
+
+def test_trade_store_recomputes_ic_summary_from_broker_exit_legs(tmp_path):
+    store = TradeStore(str(tmp_path / "trades.csv"))
+    store.append_trade(
+        {
+            "strategy": "IRON_CONDOR",
+            "signal": "IRON_CONDOR",
+            "symbol": "NIFTY",
+            "underlying": "NIFTY 50",
+            "expiry": "2026-05-26",
+            "strike": "24000/23450",
+            "entry_price": 57.30,
+            "exit_price": 40.11,
+            "exit_premium": 40.11,
+            "qty": 65,
+            "status": "CLOSED",
+            "entry_time": "2026-05-19T04:50:13+00:00",
+            "exit_time": "2026-05-19T07:47:27+00:00",
+            "gross_pnl": 1117.35,
+            "net_pnl": 921.87,
+            "total_charges": 195.48,
+            "pricing_source": "model_fallback",
+            "exit_legs": [
+                {"name": "short_call", "side": "SELL", "entry_price": 110.90, "exit_price": 100.35, "price_source": "broker_quote_snapshot"},
+                {"name": "long_call", "side": "BUY", "entry_price": 80.05, "exit_price": 70.10, "price_source": "broker_quote_snapshot"},
+                {"name": "short_put", "side": "SELL", "entry_price": 131.50, "exit_price": 121.65, "price_source": "broker_quote_snapshot"},
+                {"name": "long_put", "side": "BUY", "entry_price": 105.05, "exit_price": 94.75, "price_source": "broker_quote_snapshot"},
+            ],
+        },
+        daily_pnl=921.87,
+    )
+
+    row = store.get_all_trades()[-1]
+    assert float(row["entry_price"]) == 57.30
+    assert float(row["exit_price"]) == 57.15
+    assert float(row["exit_premium"]) == 57.15
+    assert float(row["gross_pnl"]) == 9.75
+    assert float(row["net_pnl"]) == -185.73
+    assert row["pricing_source"] == "broker_quote_snapshot"
+
+
+def test_ic_leg_premium_math_is_stable_for_10000_cases(tmp_path):
+    store = TradeStore(str(tmp_path / "trades.csv"))
+
+    for case in range(1, 10001):
+        entry_base = 20.0 + (case % 700) / 20.0
+        exit_shift = ((case % 41) - 20) / 20.0
+        qty = 25 + (case % 4) * 25
+
+        legs = [
+            {
+                "side": "SELL",
+                "entry_price": round(entry_base + 8.0, 2),
+                "exit_price": round(entry_base + 8.0 + exit_shift, 2),
+                "price_source": "broker_quote_snapshot",
+            },
+            {
+                "side": "BUY",
+                "entry_price": round(entry_base + 2.5, 2),
+                "exit_price": round(entry_base + 2.5 + exit_shift / 2, 2),
+                "price_source": "broker_quote_snapshot",
+            },
+            {
+                "side": "SELL",
+                "entry_price": round(entry_base + 7.0, 2),
+                "exit_price": round(entry_base + 7.0 - exit_shift / 3, 2),
+                "price_source": "broker_quote_snapshot",
+            },
+            {
+                "side": "BUY",
+                "entry_price": round(entry_base + 1.5, 2),
+                "exit_price": round(entry_base + 1.5 - exit_shift / 4, 2),
+                "price_source": "broker_quote_snapshot",
+            },
+        ]
+
+        entry = store._derive_entry_premium_from_legs(legs)
+        exit_premium = store._derive_exit_premium_from_legs(legs)
+
+        expected_entry = round(
+            legs[0]["entry_price"]
+            - legs[1]["entry_price"]
+            + legs[2]["entry_price"]
+            - legs[3]["entry_price"],
+            2,
+        )
+        expected_exit = round(
+            legs[0]["exit_price"]
+            - legs[1]["exit_price"]
+            + legs[2]["exit_price"]
+            - legs[3]["exit_price"],
+            2,
+        )
+
+        assert store._legs_have_market_exit_prices(legs) is True
+        assert entry == expected_entry
+        assert exit_premium == expected_exit
+        assert round((entry - exit_premium) * qty, 2) == round(
+            (expected_entry - expected_exit) * qty,
+            2,
+        )
+
+
+@pytest.mark.parametrize(
+    ("exit_legs", "expected_source", "expected_exit", "expected_gross", "expected_net"),
+    [
+        ([], "unverified_summary", 40.11, 1117.35, 921.87),
+        (
+            [
+                {"side": "SELL", "entry_price": 110.90, "exit_price": 0.0, "price_source": "broker_quote_snapshot"},
+                {"side": "BUY", "entry_price": 80.05, "exit_price": 70.10, "price_source": "broker_quote_snapshot"},
+                {"side": "SELL", "entry_price": 131.50, "exit_price": 121.65, "price_source": "broker_quote_snapshot"},
+                {"side": "BUY", "entry_price": 105.05, "exit_price": 94.75, "price_source": "broker_quote_snapshot"},
+            ],
+            "unverified_summary",
+            40.11,
+            1117.35,
+            921.87,
+        ),
+        (
+            [
+                {"side": "SELL", "entry_price": 110.90, "exit_price": 100.35},
+                {"side": "BUY", "entry_price": 80.05, "exit_price": 70.10},
+                {"side": "SELL", "entry_price": 131.50, "exit_price": 121.65},
+                {"side": "BUY", "entry_price": 105.05, "exit_price": 94.75},
+            ],
+            "unverified_summary",
+            40.11,
+            1117.35,
+            921.87,
+        ),
+        (
+            [
+                {"side": "SELL", "entry_price": 110.90, "exit_price": 100.35, "price_source": "model_fallback"},
+                {"side": "BUY", "entry_price": 80.05, "exit_price": 70.10, "price_source": "model_fallback"},
+                {"side": "SELL", "entry_price": 131.50, "exit_price": 121.65, "price_source": "model_fallback"},
+                {"side": "BUY", "entry_price": 105.05, "exit_price": 94.75, "price_source": "model_fallback"},
+            ],
+            "unverified_summary",
+            40.11,
+            1117.35,
+            921.87,
+        ),
+        (
+            [
+                {"side": "SELL", "entry_price": 110.90, "exit_price": 100.35, "price_source": "broker_quote_snapshot_cached"},
+                {"side": "BUY", "entry_price": 80.05, "exit_price": 70.10, "price_source": "broker_quote_snapshot_cached"},
+                {"side": "SELL", "entry_price": 131.50, "exit_price": 121.65, "price_source": "broker_quote_snapshot_cached"},
+                {"side": "BUY", "entry_price": 105.05, "exit_price": 94.75, "price_source": "broker_quote_snapshot_cached"},
+            ],
+            "broker_quote_snapshot",
+            57.15,
+            9.75,
+            -185.73,
+        ),
+    ],
+)
+def test_ic_closed_summary_source_gate_pass_fail_cases(
+    tmp_path,
+    exit_legs,
+    expected_source,
+    expected_exit,
+    expected_gross,
+    expected_net,
+):
+    store = TradeStore(str(tmp_path / "trades.csv"))
+    store.append_trade(
+        {
+            "strategy": "IRON_CONDOR",
+            "signal": "IRON_CONDOR",
+            "symbol": "NIFTY",
+            "underlying": "NIFTY 50",
+            "expiry": "2026-05-26",
+            "strike": "24000/23450",
+            "entry_price": 57.30,
+            "exit_price": 40.11,
+            "exit_premium": 40.11,
+            "qty": 65,
+            "status": "CLOSED",
+            "entry_time": "2026-05-19T04:50:13+00:00",
+            "exit_time": "2026-05-19T07:47:27+00:00",
+            "gross_pnl": 1117.35,
+            "net_pnl": 921.87,
+            "total_charges": 195.48,
+            "pricing_source": "model_fallback",
+            "exit_legs": exit_legs,
+        },
+        daily_pnl=921.87,
+    )
+
+    row = store.get_all_trades()[-1]
+    assert row["pricing_source"] == expected_source
+    assert float(row["exit_price"]) == expected_exit
+    assert float(row["gross_pnl"]) == expected_gross
+    assert float(row["net_pnl"]) == expected_net
 
 
 def test_ic_model_fallback_critical_disables_trading(tmp_path, monkeypatch):

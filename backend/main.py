@@ -154,6 +154,77 @@ def _derive_exit_premium_from_legs(row: dict[str, Any]) -> float | None:
     return round(close_premium, 2)
 
 
+def _derive_entry_premium_from_legs(row: dict[str, Any]) -> float | None:
+    legs = _normalize_legs_for_dashboard(
+        row.get("exit_legs")
+        or row.get("current_legs")
+        or row.get("closed_legs")
+        or row.get("exit_legs_json")
+        or row.get("legs")
+        or row.get("legs_json")
+    )
+    if not legs:
+        return None
+
+    entry_premium = 0.0
+    seen_price = False
+
+    for leg in legs:
+        side = _clean_text(leg.get("side")).upper()
+        entry_price = _to_float(
+            leg.get("entry_price")
+            or leg.get("fill_price")
+            or leg.get("price"),
+            None,
+        )
+        if entry_price is None:
+            continue
+
+        seen_price = True
+        if side == "SELL":
+            entry_premium += entry_price
+        elif side == "BUY":
+            entry_premium -= entry_price
+
+    if not seen_price:
+        return None
+
+    return round(entry_premium, 2)
+
+
+def _exit_legs_have_market_prices(row: dict[str, Any]) -> bool:
+    exit_legs = _normalize_legs_for_dashboard(
+        row.get("exit_legs")
+        or row.get("current_legs")
+        or row.get("closed_legs")
+        or row.get("exit_legs_json")
+    )
+    if not exit_legs:
+        return False
+
+    market_sources = {
+        "broker_quote_snapshot",
+        "broker_quote_snapshot_cached",
+        "broker_fill",
+    }
+
+    for leg in exit_legs:
+        exit_price = _to_float(
+            leg.get("exit_price")
+            or leg.get("current_close_price")
+            or leg.get("current_price"),
+            None,
+        )
+        if exit_price is None or exit_price <= 0:
+            return False
+
+        source = _clean_text(leg.get("price_source")).lower()
+        if source not in market_sources:
+            return False
+
+    return True
+
+
 def _is_numeric_text(value: Any) -> bool:
     return _to_float(value, None) is not None
 
@@ -374,10 +445,29 @@ def _normalize_dashboard_trade(trade: dict[str, Any]) -> dict[str, Any]:
         row.get("exit_premium") if row.get("exit_premium") not in ("", None) else exit_price
     )
     derived_exit_premium = _derive_exit_premium_from_legs(row)
-    if exit_price == "" and derived_exit_premium is not None:
+    has_market_exit_legs = _exit_legs_have_market_prices(row)
+    if (
+        strategy.upper() == "IRON_CONDOR"
+        and _is_trade_closed(row)
+        and has_market_exit_legs
+        and derived_exit_premium is not None
+    ):
         exit_price = round(derived_exit_premium, 2)
-    if exit_premium == "" and derived_exit_premium is not None:
         exit_premium = round(derived_exit_premium, 2)
+    elif exit_price == "" and derived_exit_premium is not None:
+        exit_price = round(derived_exit_premium, 2)
+    elif exit_premium == "" and derived_exit_premium is not None:
+        exit_premium = round(derived_exit_premium, 2)
+
+    derived_entry_premium = _derive_entry_premium_from_legs(row)
+    if (
+        strategy.upper() == "IRON_CONDOR"
+        and has_market_exit_legs
+        and derived_entry_premium is not None
+    ):
+        entry_price = round(derived_entry_premium, 2)
+        entry_ltp = entry_price
+
     gross_pnl = _round_or_blank(row.get("gross_pnl"))
     net_pnl = _round_or_blank(
         row.get("net_pnl") if row.get("net_pnl") not in ("", None) else row.get("pnl")
@@ -393,6 +483,23 @@ def _normalize_dashboard_trade(trade: dict[str, Any]) -> dict[str, Any]:
 
     if charges_float is None and gross_float is not None and net_float is not None:
         total_charges = round(abs(gross_float - net_float), 2)
+        charges_float = _to_float(total_charges, None)
+
+    if (
+        strategy.upper() == "IRON_CONDOR"
+        and _is_trade_closed(row)
+        and has_market_exit_legs
+        and _to_float(entry_price, None) is not None
+        and _to_float(exit_price, None) is not None
+    ):
+        qty_value = _to_int(row.get("qty"), 0)
+        charges_value = charges_float if charges_float is not None else 0.0
+        gross_pnl = round(
+            (_to_float(entry_price, 0.0) - _to_float(exit_price, 0.0)) * qty_value,
+            2,
+        )
+        net_pnl = round(gross_pnl - charges_value, 2)
+        pnl = net_pnl
 
     reason = _clean_text(row.get("exit_reason") or row.get("reason"))
     if not _known_exit_reason(reason):
@@ -401,6 +508,10 @@ def _normalize_dashboard_trade(trade: dict[str, Any]) -> dict[str, Any]:
     pricing_source = _clean_text(row.get("pricing_source"))
     if _known_exit_reason(pricing_source):
         pricing_source = "broker_quote_snapshot"
+    if strategy.upper() == "IRON_CONDOR" and has_market_exit_legs:
+        pricing_source = "broker_quote_snapshot"
+    elif strategy.upper() == "IRON_CONDOR" and _is_trade_closed(row):
+        pricing_source = "unverified_summary"
     if not pricing_source and strategy.upper() == "IRON_CONDOR":
         pricing_source = "broker_quote_snapshot"
 
@@ -429,6 +540,8 @@ def _normalize_dashboard_trade(trade: dict[str, Any]) -> dict[str, Any]:
         if _known_exit_reason(row.get("sell_order_id"))
         else _clean_text(row.get("sell_order_id")),
         "pricing_source": pricing_source,
+        "pricing_verified": bool(has_market_exit_legs),
+        "pricing_verification": "broker_exit_legs" if has_market_exit_legs else "",
     }
 
 

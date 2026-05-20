@@ -1003,7 +1003,7 @@ class SamcoClient:
 _EXPIRY_CHANGE_DATE = date(2025, 9, 2)
 
 
-def get_weekly_expiry(base_date: date | None = None) -> date:
+def get_weekly_expiry(base_date: date | None = None, skip_today_if_expiry: bool = False) -> date:
     """
     NIFTY weekly expiry helper.
     Before 2025-09-02:
@@ -1016,11 +1016,11 @@ def get_weekly_expiry(base_date: date | None = None) -> date:
     target_weekday = 1 if today >= _EXPIRY_CHANGE_DATE else 3
     days = (target_weekday - today.weekday()) % 7
 
-    if base_date is None and days == 0 and now >= datetime.strptime("15:30", "%H:%M").time():
+    if days == 0 and (skip_today_if_expiry or (base_date is None and now >= datetime.strptime("15:30", "%H:%M").time())):
         days = 7
 
     return today + timedelta(days=days)
 
 
-def get_expiry_api(base_date: date | None = None) -> str:
-    return get_weekly_expiry(base_date).strftime("%Y-%m-%d")
+def get_expiry_api(base_date: date | None = None, skip_today_if_expiry: bool = False) -> str:
+    return get_weekly_expiry(base_date, skip_today_if_expiry).strftime("%Y-%m-%d")

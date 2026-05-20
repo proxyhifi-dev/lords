@@ -93,4 +93,8 @@ class OptionSelector:
         """
         from backend.app.broker.samco_client import get_expiry_api as _get_expiry
 
-        return _get_expiry()
+        return _get_expiry(
+            skip_today_if_expiry=bool(
+                getattr(settings, "ic_skip_expiry_day_entry_use_next_week", False)
+            )
+        )

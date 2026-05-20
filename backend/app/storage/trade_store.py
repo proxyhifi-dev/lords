@@ -585,8 +585,31 @@ class TradeStore:
             or row.get("closed_legs")
             or row.get("exit_legs_json")
         )
-        if not exit_price:
-            derived_exit_price = self._derive_exit_premium_from_legs(exit_legs)
+        has_market_exit_legs = self._legs_have_market_exit_prices(exit_legs)
+        derived_exit_price = self._derive_exit_premium_from_legs(exit_legs)
+        if strategy.upper() == "IRON_CONDOR" and exit_time and has_market_exit_legs:
+            if derived_exit_price is not None:
+                exit_price = self._format_money(derived_exit_price)
+                row["exit_premium"] = exit_price
+            derived_entry_price = self._derive_entry_premium_from_legs(exit_legs or legs)
+            if derived_entry_price is not None:
+                entry_price = self._format_money(derived_entry_price)
+                entry_ltp = entry_price
+
+            entry_float = self._to_float(entry_price, None)
+            exit_float = self._to_float(exit_price, None)
+            qty_float = self._to_float(qty, None)
+            charges_float = self._to_float(total_charges, 0.0) or 0.0
+            if entry_float is not None and exit_float is not None and qty_float is not None:
+                gross_value = round((entry_float - exit_float) * int(qty_float), 2)
+                net_value = round(gross_value - charges_float, 2)
+                gross_pnl = self._format_money(gross_value)
+                pnl = self._format_money(net_value)
+                net_pnl = self._format_money(net_value)
+                pricing_source = "broker_quote_snapshot"
+        elif strategy.upper() == "IRON_CONDOR" and exit_time:
+            pricing_source = "unverified_summary"
+        elif not exit_price:
             if derived_exit_price is not None:
                 exit_price = self._format_money(derived_exit_price)
 
@@ -682,6 +705,61 @@ class TradeStore:
             return None
 
         return round(close_premium, 2)
+
+    def _derive_entry_premium_from_legs(self, legs: list[dict[str, Any]]) -> float | None:
+        if not legs:
+            return None
+
+        entry_premium = 0.0
+        seen_price = False
+
+        for leg in legs:
+            side = self._clean_text(leg.get("side")).upper()
+            entry_price = self._to_float(
+                leg.get("entry_price")
+                or leg.get("fill_price")
+                or leg.get("price"),
+                None,
+            )
+            if entry_price is None:
+                continue
+
+            seen_price = True
+            if side == "SELL":
+                entry_premium += entry_price
+            elif side == "BUY":
+                entry_premium -= entry_price
+
+        if not seen_price:
+            return None
+
+        return round(entry_premium, 2)
+
+    def _legs_have_market_exit_prices(self, exit_legs: list[dict[str, Any]]) -> bool:
+        if not exit_legs:
+            return False
+
+        market_sources = {
+            "broker_quote_snapshot",
+            "broker_quote_snapshot_cached",
+            "broker_fill",
+        }
+
+        for leg in exit_legs:
+            exit_price = self._to_float(
+                leg.get("exit_price")
+                or leg.get("current_close_price")
+                or leg.get("current_price"),
+                None,
+            )
+            if exit_price is None or exit_price <= 0:
+                return False
+
+            source = self._clean_text(leg.get("price_source")).lower()
+            if source not in market_sources:
+                return False
+
+        return True
 
     def _build_row(self, trade: dict[str, Any], daily_pnl: float | None = None) -> dict[str, Any]:
         now = datetime.now(IST)
@@ -792,10 +870,41 @@ class TradeStore:
         legs = self._extract_trade_legs(trade)
         exit_legs = self._extract_trade_exit_legs(trade)
         derived_exit_price = self._derive_exit_premium_from_legs(exit_legs)
-        if (exit_price in ("", None)) and derived_exit_price is not None:
+        has_market_exit_legs = self._legs_have_market_exit_prices(exit_legs)
+        if (
+            strategy.upper() == "IRON_CONDOR"
+            and exit_time
+            and has_market_exit_legs
+            and derived_exit_price is not None
+        ):
             exit_price = round(derived_exit_price, 2)
-        if (exit_premium in ("", None)) and derived_exit_price is not None:
             exit_premium = round(derived_exit_price, 2)
+
+            derived_entry_price = self._derive_entry_premium_from_legs(exit_legs or legs)
+            if derived_entry_price is not None:
+                entry_price = round(derived_entry_price, 2)
+                entry_ltp = entry_price
+
+            entry_float = self._to_float(entry_price, None)
+            exit_float = self._to_float(exit_price, None)
+            qty_float = self._to_float(qty, None)
+            total_float = self._to_float(total_charges, 0.0) or 0.0
+            if entry_float is not None and exit_float is not None and qty_float is not None:
+                gross_pnl = round((entry_float - exit_float) * int(qty_float), 2)
+                net_pnl = round(gross_pnl - total_float, 2)
+                pnl = net_pnl
+            trade["pricing_source"] = "broker_quote_snapshot"
+        elif strategy.upper() == "IRON_CONDOR" and exit_time:
+            trade["pricing_source"] = "unverified_summary"
+        elif (exit_price in ("", None)) and derived_exit_price is not None:
+            exit_price = round(derived_exit_price, 2)
+        elif (exit_premium in ("", None)) and derived_exit_price is not None:
+            exit_premium = round(derived_exit_price, 2)
+
+        try:
+            entry_slippage = round(float(entry_price or 0) - float(entry_ltp or 0), 2)
+        except (TypeError, ValueError):
+            entry_slippage = ""
 
         row = {
             "date": now.date().isoformat(),

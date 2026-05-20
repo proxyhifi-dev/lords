@@ -541,6 +541,8 @@ class MarketScheduler:
                 delay,
                 hard_stall_seconds,
             )
+            self._last_tick_time = current_ts
+            self._last_good_quote_time = current_ts
             await self._fail_safe_on_data_loss(reason=f"scheduler_stall_{delay:.0f}s")
             return
 
@@ -551,6 +553,8 @@ class MarketScheduler:
                 "Dead-man switch: market data stale for %.1fs",
                 data_stale,
             )
+            self._last_tick_time = current_ts
+            self._last_good_quote_time = current_ts
             await self._fail_safe_on_data_loss(reason=f"data_stale_{data_stale:.0f}s")
             return
 
@@ -677,9 +681,15 @@ class MarketScheduler:
             logger.info("IC gate blocked: weekend")
             return False
 
-        if bool(getattr(settings, "ic_skip_expiry_day_entry", True)):
-            current_day = current_time.date()
-            if get_weekly_expiry(current_day) == current_day:
+        current_day = current_time.date()
+        expiry_day = get_weekly_expiry(current_day) == current_day
+        if expiry_day:
+            if bool(getattr(settings, "ic_skip_expiry_day_entry_use_next_week", False)):
+                logger.info(
+                    "IC expiry day: using next week expiry on %s",
+                    current_day.isoformat(),
+                )
+            elif bool(getattr(settings, "ic_skip_expiry_day_entry", True)):
                 logger.info("IC gate blocked: expiry day %s", current_day.isoformat())
                 return False
 

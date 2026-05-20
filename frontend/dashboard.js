@@ -546,6 +546,7 @@ function formatPricingSource(source) {
   if (normalized === 'broker_quote_snapshot') return 'BROKER QUOTE SNAPSHOT';
   if (normalized === 'broker_quote_snapshot_cached') return 'BROKER QUOTE SNAPSHOT CACHED';
   if (normalized === 'model_fallback') return 'MODEL FALLBACK';
+  if (normalized === 'unverified_summary') return 'UNVERIFIED SUMMARY';
 
   return normalized ? normalized.toUpperCase().replaceAll('_', ' ') : '—';
 }
@@ -846,28 +847,38 @@ function getHistoryLegCells(trade) {
 }
 
 function collectTradeLegs(trade) {
-  const sources = [
+  const entrySources = [
     trade.legs,
     trade.legs_json,
     trade.entry_legs,
     trade.entry_legs_json,
+  ];
+  const exitSources = [
     trade.current_legs,
     trade.current_legs_json,
     trade.exit_legs,
     trade.exit_legs_json,
   ];
 
-  const result = [];
+  const byName = {};
 
-  for (const source of sources) {
+  for (const source of entrySources) {
     for (const leg of parseTradeLegs(source)) {
-      if (leg && leg.name && !result.some((existing) => existing.name === leg.name)) {
-        result.push(leg);
+      if (leg && leg.name) {
+        byName[leg.name] = { ...(byName[leg.name] || {}), ...leg };
       }
     }
   }
 
-  return result;
+  for (const source of exitSources) {
+    for (const leg of parseTradeLegs(source)) {
+      if (leg && leg.name) {
+        byName[leg.name] = { ...(byName[leg.name] || {}), ...leg };
+      }
+    }
+  }
+
+  return Object.values(byName);
 }
 
 function buildSyntheticLeg(name, side, optionType, strike, premium, trade) {

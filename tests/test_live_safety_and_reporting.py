@@ -210,6 +210,36 @@ def test_scheduler_hard_stall_triggers_fail_safe(monkeypatch):
     assert str(calls["reason"]).startswith("scheduler_stall_")
 
 
+def test_scheduler_hard_stall_updates_tick_time(monkeypatch):
+    scheduler = object.__new__(MarketScheduler)
+    now = market_scheduler_module.wall_time.time()
+    scheduler._last_tick_time = now - 3.0
+    scheduler._last_good_quote_time = 9999999999.0
+    calls = {}
+
+    async def fake_fail_safe(reason):
+        calls["reason"] = reason
+
+    fake_settings = type(
+        "S",
+        (),
+        {
+            "scheduler_stall_warn_seconds": 1.0,
+            "scheduler_stall_hard_seconds": 2.0,
+            "deadman_timeout": 999999,
+        },
+    )()
+    monkeypatch.setattr(market_scheduler_module, "settings", fake_settings)
+    monkeypatch.setattr(market_scheduler_module, "setting_float", lambda name: getattr(fake_settings, name))
+    monkeypatch.setattr(scheduler, "_fail_safe_on_data_loss", fake_fail_safe)
+
+    asyncio.run(scheduler._handle_open_market_cycle())
+
+    assert str(calls["reason"]).startswith("scheduler_stall_")
+    assert scheduler._last_tick_time >= now
+    assert scheduler._last_good_quote_time >= now
+
+
 def test_samco_call_sdk_relogs_on_auth_exception(monkeypatch):
     from backend.app.broker.samco_client import SamcoClient
 
