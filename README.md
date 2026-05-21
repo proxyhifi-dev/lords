@@ -232,21 +232,6 @@ Leave both vars blank to run silently — no errors, no setup needed for paper t
 
 ---
 
-## Files changed in this session
-
-| File | What was fixed |
-|------|---------------|
-| `backend/app/engine/trading_engine.py` | Health loop adaptive interval; emergency exit fresh quote fetch; slippage-adjusted premium gate; ₹0 exit price fallback; EOD exit through model_fallback; `CLOSING` guard; delta strikes; journal events |
-| `backend/app/scheduler/market_scheduler.py` | IV staleness gate (90s); India VIX cascade; ATM implied vol fallback |
-| `backend/app/broker/samco_client.py` | Auth cascade break; 200ms rate limiter; `get_india_vix()` method |
-| `backend/app/engine/state_manager.py` | `peak_equity` high-water mark; overnight rollover; backup rate limit; idempotency TTL |
-| `backend/app/strategy/iron_condor_strategy.py` | BSM delta strikes; Newton-Raphson implied vol; DTE-aware credit scaling |
-| `backend/app/engine/execution_manager.py` | Paper mode returns `avg_price=None` not `0.0` |
-| `backend/app/core/startup_manager.py` | Validates `SAMCO_USER_ID`, `SAMCO_PASSWORD`, `SAMCO_YOB` at startup |
-| `backend/app/core/config_loader.py` | Added `ic_slippage_per_leg` |
-| `.env` | Updated distances, stop-loss multiples, entry window, added `IC_SLIPPAGE_PER_LEG`, `SCHEDULER_STALL_HARD_SECONDS` |
-
----
 
 ## Disclaimer
 
