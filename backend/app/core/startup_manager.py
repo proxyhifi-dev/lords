@@ -57,8 +57,21 @@ class StartupManager:
                 logger.info("Initializing broker...")
                 self.broker = SamcoClient()
 
-                if is_live and (not settings.samco_user_id or not settings.samco_password):
-                    raise ValueError("SAMCO credentials missing in LIVE mode")
+                if is_live:
+                    missing = [
+                        field
+                        for field, val in [
+                            ("SAMCO_USER_ID", settings.samco_user_id),
+                            ("SAMCO_PASSWORD", settings.samco_password),
+                            ("SAMCO_YOB", settings.samco_yob),
+                        ]
+                        if not str(val or "").strip()
+                    ]
+                    if missing:
+                        raise ValueError(
+                            f"LIVE MODE: missing required credentials in .env: {', '.join(missing)}. "
+                            "Set these values and restart."
+                        )
 
                 logger.info("Logging in to broker...")
                 await self.broker.login()
