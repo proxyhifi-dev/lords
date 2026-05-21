@@ -238,6 +238,8 @@ class Settings:
     circuit_cooldown_seconds: int = 30
     deadman_timeout: int = 30
 
+    redis_url: str = "redis://localhost:6379"
+
     trades_file: str = "data/trades.csv"
     state_file: str = "data/runtime_state.json"
     log_file: str = "logs/bot.log"
@@ -493,6 +495,8 @@ def get_settings() -> Settings:
         circuit_failure_threshold=_parse_int(_get(combined, "CIRCUIT_FAILURE_THRESHOLD", default=3), 3),
         circuit_cooldown_seconds=_parse_int(_get(combined, "CIRCUIT_COOLDOWN_SECONDS", default=30), 30),
         deadman_timeout=_parse_int(_get(combined, "DEADMAN_TIMEOUT", default=30), 30),
+
+        redis_url=_strip_value(_get(combined, "REDIS_URL", default="redis://localhost:6379")),
 
         trades_file=_strip_value(_get(combined, "TRADES_FILE", default="data/trades.csv")),
         state_file=_strip_value(_get(combined, "STATE_FILE", default="data/runtime_state.json")),
