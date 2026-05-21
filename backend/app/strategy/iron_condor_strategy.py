@@ -650,11 +650,17 @@ class IronCondorStrategy:
         if spot_value <= 0:
             return False, "invalid_spot", diagnostics
 
-        if not self.high_probability_mode:
-            return True, "ok", diagnostics
-
+        # require_live_iv applies unconditionally regardless of high_probability_mode
         if self.require_live_iv and iv is None:
             return False, "live_iv_required", diagnostics
+
+        # Hard ceiling: extreme IV signals tail-risk regime — never safe to sell premium
+        if iv is not None and iv > 0.50:
+            diagnostics["threshold"] = 0.50
+            return False, "iv_extreme_tail_risk", diagnostics
+
+        if not self.high_probability_mode:
+            return True, "ok", diagnostics
 
         if iv is not None and iv < self.min_live_iv:
             diagnostics["threshold"] = round(float(self.min_live_iv), 4)
@@ -759,8 +765,8 @@ class IronCondorStrategy:
         """
         Calculate Iron Condor strikes.
 
-        live_iv is accepted for TradingEngine compatibility. Current strike
-        selection keeps the existing configured distance/rounding behavior.
+        Uses symmetric ATM rounding and IV-adaptive widening when live_iv
+        exceeds assumed_iv (up to 30% wider strikes at elevated volatility).
         """
         if not spot or spot <= 0:
             logger.error("Invalid spot price: %s", spot)
@@ -771,12 +777,28 @@ class IronCondorStrategy:
         wing_width = max(rounding, self.wing_width)
 
         if short_distance > 0 and wing_width > 0:
-            atm_up = self._ceil_to_step(spot, rounding)
-            atm_down = self._floor_to_step(spot, rounding)
-            short_call = atm_up + short_distance
-            short_put = atm_down - short_distance
-            long_call = short_call + wing_width
-            long_put = short_put - wing_width
+            atm = self._round_to_step(spot, rounding)
+            effective_short_distance = short_distance
+            effective_wing_width = wing_width
+
+            # IV-adaptive widening: increase strike distances when live IV is elevated
+            if live_iv is not None and live_iv > self.assumed_iv and self.assumed_iv > 0:
+                iv_excess_ratio = (live_iv - self.assumed_iv) / self.assumed_iv
+                widen_factor = 1.0 + min(iv_excess_ratio * 0.5, 0.30)  # cap at 30% wider
+                effective_short_distance = self._round_to_step(short_distance * widen_factor, rounding)
+                effective_wing_width = self._round_to_step(wing_width * widen_factor, rounding)
+                logger.info(
+                    "IV-adaptive strike widening live_iv=%.3f assumed_iv=%.3f factor=%.3f "
+                    "short_dist %d→%d wing %d→%d",
+                    live_iv, self.assumed_iv, widen_factor,
+                    short_distance, effective_short_distance,
+                    wing_width, effective_wing_width,
+                )
+
+            short_call = atm + effective_short_distance
+            short_put = atm - effective_short_distance
+            long_call = short_call + effective_wing_width
+            long_put = short_put - effective_wing_width
         else:
             short_otm_pct = self._cfg_float("IC_SHORT_OTM_PCT", "ic_short_otm_pct", 0.024)
             long_otm_pct = self._cfg_float("IC_LONG_OTM_PCT", "ic_long_otm_pct", 0.036)
@@ -851,7 +873,12 @@ class IronCondorStrategy:
         distance_to_call = short_call - current_spot
         distance_to_put = current_spot - short_put
 
-        if distance_to_call <= 0:
+        # Require spot to be tick_buffer points past the short strike before calling a
+        # confirmed breach — prevents a single noisy tick AT the strike from triggering.
+        tick_buffer = self._cfg_float(
+            "IC_BREACH_NOISE_BUFFER", "ic_breach_noise_buffer", 3.0
+        )
+        if distance_to_call < -tick_buffer:
             logger.warning(
                 "IC proximity exit: spot breached short_call spot=%.2f short_call=%.2f",
                 current_spot,
@@ -859,7 +886,7 @@ class IronCondorStrategy:
             )
             return "SPOT_BREACHED_SHORT_CALL"
 
-        if distance_to_put <= 0:
+        if distance_to_put < -tick_buffer:
             logger.warning(
                 "IC proximity exit: spot breached short_put spot=%.2f short_put=%.2f",
                 current_spot,
@@ -907,7 +934,7 @@ class IronCondorStrategy:
         elif mode == "aggressive":
             credit *= 1.06
 
-        return round(max(4.0, min(credit, 105.0)), 2)
+        return round(max(4.0, min(credit, spot * 0.006)), 2)
 
     def estimate_option_premium(
         self,
@@ -950,25 +977,20 @@ class IronCondorStrategy:
         if not strikes:
             return {}
 
-        net_credit = self.estimate_dynamic_entry_credit(spot)
-        if net_credit <= 0:
-            return {}
-
-        short_call = round(net_credit * 0.58, 2)
-        short_put = round(net_credit * 0.58, 2)
-        long_call = round(net_credit * 0.08, 2)
-        long_put = round(short_call + short_put - long_call - net_credit, 2)
-        long_put = max(self.min_option_premium, long_put)
+        sc_prem = self.estimate_option_premium(spot, strikes["short_call"], "CE", days)
+        lc_prem = self.estimate_option_premium(spot, strikes["long_call"], "CE", days)
+        sp_prem = self.estimate_option_premium(spot, strikes["short_put"], "PE", days)
+        lp_prem = self.estimate_option_premium(spot, strikes["long_put"], "PE", days)
 
         premiums = {
-            "short_call": short_call,
-            "long_call": long_call,
-            "short_put": short_put,
-            "long_put": long_put,
+            "short_call": round(sc_prem, 2),
+            "long_call": round(lc_prem, 2),
+            "short_put": round(sp_prem, 2),
+            "long_put": round(lp_prem, 2),
         }
 
         if any(premium <= 0 for premium in premiums.values()):
-            logger.error("Invalid synthetic premium split: %s", premiums)
+            logger.error("Invalid leg premium estimate: %s", premiums)
             return {}
 
         return premiums
@@ -1019,10 +1041,19 @@ class IronCondorStrategy:
         if short_call <= 0 or short_put <= 0:
             return round(float(entry_premium), 2)
 
-        session_minutes = 375.0
+        # Session window: from entry to scheduled exit (not fixed 375 min market day)
+        exit_dt = entry_time.replace(
+            hour=self.exit_time.hour,
+            minute=self.exit_time.minute,
+            second=0,
+            microsecond=0,
+        )
+        session_minutes = max(1.0, (exit_dt - entry_time).total_seconds() / 60.0)
         progress = max(0.0, min(minutes / session_minutes, 1.0))
-        theta_decay_strength = 0.28
-        theta_floor = max(self.min_decay_factor, 0.35)
+        # theta_decay_strength=0.50 allows full theta decay to ~50% at EOD
+        # theta_floor=0.28 ensures model never shows <28% of entry (floor below target)
+        theta_decay_strength = 0.50
+        theta_floor = 0.28
         theta = max(
             entry_premium * theta_floor,
             entry_premium * (1.0 - theta_decay_strength * progress),
@@ -1064,11 +1095,20 @@ class IronCondorStrategy:
         range_excess = max(0.0, range_pct - 0.0015)
         iv = entry_premium * max(0.0, min(move_excess * 7.0 + range_excess * 5.0, 0.55))
 
+        spread_width = float(
+            max(
+                strikes.get("call_width", self.wing_width),
+                strikes.get("put_width", self.wing_width),
+            )
+        )
         breach = 0.0
         if current_spot >= short_call:
             breach = entry_premium * 1.60 + (current_spot - short_call) * 0.55
         elif current_spot <= short_put:
             breach = entry_premium * 1.60 + (short_put - current_spot) * 0.55
+        # Cap breach at theoretical max loss (spread_width - entry_premium)
+        if breach > 0 and spread_width > entry_premium:
+            breach = min(breach, spread_width - entry_premium)
 
         trend = 0.0
         trend_threshold_pct = 0.0040
@@ -1150,6 +1190,20 @@ class IronCondorStrategy:
                 )
                 return "EOD_NO_POSITIVE_TARGET"
 
+            # Position is in loss during EOD window — cut if loss exceeds threshold
+            eod_loss_cut = -abs(
+                self._cfg_float("IC_EOD_LOSS_CUT", "ic_eod_loss_cut", self.max_loss_per_trade * 0.6)
+            )
+            if net_pnl <= eod_loss_cut:
+                logger.warning(
+                    "EOD_LOSS_CUT net_pnl=%.2f threshold=%.2f current=%.2f entry=%.2f",
+                    net_pnl,
+                    eod_loss_cut,
+                    current_premium,
+                    entry_premium,
+                )
+                return "EOD_LOSS_CUT"
+
         if current_t >= self.exit_time:
             logger.info("EOD exit current_time=%s exit_time=%s", current_t, self.exit_time)
             return "EOD"
@@ -1170,7 +1224,11 @@ class IronCondorStrategy:
         total_turnover = entry_turnover + exit_turnover
 
         brokerage = self.brokerage_per_order * (self.entry_order_count + self.exit_order_count)
-        stt = exit_turnover * self.stt_sell_rate
+        # STT applies to sell-side only (NSE options: 0.05% of premium on sell leg).
+        # At entry: selling short_call + short_put → gross shorts ≈ net * qty * 1.6
+        # At exit (closing): selling long_call + long_put → gross longs ≈ exit_net * qty * 0.4
+        # Using net turnover for both is the best approximation without per-leg prices.
+        stt = (entry_turnover + exit_turnover) * self.stt_sell_rate
         exchange_txn = total_turnover * self.exchange_txn_rate
         sebi = total_turnover * self.sebi_rate
         stamp_duty = entry_turnover * self.stamp_duty_rate
@@ -1282,7 +1340,8 @@ class IronCondorStrategy:
             exit_premium=exit_premium,
             qty=qty,
         )
-        total_charges = float(charges["total_charges"])
+        platform_fee = float(getattr(self.settings, "ic_platform_charges", 0.0) or 0.0)
+        total_charges = float(charges["total_charges"]) + platform_fee
         net_pnl = gross_pnl - total_charges
         risk_breached = net_pnl <= -abs(self.max_loss_per_trade)
 
@@ -1302,7 +1361,7 @@ class IronCondorStrategy:
             "sebi": charges["sebi"],
             "gst": charges["gst"],
             "stamp_duty": charges["stamp_duty"],
-            "platform_charges": charges["brokerage"],
+            "platform_charges": round(platform_fee, 2),
             "total_charges": round(total_charges, 2),
             "net_pnl": round(net_pnl, 2),
             "risk_breached": risk_breached,
@@ -1312,8 +1371,15 @@ class IronCondorStrategy:
         self,
         spot: float,
         qty: int,
-        days: int = 30,
+        days: int | None = None,
     ) -> dict[str, Any]:
+        if days is None:
+            try:
+                expiry = self.resolve_entry_expiry()
+                days = max(1, (expiry - datetime.now(IST).date()).days)
+            except Exception:
+                days = self.days_to_expiry_value
+
         strikes = self.calculate_strikes(spot)
         if not strikes:
             return {}
