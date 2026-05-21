@@ -1058,6 +1058,21 @@ class TradingEngine:
             trade["pricing_source"],
         )
 
+        await self.state_manager._journal_event(
+            "TRADE_ENTRY",
+            {
+                "symbol": trade.get("symbol"),
+                "strategy": "IRON_CONDOR",
+                "entry_price": trade.get("entry_price"),
+                "qty": trade.get("qty"),
+                "expiry": trade.get("expiry"),
+                "legs": [
+                    {"name": l.get("name"), "strike": l.get("strike"), "side": l.get("side")}
+                    for l in (trade.get("legs") or [])
+                ],
+                "ts": datetime.now(timezone.utc).isoformat(),
+            },
+        )
         await self.event_bus.publish("TRADE_OPENED", {"trade": trade})
 
     async def _execute_iron_condor_exit_legs(
@@ -1263,6 +1278,22 @@ class TradingEngine:
             }
 
             self.trade_store.append_trade(closed, new_daily)
+
+            await self.state_manager._journal_event(
+                "TRADE_EXIT",
+                {
+                    "symbol": closed.get("symbol"),
+                    "strategy": "IRON_CONDOR",
+                    "exit_reason": reason,
+                    "entry_price": closed.get("entry_price"),
+                    "exit_price": closed.get("exit_price"),
+                    "gross_pnl": gross_pnl,
+                    "net_pnl": net_pnl,
+                    "total_charges": total_charges,
+                    "new_daily_pnl": new_daily,
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                },
+            )
 
             await self.state_manager.update(
                 active_trade=None,
