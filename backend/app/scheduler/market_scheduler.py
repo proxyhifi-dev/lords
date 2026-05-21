@@ -176,6 +176,8 @@ class MarketScheduler:
 
         self._latest_iv: float | None = None
         self._iv_history: deque[float] = deque(maxlen=20)
+        self._last_iv_update_ts: float = 0.0  # wall-clock when IV was last refreshed
+        self._IV_MAX_STALE_SECONDS: float = 90.0  # reject entry if IV older than this
 
         # India VIX cache — fetched at most once per minute to avoid rate limits.
         self._vix_cache: float | None = None
@@ -757,6 +759,7 @@ class MarketScheduler:
         if iv is not None:
             self._latest_iv = iv
             self._iv_history.append(iv)
+            self._last_iv_update_ts = wall_time.time()
 
         try:
             updates: dict[str, Any] = {"spot_price": spot}
@@ -883,12 +886,25 @@ class MarketScheduler:
             )
             return False
 
+        # Reject entry if IV data is stale — stale IV means delta-strike
+        # calculation and regime filters are using bad numbers.
+        if self._last_iv_update_ts > 0:
+            iv_age = wall_time.time() - self._last_iv_update_ts
+            if iv_age > self._IV_MAX_STALE_SECONDS:
+                logger.warning(
+                    "IC gate blocked: IV stale age=%.0fs threshold=%.0fs",
+                    iv_age,
+                    self._IV_MAX_STALE_SECONDS,
+                )
+                return False
+
         logger.info(
-            "IC gate passed: one_per_day=%s monthly_only=%s time=%s spot=%.2f",
+            "IC gate passed: one_per_day=%s monthly_only=%s time=%s spot=%.2f iv_age=%.0fs",
             bool(getattr(settings, "ic_one_per_day", True)),
             bool(settings.ic_monthly_only),
             current_time.strftime("%H:%M:%S"),
             spot,
+            wall_time.time() - self._last_iv_update_ts if self._last_iv_update_ts else -1,
         )
 
         return True
