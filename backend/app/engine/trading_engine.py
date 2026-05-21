@@ -360,7 +360,10 @@ class TradingEngine:
             logger.error("Cannot resolve IC option symbol: broker unavailable")
             return None
 
-        key = f"{strike}_{option_type}_{expiry or 'default'}"
+        # Include today's date in the cache key so yesterday's expiry symbol is
+        # never reused for a different expiry after midnight or a day restart.
+        today_key = datetime.now(IST).date().isoformat()
+        key = f"{strike}_{option_type}_{expiry or 'default'}_{today_key}"
         if key in self._symbol_cache:
             return self._symbol_cache[key]
 
@@ -422,7 +425,7 @@ class TradingEngine:
 
         if best_symbol:
             self._symbol_cache[key] = best_symbol
-            logger.info("IC SYMBOL RESOLVED: %s (snap_diff=%s)", best_symbol, best_diff)
+            logger.info("IC SYMBOL RESOLVED: %s (snap_diff=%s) cache_key=%s", best_symbol, best_diff, key)
         else:
             logger.error("No valid IC symbol near strike=%s type=%s", strike, option_type)
 
@@ -666,32 +669,77 @@ class TradingEngine:
             "price_source": "broker_fill",
         }
 
-    async def _rollback_iron_condor(self, legs: list[dict[str, Any]]) -> None:
+    async def _rollback_iron_condor(self, legs: list[dict[str, Any]]) -> bool:
+        """
+        Close every already-filled leg to restore a flat position.
+
+        Returns True only when every leg was successfully reversed.
+        On any failure the account may hold an incomplete / naked position —
+        callers must treat a False return as a critical event and trigger
+        emergency flatten immediately.
+        """
         if self._is_paper_mode():
             logger.warning("PAPER MODE: simulated IC rollback for %d legs", len(legs))
-            return
+            return True
+
+        failed_legs: list[str] = []
 
         for leg in reversed(legs):
             side = "BUY" if leg["side"] == "SELL" else "SELL"
+            qty = int(leg.get("filled_qty") or leg.get("qty") or 0)
+
+            if qty <= 0:
+                logger.warning(
+                    "Rollback skipped — zero qty leg=%s side=%s",
+                    leg.get("symbol"),
+                    side,
+                )
+                continue
 
             try:
-                await self.execution_manager.execute_order(
+                result = await self.execution_manager.execute_order(
                     {
                         "signal": "IRON_CONDOR_ROLLBACK",
                         "symbol": leg["symbol"],
                         "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "quantity": leg["filled_qty"],
+                        "quantity": qty,
                         "side": side,
                     }
                 )
+                if result.is_uncertain or result.state not in {OrderState.FILLED, OrderState.ABORTED}:
+                    logger.error(
+                        "Rollback leg uncertain/failed: %s %s qty=%d state=%s",
+                        side, leg["symbol"], qty, result.state,
+                    )
+                    failed_legs.append(leg["symbol"])
             except Exception as exc:
-                logger.warning(
-                    "Rollback leg failed: %s %s qty=%d err=%s",
-                    side,
-                    leg["symbol"],
-                    leg["filled_qty"],
-                    exc,
+                logger.error(
+                    "Rollback leg exception: %s %s qty=%d err=%s",
+                    side, leg["symbol"], qty, exc,
                 )
+                failed_legs.append(leg["symbol"])
+
+        if failed_legs:
+            logger.critical(
+                "IC ROLLBACK PARTIAL — unclosed legs=%s — triggering emergency flatten",
+                failed_legs,
+            )
+            await self.event_bus.publish(
+                "ROLLBACK_FAILED",
+                {
+                    "unclosed_symbols": failed_legs,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            await self.state_manager.update(
+                trading_enabled=False,
+                last_order_failed=True,
+                last_risk_breach="rollback_partial_failure",
+                emergency_flatten_unclosed_symbols=failed_legs,
+            )
+            return False
+
+        return True
 
     async def _enter_iron_condor_trade(self, payload: dict[str, Any], state) -> None:
         if not self.iron_condor_strategy:
@@ -789,7 +837,10 @@ class TradingEngine:
 
         logger.info("IC expected-move filter passed diag=%s", em_diag)
 
-        expiry = OptionSelector.get_expiry_api()
+        # Always resolve expiry via the strategy helper so expiry-day next-week logic
+        # is consistent between the quote snapshot and symbol resolution (BUG-9).
+        expiry = self.iron_condor_strategy.resolve_entry_expiry(current_time).isoformat()
+        logger.info("IC entry using expiry=%s", expiry)
         snapshot_legs, snapshot_premiums, snapshot_net_premium = await self._build_iron_condor_snapshot_legs(
             strikes,
             expiry,
@@ -882,7 +933,12 @@ class TradingEngine:
             if not placed or int(placed.get("filled_qty", 0)) <= 0:
                 logger.error("IC leg placement failed: %s", leg["display_symbol"])
                 if placed_legs:
-                    await self._rollback_iron_condor(placed_legs)
+                    rollback_ok = await self._rollback_iron_condor(placed_legs)
+                    if not rollback_ok:
+                        await self._handle_fatal_exception(
+                            "IC_ROLLBACK_FAILED",
+                            RuntimeError(f"Partial IC rollback after failed leg {leg['display_symbol']}"),
+                        )
                 return
 
             placed_legs.append(placed)
@@ -890,7 +946,12 @@ class TradingEngine:
         if len(placed_legs) != 4:
             logger.error("Only %d of 4 IC legs filled — rolling back", len(placed_legs))
             if placed_legs:
-                await self._rollback_iron_condor(placed_legs)
+                rollback_ok = await self._rollback_iron_condor(placed_legs)
+                if not rollback_ok:
+                    await self._handle_fatal_exception(
+                        "IC_ROLLBACK_FAILED",
+                        RuntimeError(f"Partial IC rollback — only {len(placed_legs)} of 4 legs filled"),
+                    )
             return
 
         filled_map = {leg["name"]: leg for leg in placed_legs}
@@ -1081,7 +1142,10 @@ class TradingEngine:
                 return None
 
             active_trade = state.active_trade
-            latest_trade = {**active_trade, **trade}
+            # active_trade (re-read under lock) is the authoritative fresh state.
+            # trade (the argument) may be a stale snapshot from before the lock was
+            # acquired.  Merge so that fresh DB values win over the caller's snapshot.
+            latest_trade = {**trade, **active_trade}
             if latest_trade.get("status") == "CLOSED":
                 return dict(latest_trade)
             if latest_trade.get("exit_in_progress"):
