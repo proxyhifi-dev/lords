@@ -230,15 +230,30 @@ class RiskManager:
 
         max_loss_allowed = float(getattr(settings, "ic_max_loss_per_trade", 0))
 
-        if net_premium > max_loss_allowed:
+        # For an Iron Condor the net_premium is the credit RECEIVED (higher = better).
+        # The potential maximum loss = (spread_width − net_premium) × qty.
+        # Block entry only when that worst-case loss would exceed the per-trade cap.
+        spread_width = float(getattr(settings, "ic_wing_width", 100))
+        order_qty = float(getattr(settings, "order_qty", 65))
+        max_potential_loss = max(0.0, (spread_width - net_premium) * order_qty)
+
+        if max_loss_allowed > 0 and max_potential_loss > max_loss_allowed:
             logger.error(
-                "ENTRY PREMIUM TOO HIGH: ₹%.0f > ₹%.0f max",
-                net_premium,
+                "IC MAX LOSS EXCEEDED: potential_loss=₹%.0f > allowed=₹%.0f (spread_width=%.0f net_premium=%.2f qty=%.0f)",
+                max_potential_loss,
                 max_loss_allowed,
+                spread_width,
+                net_premium,
+                order_qty,
             )
             return False
 
-        logger.info("Premium check passed: ₹%.0f acceptable", net_premium)
+        logger.info(
+            "Premium check passed: net_premium=₹%.2f potential_loss=₹%.0f allowed=₹%.0f",
+            net_premium,
+            max_potential_loss,
+            max_loss_allowed,
+        )
 
         if state.active_trade:
             logger.error("POSITION ALREADY ACTIVE — cannot open IC")
@@ -248,9 +263,9 @@ class RiskManager:
 
         max_daily_loss = float(getattr(settings, "max_daily_loss", 0))
 
-        if state.daily_pnl < -max_daily_loss:
+        if state.daily_pnl <= -max_daily_loss:
             logger.error(
-                "DAILY LOSS LIMIT EXCEEDED: ₹%.0f < -₹%.0f",
+                "DAILY LOSS LIMIT EXCEEDED: ₹%.0f <= -₹%.0f",
                 state.daily_pnl,
                 max_daily_loss,
             )
