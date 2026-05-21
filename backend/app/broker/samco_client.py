@@ -180,6 +180,8 @@ class SamcoClient:
         self._last_login_at = 0.0
         self._last_successful_api_at = 0.0
         self._consecutive_auth_failures = 0
+        self._last_api_call_ts: float = 0.0
+        self._MIN_REQUEST_INTERVAL: float = 0.2  # 200ms min between SAMCO API calls
 
     @staticmethod
     def _looks_like_auth_error(payload: Any) -> bool:
@@ -976,6 +978,13 @@ class SamcoClient:
         if not self._breaker.allow_request():
             raise RuntimeError(f"Circuit breaker OPEN for {api_name}")
 
+        # Enforce minimum interval between API calls to avoid SAMCO rate-limit errors.
+        now_ts = time.time()
+        gap = self._MIN_REQUEST_INTERVAL - (now_ts - self._last_api_call_ts)
+        if gap > 0:
+            await asyncio.sleep(gap)
+        self._last_api_call_ts = time.time()
+
         attempts = int(settings.reconnect_max_attempts)
         delay = float(settings.reconnect_base_delay)
 
@@ -990,7 +999,11 @@ class SamcoClient:
                     logger.warning("SAMCO %s auth/session issue detected. Re-logging in.", api_name)
                     self._session_live = False
                     self._consecutive_auth_failures += 1
-                    await self.login()
+                    try:
+                        await self.login()
+                    except Exception as login_exc:
+                        logger.error("SAMCO re-login failed — aborting retry: %s", login_exc)
+                        break
                     result = await asyncio.to_thread(fn)
                     resp = self._parse_response(result)
                     self._breaker.record_success()
@@ -1003,10 +1016,14 @@ class SamcoClient:
                     self._session_live = False
                     self._consecutive_auth_failures += 1
                     logger.warning(
-                        "SAMCO %s runtime auth/session exception detected. Re-logging in before retry.",
+                        "SAMCO %s runtime auth/session exception. Re-logging in before retry.",
                         api_name,
                     )
-                    await self.login()
+                    try:
+                        await self.login()
+                    except Exception as login_exc:
+                        logger.error("SAMCO re-login failed — aborting retry: %s", login_exc)
+                        break
                     continue
                 raise
             except Exception as exc:
@@ -1023,10 +1040,14 @@ class SamcoClient:
                     self._consecutive_auth_failures += 1
                     if attempt < attempts:
                         logger.warning(
-                            "SAMCO %s auth/session exception detected. Re-logging in before retry.",
+                            "SAMCO %s auth/session exception. Re-logging in before retry.",
                             api_name,
                         )
-                        await self.login()
+                        try:
+                            await self.login()
+                        except Exception as login_exc:
+                            logger.error("SAMCO re-login failed — aborting retry: %s", login_exc)
+                            break
                         continue
                 if attempt < attempts:
                     await asyncio.sleep(delay)
