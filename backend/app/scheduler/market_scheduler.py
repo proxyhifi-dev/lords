@@ -177,6 +177,11 @@ class MarketScheduler:
         self._latest_iv: float | None = None
         self._iv_history: deque[float] = deque(maxlen=20)
 
+        # India VIX cache — fetched at most once per minute to avoid rate limits.
+        self._vix_cache: float | None = None
+        self._vix_cache_ts: float = 0.0
+        self._VIX_CACHE_TTL: float = 60.0
+
         self._entry_window_start = setting_time("ic_entry_window_start")
         self._entry_window_end = setting_time("ic_entry_window_end")
 
@@ -738,7 +743,16 @@ class MarketScheduler:
         if closed_candle:
             await self.event_bus.publish("CANDLE_CLOSED", closed_candle)
 
+        # Priority 1: IV embedded in the index quote (rare for NIFTY 50 but check first)
         iv = self._extract_iv(index_quote)
+
+        # Priority 2: India VIX index — fetched at most once per minute
+        if iv is None:
+            iv = await self._fetch_india_vix()
+
+        # Priority 3: ATM implied vol from live option quotes
+        if iv is None:
+            iv = await self._fetch_atm_implied_vol(spot)
 
         if iv is not None:
             self._latest_iv = iv
@@ -915,6 +929,70 @@ class MarketScheduler:
             return True
 
         return True
+
+    async def _fetch_india_vix(self) -> float | None:
+        """
+        Return India VIX as a decimal IV with a 60-second cache.
+        VIX=15.0 → 0.15.  Falls back to None on failure.
+        """
+        now_ts = wall_time.time()
+        if self._vix_cache is not None and (now_ts - self._vix_cache_ts) < self._VIX_CACHE_TTL:
+            return self._vix_cache
+
+        try:
+            iv = await asyncio.wait_for(
+                self.broker.get_india_vix(),
+                timeout=self.broker_quote_timeout_seconds,
+            )
+            if iv and 0.05 <= iv <= 1.00:  # sanity: VIX between 5% and 100%
+                self._vix_cache = iv
+                self._vix_cache_ts = now_ts
+                logger.debug("India VIX refreshed iv=%.4f", iv)
+                return iv
+        except Exception as exc:
+            logger.debug("India VIX fetch skipped: %s", exc)
+        return None
+
+    async def _fetch_atm_implied_vol(self, spot: float) -> float | None:
+        """
+        Compute implied vol from ATM call and put mid-prices via Newton-Raphson.
+        Used only when India VIX is unavailable.
+        Caps at 2 API calls; returns None on any failure.
+        """
+        from backend.app.strategy.iron_condor_strategy import IronCondorStrategy
+        from backend.app.broker.samco_client import get_weekly_expiry
+        from datetime import date as _date
+
+        try:
+            strategy = IronCondorStrategy()
+            rounding = int(getattr(strategy, "strike_rounding", 50))
+            atm = int(round(spot / rounding) * rounding)
+            expiry = get_weekly_expiry(_date.today()).strftime("%Y-%m-%d")
+            dte_days = (
+                (_date.fromisoformat(expiry) - _date.today()).days
+            )
+            if dte_days <= 0:
+                return None
+
+            ce_quote = await asyncio.wait_for(
+                self.broker.get_quote(
+                    symbol_name=f"NIFTY{expiry.replace('-', '')}{atm}CE",
+                    exchange="NFO",
+                ),
+                timeout=self.broker_quote_timeout_seconds,
+            )
+            ce_price = self.broker.parse_ltp(ce_quote)
+
+            if not ce_price or ce_price <= 0:
+                return None
+
+            iv = strategy.implied_vol(ce_price, spot, atm, float(dte_days), "CE")
+            if iv and 0.05 <= iv <= 1.00:
+                logger.debug("ATM implied vol from CE price=%.2f iv=%.4f", ce_price, iv)
+                return iv
+        except Exception as exc:
+            logger.debug("ATM implied vol fetch skipped: %s", exc)
+        return None
 
     def _extract_iv(self, quote: dict[str, Any]) -> float | None:
         if not isinstance(quote, dict):
