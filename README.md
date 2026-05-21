@@ -1,27 +1,35 @@
-# Lords Bot — NIFTY Iron Condor
+# Lords Bot — NIFTY Iron Condor v6.0
 
-Automated NIFTY weekly Iron Condor bot with paper / live modes, real-time risk gates, and Telegram alerts on critical events.
+Automated NIFTY weekly Iron Condor bot. Paper and live modes, delta-targeted strikes, live IV cascade, full audit trail, and Telegram alerts.
+
+---
 
 ## What it does
 
-- **Iron Condor entry** during a configurable window (default 09:30–13:30 IST), one trade per day.
-- **Strike construction**: ATM-anchored short-call/short-put + protective wings, percentage- or rupee-based.
-- **Live monitoring**: real broker quotes for the IC every 2s, with model fallback if quotes degrade.
-- **Multi-layer exit**: target profit, stop-loss multiple, extreme-loss stop, EOD square-off, expiry-day safety.
-- **Economics filter**: rejects entries where credit can't cover round-trip charges + buffer + reward/risk floor.
-- **Hard fail-safe**: any uncertain order or fatal exception flips trading off and emergency-flattens any open trade.
-- **State durability**: SQLite + journal + idempotency keys; survives crashes mid-trade.
-- **Telegram alerts**: critical events (`SELL_FAILED`, `EXECUTION_UNCERTAIN`, hard-fail, partial-fill-unrecovered) push to your phone.
+- **Delta-targeted strike selection** — Black-Scholes binary search places short strikes at configurable delta (default 10Δ ≈ 85% PoP). At NIFTY 24000, IV 15%, 7 DTE → shorts land ~600 pts OTM, not 200.
+- **Live IV cascade** — IV sourced in priority order: index quote → India VIX (60s cache) → ATM CE implied vol (Newton-Raphson) → assumed fallback. Entry blocked if IV is stale (>90s).
+- **Entry window** — configurable IST window (default 09:30–10:30), one trade per day, skip expiry day.
+- **Economics filter** — rejects entries where slippage-adjusted credit can't cover charges + reward/risk floor.
+- **Multi-layer exit** — target profit (50%), stop-loss (2×), extreme-loss (3×), EOD square-off, spot-proximity exit, expiry-day safety.
+- **Duplicate exit guard** — `status=CLOSING` + `exit_in_progress` flag prevents concurrent exit calls from executing twice.
+- **Emergency exit with fresh quotes** — fetches live bid/ask for each IC leg before closing; falls back to cached only if broker is unreachable.
+- **Health loop** — adaptive interval (10s during active trade, 60s idle). Broker failure triggers alert and disables new entries — does **not** blindly exit the position.
+- **State durability** — SQLite WAL + journal + idempotency keys (24h TTL); survives crashes mid-trade.
+- **Audit trail** — `TRADE_ENTRY` and `TRADE_EXIT` journal events with full leg detail, charges, and P&L.
+- **Telegram alerts** — critical events push to your phone within seconds.
 
-## Quick start (paper)
+---
+
+## Quick start (paper mode)
 
 ```bash
-# 1. Install
+# 1. Install dependencies
 pip install -r requirements.txt
 
 # 2. Configure
 cp .env.example .env
-# edit .env — see "Configuration" below
+# Edit .env — fill SAMCO credentials if you want real market data
+# Leave MODE=paper for safe testing
 
 # 3. Run
 uvicorn backend.main:app --host 0.0.0.0 --port 8000
@@ -30,116 +38,217 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000
 # http://localhost:8000
 ```
 
-Default `MODE=paper` simulates fills against live market quotes. No real orders are placed.
+`MODE=paper` simulates fills against live SAMCO quotes. No real orders are placed.  
+`PAPER_MODE_USE_BROKER=true` (default) fetches real NIFTY prices even in paper mode.
+
+---
 
 ## Going live — checklist
 
-Before flipping `MODE=live`, all of these should be true:
+Complete every item before setting `MODE=live`:
 
-- [ ] `.env` filled with valid `SAMCO_USER_ID`, `SAMCO_PASSWORD`, `SAMCO_YOB`, `SAMCO_ACCESS_TOKEN`
-- [ ] Telegram alerts configured and tested (you got the "bot started" message)
-- [ ] Ran 5+ full paper sessions across different market regimes
-- [ ] P&L from paper sessions reconciled with what real fills would have produced
-- [ ] Manual flatten tested via `POST /api/trade/flatten`
-- [ ] Kill-switch tested via `POST /api/kill-switch`
-- [ ] Reviewed trades in `data/trades.csv` for correct charge accounting
-- [ ] Capital + `MAX_DAILY_LOSS` + `IC_MAX_LOSS_PER_TRADE` set conservatively
-- [ ] Started with one lot for the first live week
+**Credentials & connectivity**
+- [ ] `SAMCO_USER_ID`, `SAMCO_PASSWORD`, `SAMCO_YOB` filled in `.env`
+- [ ] Bot logs in successfully in paper mode with `PAPER_MODE_USE_BROKER=true`
+- [ ] Telegram alerts working — you received the startup message on your phone
 
+**Paper validation (minimum 10 trades)**
+- [ ] Win rate ≥ 60% over the last 10 paper trades
+- [ ] No phantom P&L (entry and exit prices look realistic)
+- [ ] EOD exits firing correctly at `IC_EXIT_TIME`
+- [ ] Stop-loss exits firing when premium hits `IC_STOP_LOSS_MULTIPLE × entry`
+- [ ] Manual flatten works via `POST /api/trade/flatten`
+- [ ] `data/trades.csv` charges look correct (not ₹0, not ₹10,000)
+
+**Risk settings confirmed**
+- [ ] `CAPITAL` matches your actual trading account balance
+- [ ] `MAX_DAILY_LOSS` ≤ 6% of capital (default ₹3000 on ₹50000)
+- [ ] `IC_MARGIN_REQUIRED` matches SAMCO's actual margin block for NIFTY IC
+- [ ] `ORDER_QTY=65` verified against your margin availability
+
+**Go live**
 ```bash
-MODE=live uvicorn backend.main:app --host 0.0.0.0 --port 8000
+# In .env: set MODE=live, then restart
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
-Live mode is fail-closed: any uncertain order disables trading until you re-enable via `POST /api/trading-enabled`.
+Live mode is fail-closed: any uncertain order or fatal exception disables trading. Re-enable via `POST /api/trading-enabled`.
 
-## Configuration
+---
 
-All knobs live in `.env`. Key groups:
+## Configuration reference
 
-**Mode + capital**
-- `MODE` — `paper` or `live`
-- `CAPITAL`, `ORDER_QTY` — bankroll, NIFTY lots per trade
-- `MAX_DAILY_LOSS`, `MAX_TRADES`, `MAX_CONSECUTIVE_LOSSES`, `MAX_DRAWDOWN_PCT` — risk limits
+All settings live in `.env`. Copy `.env.example` as your starting point.
 
-**IC strategy**
-- `IC_ENTRY_WINDOW_START` / `_END`, `NO_ENTRY_AFTER`, `SQUARE_OFF` — timing
-- `IC_SHORT_DISTANCE`, `IC_WING_WIDTH`, `IC_STRIKE_ROUNDING` — strike construction
-- `IC_TARGET_PROFIT_PCT`, `IC_STOP_LOSS_MULTIPLE`, `IC_EXTREME_LOSS_MULTIPLE` — exit thresholds
-- `IC_MIN_ENTRY_PREMIUM`, `IC_MIN_REWARD_RISK`, `IC_MIN_CREDIT_TO_COST_RATIO`, `IC_MIN_NET_AFTER_COST_BUFFER` — economics filter
+### Credentials
+| Setting | Description |
+|---------|-------------|
+| `SAMCO_USER_ID` | SAMCO login user ID |
+| `SAMCO_PASSWORD` | SAMCO login password |
+| `SAMCO_YOB` | Year of birth (used for SAMCO login) |
+| `SAMCO_ACCESS_TOKEN` | Optional pre-auth token |
 
-**Cooldowns**
-- `SIGNAL_COOLDOWN_SECONDS` — base time between signals
-- `SIGNAL_REJECTION_COOLDOWN_SECONDS` — extended cooldown after rejection (default 300s)
+### Mode & capital
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `MODE` | `paper` | `paper` or `live` |
+| `CAPITAL` | `50000` | Account capital for drawdown calculations |
+| `ORDER_QTY` | `65` | Qty per IC leg — matches your lot size |
+| `MAX_DAILY_LOSS` | `3000` | Halt trading if daily P&L drops below −₹3000 |
+| `MAX_TRADES` | `10` | Max trades per day |
+| `MAX_CONSECUTIVE_LOSSES` | `3` | Halt after N consecutive losing trades |
+| `MAX_DRAWDOWN_PCT` | `0.20` | Halt if equity drawdown exceeds 20% |
 
-**Alerts**
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` — leave blank to disable
+### Entry timing
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `IC_ENTRY_WINDOW_START` | `09:30` | Earliest entry time (IST) |
+| `IC_ENTRY_WINDOW_END` | `10:30` | Latest entry time — first hour has best IV stability |
+| `NO_ENTRY_AFTER` | `10:30` | Hard cutoff; no new positions after this |
+| `SQUARE_OFF` | `14:55` | Force-close all positions at this time |
+| `IC_EXIT_TIME` | `15:00` | EOD exit time if not already closed |
 
-## Telegram setup (2 minutes)
+### Strike construction
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `IC_SHORT_DISTANCE` | `400` | Fallback fixed-distance (pts) when delta calc unavailable |
+| `IC_WING_WIDTH` | `100` | Long strike offset from short strike |
+| `IC_STRIKE_ROUNDING` | `50` | Snap strikes to nearest N points |
 
-1. Open Telegram, message `@BotFather` → `/newbot` → follow prompts → save the token.
-2. Message your new bot once (any text).
-3. Message `@userinfobot` → it replies with your numeric chat ID.
-4. Put both in `.env`:
-   ```
-   TELEGRAM_BOT_TOKEN=123456:ABC...
-   TELEGRAM_CHAT_ID=987654321
-   ```
-5. Restart the bot. You should get a `[INFO] LORDS bot started` message.
+The bot uses **BSM delta targeting** when live IV is available (default 10Δ). `IC_SHORT_DISTANCE` is only used as fallback when IV is unavailable.
 
-If both vars are blank, the notifier is silent — no errors, no setup needed for paper play.
+### Entry economics
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `IC_MIN_ENTRY_PREMIUM` | `20` | Minimum net credit (pts) to accept entry |
+| `IC_SLIPPAGE_PER_LEG` | `3` | Pts deducted per leg for bid-ask slippage (×4 legs = 12 pts total) |
+| `IC_MIN_REWARD_RISK` | `0.12` | Minimum credit / max-loss ratio |
+| `IC_MIN_NET_AFTER_COST_BUFFER` | `40` | Net credit must exceed charges by this many pts |
+| `IC_MIN_CREDIT_TO_COST_RATIO` | `1.30` | Credit must be ≥ 1.3× estimated round-trip cost |
+| `IC_EXPECTED_MOVE_BUFFER` | `1.30` | Short strikes must be ≥ 1.3× expected move from spot |
+
+### Exit thresholds
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `IC_TARGET_PROFIT_PCT` | `0.50` | Exit when current premium = 50% of entry (collect 50% of credit) |
+| `IC_STOP_LOSS_MULTIPLE` | `2.00` | Exit when premium = 2× entry credit |
+| `IC_EXTREME_LOSS_MULTIPLE` | `3.00` | Immediate exit when premium = 3× entry credit |
+
+### IV & model
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `IC_ASSUMED_IV` | `0.15` | Fallback IV (15%) when live data unavailable |
+| `IC_REQUIRE_LIVE_IV` | `false` | If `true`, block entry when live IV unavailable |
+| `IC_MIN_LIVE_IV` | `0.12` | Block entry if IV < 12% (no premium available) |
+| `IC_MAX_LIVE_IV` | `0.24` | Block entry if IV > 24% (regime too volatile) |
+| `IC_DAYS_TO_EXPIRY` | `1` | Model DTE assumption; `1` for same-day/weekly |
+
+### Safety & connectivity
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `DEADMAN_TIMEOUT` | `30` | Trigger fail-safe if no quote received for 30s |
+| `SCHEDULER_STALL_HARD_SECONDS` | `60` | Trigger fail-safe if scheduler stalls for 60s |
+| `CIRCUIT_FAILURE_THRESHOLD` | `3` | Open circuit breaker after N consecutive broker failures |
+| `CIRCUIT_COOLDOWN_SECONDS` | `30` | Circuit stays open for 30s before probing recovery |
+| `RECONCILIATION_INTERVAL_SECONDS` | `300` | Broker position reconciliation every 5 min |
+
+---
 
 ## Architecture
 
 ```
-.env / config_loader  →  Settings dataclass (singleton)
+.env / config_loader  →  Settings (frozen dataclass, singleton)
                               │
-                              ▼
-SamcoClient ── login/quotes/orders ── broker
-                              │
-                              ▼
-MarketScheduler  ── ticks NIFTY every 1s ──► EventBus
-                                                │
-                                                ├─► RiskManager     (gates SIGNAL → RISK_APPROVED)
-                                                ├─► TradingEngine   (IC entry/monitor/exit)
-                                                ├─► ReconciliationEngine (sync local↔broker)
-                                                ├─► RejectionWatcher (extends cooldown on rejects)
-                                                └─► TelegramNotifier (critical alerts)
-                              │
-                              ▼
-StateManager (SQLite + journal)  ──  TradeStore (CSV)
-                              │
-                              ▼
-           FastAPI dashboard (/api/dashboard, /api/iron-condor/stats, ...)
+          ┌───────────────────┼───────────────────┐
+          ▼                   ▼                   ▼
+    SamcoClient          StateManager          TradeStore
+    (broker API,         (SQLite WAL,          (CSV audit,
+     circuit breaker,     journal events,       charges,
+     200ms rate limit,    idempotency keys,     P&L)
+     IV cascade)          peak_equity,
+                          rollover)
+          │
+          ▼
+    MarketScheduler  ─── ticks NIFTY every 1s ───► EventBus
+    (IV staleness gate,                               │
+     IC entry gate,                     ┌────────────┼────────────┐
+     daily reset,                       ▼            ▼            ▼
+     stall watchdog)              RiskManager  TradingEngine  Reconciliation
+                                  (validates   (IC entry,     (broker sync,
+                                   signal →     delta strikes, position check)
+                                   RISK_APPROVED monitor loop,      │
+                                   event)       exit pipeline,      ▼
+                                                health loop)  TelegramNotifier
+                                                              (critical alerts)
+          │
+          ▼
+    FastAPI  (/api/dashboard, /api/iron-condor/stats, /api/analytics, ...)
 ```
+
+### Key flows
+
+**Entry:** `_tick` → `_iron_condor_can_enter` (gates: time window, IV staleness, one-per-day, live readiness) → `SIGNAL` event → `RiskManager` → `RISK_APPROVED` → `_enter_iron_condor_trade` → BSM delta strikes → quote snapshot → slippage check → economics filter → place 4 legs → `TRADE_ENTRY` journal
+
+**Exit:** `_monitor_iron_condor_trade` polls premium every tick → `get_exit_reason` checks target/SL/extreme/EOD/proximity → `_exit_iron_condor_trade` (CLOSING guard) → `_execute_iron_condor_exit_legs` (fallback price on ₹0) → `TRADE_EXIT` journal → state cleared
+
+**Emergency:** broker unreachable for 3 consecutive health checks → disable new entries → alert → human intervention (does NOT force-exit position blindly)
+
+---
 
 ## API endpoints
 
-| Path | Purpose |
-|---|---|
-| `GET /api/dashboard` | Full state snapshot + recent trades |
-| `GET /api/iron-condor/stats` | Live IC position with current premium and exit thresholds |
-| `GET /api/analytics` | Win rate, Sharpe, drawdown, Kelly |
-| `POST /api/trade/flatten` | Close active position now |
-| `POST /api/kill-switch` | Disable trading + cancel open orders |
-| `POST /api/reconcile` | Force broker reconciliation |
-| `POST /api/emergency-flatten` | Flatten + reconcile |
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/dashboard` | Full state snapshot, active trade, recent trades |
+| `GET` | `/api/iron-condor/stats` | Live IC position, current premium, exit thresholds, leg prices |
+| `GET` | `/api/analytics` | Win rate, Sharpe, Sortino, drawdown, Kelly fraction |
+| `GET` | `/api/status` | Bot running, mode, trading enabled |
+| `GET` | `/api/pnl` | Daily P&L, live P&L, trade count |
+| `GET` | `/api/trades` | All trades (normalized) |
+| `GET` | `/api/reconciliation` | Latest reconciliation result |
+| `POST` | `/api/trade/flatten` | Close active position immediately |
+| `POST` | `/api/emergency-flatten` | Flatten + reconcile |
+| `POST` | `/api/reconcile` | Force broker reconciliation now |
+| `POST` | `/api/trading-enabled` | Enable or disable new entries (`{"enabled": true/false}`) |
+| `POST` | `/api/start` | Start scheduler |
+| `POST` | `/api/stop` | Stop scheduler |
 
-## Backtest
+---
 
-```bash
-python backtest_runner.py --file data/nifty_1min_<date>.csv --capital 50000
-```
+## Telegram setup (2 minutes)
 
-Note: backtest uses **synthetic option pricing**, not real options-chain history. Results are directional indicators, not validation.
+1. Message `@BotFather` on Telegram → `/newbot` → follow prompts → copy the token.
+2. Send any message to your new bot.
+3. Message `@userinfobot` → it replies with your numeric chat ID.
+4. Add to `.env`:
+   ```
+   TELEGRAM_BOT_TOKEN=123456:ABC-your-token
+   TELEGRAM_CHAT_ID=987654321
+   ```
+5. Restart the bot. You will receive a startup message.
 
-## Tests
+Leave both vars blank to run silently — no errors, no setup needed for paper testing.
 
-```bash
-pytest -q
-```
+---
 
-The execution-safety suite covers partial fills, rejections, fill timeouts, and exit verification. Engine integration coverage is partial — paper sessions are the better validation.
+## Files changed in this session
+
+| File | What was fixed |
+|------|---------------|
+| `backend/app/engine/trading_engine.py` | Health loop adaptive interval; emergency exit fresh quote fetch; slippage-adjusted premium gate; ₹0 exit price fallback; EOD exit through model_fallback; `CLOSING` guard; delta strikes; journal events |
+| `backend/app/scheduler/market_scheduler.py` | IV staleness gate (90s); India VIX cascade; ATM implied vol fallback |
+| `backend/app/broker/samco_client.py` | Auth cascade break; 200ms rate limiter; `get_india_vix()` method |
+| `backend/app/engine/state_manager.py` | `peak_equity` high-water mark; overnight rollover; backup rate limit; idempotency TTL |
+| `backend/app/strategy/iron_condor_strategy.py` | BSM delta strikes; Newton-Raphson implied vol; DTE-aware credit scaling |
+| `backend/app/engine/execution_manager.py` | Paper mode returns `avg_price=None` not `0.0` |
+| `backend/app/core/startup_manager.py` | Validates `SAMCO_USER_ID`, `SAMCO_PASSWORD`, `SAMCO_YOB` at startup |
+| `backend/app/core/config_loader.py` | Added `ic_slippage_per_leg` |
+| `.env` | Updated distances, stop-loss multiples, entry window, added `IC_SLIPPAGE_PER_LEG`, `SCHEDULER_STALL_HARD_SECONDS` |
+
+---
 
 ## Disclaimer
 
-Live options trading on NIFTY carries real money risk. The strategy thresholds (target / SL / extreme) are reasonable defaults but have not been validated against extensive real NIFTY weekly options data. Run paper first. Start small. Watch your alerts.
+Live options trading on NIFTY carries real financial risk. Default thresholds are calibrated for a ₹50,000 account with conservative risk parameters, but have not been validated against extended real-money NIFTY data. Always run paper mode first. Start with minimum capital. Monitor Telegram alerts actively.
+
+The bot includes multiple fail-safes (circuit breaker, health loop, kill-switch, reconciliation) but no software system is infallible. Always know how to manually square off your NIFTY positions in the SAMCO web/app interface as a backup.
