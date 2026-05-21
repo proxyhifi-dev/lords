@@ -3,6 +3,9 @@ Lords Bot — Startup Manager
 """
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from backend.app.broker.samco_client import SamcoClient
 from backend.app.core.config_loader import get_settings
 from backend.app.core.event_bus import EventBus
@@ -12,6 +15,7 @@ from backend.app.storage.trade_store import TradeStore
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("startup_manager")
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class StartupManager:
@@ -118,6 +122,23 @@ class StartupManager:
                             has_broker_position,
                             has_local_position,
                         )
+                        if (
+                            paper_mode_use_broker
+                            and has_local_position
+                            and not has_broker_position
+                            and self._is_stale_paper_active_trade(state)
+                        ):
+                            logger.warning(
+                                "Clearing stale paper active trade at startup because broker is flat"
+                            )
+                            await self.state_manager.update(
+                                active_trade=None,
+                                live_pnl=0.0,
+                                unrealized_pnl=0.0,
+                                manual_intervention_required=False,
+                                last_order_failed=False,
+                                last_risk_breach="stale_paper_trade_cleared_on_startup",
+                            )
 
                 except Exception as exc:
                     if is_live:
@@ -188,6 +209,37 @@ class StartupManager:
             except (TypeError, ValueError):
                 continue
         return 0
+
+    @staticmethod
+    def _is_stale_paper_active_trade(state) -> bool:
+        trade = getattr(state, "active_trade", None)
+        if not isinstance(trade, dict):
+            return False
+
+        today = datetime.now(IST).date()
+        candidates = [
+            trade.get("entry_time"),
+            trade.get("date"),
+            getattr(state, "trade_date", None),
+            getattr(state, "last_trade_date", None),
+            getattr(state, "last_ic_trade_date", None),
+        ]
+
+        for value in candidates:
+            if not value:
+                continue
+            text = str(value).strip()
+            try:
+                parsed = datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(IST)
+                return parsed.date() < today
+            except ValueError:
+                try:
+                    parsed_date = datetime.strptime(text[:10], "%Y-%m-%d").date()
+                    return parsed_date < today
+                except ValueError:
+                    continue
+
+        return False
 
 
 startup_manager = StartupManager()

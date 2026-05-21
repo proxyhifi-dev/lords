@@ -3,6 +3,9 @@ const API = '';
 const POLL_MS = 2000;
 const IC_POLL_MS = 5000;
 const ANALYTICS_POLL_MS = 15000;
+const TAB_ID = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const POLL_LEADER_KEY = 'lords_dashboard_poll_leader';
+const POLL_LEADER_TTL_MS = 6000;
 
 let prevSpot = null;
 let tradingEnabled = true;
@@ -23,7 +26,54 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(loadAnalytics, ANALYTICS_POLL_MS);
 });
 
+window.addEventListener('beforeunload', releasePollingLeadership);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    releasePollingLeadership();
+    return;
+  }
+
+  poll();
+  loadICStats();
+  loadAnalytics();
+});
+
+function shouldPollBackend() {
+  if (document.hidden) return false;
+
+  const now = Date.now();
+  let leader = null;
+
+  try {
+    leader = JSON.parse(localStorage.getItem(POLL_LEADER_KEY) || 'null');
+  } catch {
+    leader = null;
+  }
+
+  const leaderExpired = !leader || !leader.ts || (now - Number(leader.ts)) > POLL_LEADER_TTL_MS;
+  const leaderIsThisTab = leader && leader.id === TAB_ID;
+
+  if (leaderExpired || leaderIsThisTab) {
+    localStorage.setItem(POLL_LEADER_KEY, JSON.stringify({ id: TAB_ID, ts: now }));
+    return true;
+  }
+
+  return false;
+}
+
+function releasePollingLeadership() {
+  try {
+    const leader = JSON.parse(localStorage.getItem(POLL_LEADER_KEY) || 'null');
+    if (leader && leader.id === TAB_ID) {
+      localStorage.removeItem(POLL_LEADER_KEY);
+    }
+  } catch {
+    localStorage.removeItem(POLL_LEADER_KEY);
+  }
+}
+
 async function poll() {
+  if (!shouldPollBackend()) return;
   if (pollInFlight) return;
   pollInFlight = true;
   try {
@@ -374,6 +424,17 @@ function updateICPosition(data) {
   const longCallPrem = getLegDisplayPrice(longCallLeg, premiums.long_call);
   const shortPutPrem = getLegDisplayPrice(shortPutLeg, premiums.short_put);
   const longPutPrem = getLegDisplayPrice(longPutLeg, premiums.long_put);
+  const investment = calculateICInvestmentSummary({
+    trade,
+    data,
+    legs: [shortCallLeg, longCallLeg, shortPutLeg, longPutLeg],
+    fallbackPrices: {
+      short_call: shortCallPrem,
+      long_call: longCallPrem,
+      short_put: shortPutPrem,
+      long_put: longPutPrem,
+    },
+  });
 
   content.innerHTML = `
     <div class="ic-grid">
@@ -409,7 +470,11 @@ function updateICPosition(data) {
       </div>
       <div class="ic-field">
         <div class="ic-field-label">QTY</div>
-        <div class="ic-field-value">${qty}</div>
+        <div class="ic-field-value">${qty} / LEG</div>
+      </div>
+      <div class="ic-field">
+        <div class="ic-field-label">TOTAL LEG QTY</div>
+        <div class="ic-field-value accent">${investment.totalLegQty}</div>
       </div>
       <div class="ic-field">
         <div class="ic-field-label">ENTRY TIME</div>
@@ -455,6 +520,36 @@ function updateICPosition(data) {
       </div>
     </div>
 
+    <div class="ic-investment-section">
+      <div class="ic-field-label">CAPITAL / INVESTMENT VIEW</div>
+      <div class="ic-investment-grid">
+        <div class="investment-cell">
+          <span>ORDER SIZE</span>
+          <strong>${investment.legCount} x ${investment.qtyPerLeg}</strong>
+        </div>
+        <div class="investment-cell">
+          <span>BUY PREMIUM PAID</span>
+          <strong class="negative">${formatMoney(investment.buyPremiumPaid)}</strong>
+        </div>
+        <div class="investment-cell">
+          <span>SELL CREDIT RECEIVED</span>
+          <strong class="positive">${formatMoney(investment.sellCreditReceived)}</strong>
+        </div>
+        <div class="investment-cell">
+          <span>NET CREDIT</span>
+          <strong class="${pnlToneClass(investment.netCreditAmount)}">${formatMoney(investment.netCreditAmount)}</strong>
+        </div>
+        <div class="investment-cell">
+          <span>MAX RISK EST.</span>
+          <strong class="negative">${formatMoney(investment.maxRiskEstimate)}</strong>
+        </div>
+        <div class="investment-cell investment-cell--primary">
+          <span>MARGIN / CAPITAL REQ.</span>
+          <strong>${formatMoney(investment.marginRequired)}</strong>
+        </div>
+      </div>
+    </div>
+
     ${alertText ? `<div class="ic-alert-strip ${quoteWarning === 'stale_quote_alert' || manualReview ? 'negative' : 'neutral'}">${escapeHtml(alertText)}</div>` : ''}
 
     <div class="ic-decay-section">
@@ -482,6 +577,67 @@ function updateICPosition(data) {
   `;
 
   renderPayoff(trade, data.nifty_spot);
+}
+
+function calculateICInvestmentSummary({ trade, data, legs, fallbackPrices }) {
+  const qtyPerLeg = Number(trade?.qty || data?.order_qty || 0);
+  const safeQty = Number.isFinite(qtyPerLeg) && qtyPerLeg > 0 ? qtyPerLeg : 0;
+  const legList = (legs || []).filter(Boolean);
+  const legCount = legList.length || 4;
+
+  const priceFor = (leg, fallback) => {
+    const raw = leg?.entry_price ?? leg?.fill_price ?? leg?.price ?? fallback ?? 0;
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  };
+
+  let buyPremiumPaid = 0;
+  let sellCreditReceived = 0;
+
+  for (const leg of legList) {
+    const side = String(leg?.side || inferSideFromName(leg?.name)).toUpperCase();
+    const fallback = fallbackPrices?.[leg?.name] ?? 0;
+    const amount = priceFor(leg, fallback) * safeQty;
+    if (side === 'BUY') {
+      buyPremiumPaid += amount;
+    } else if (side === 'SELL') {
+      sellCreditReceived += amount;
+    }
+  }
+
+  if (!legList.length) {
+    buyPremiumPaid = (
+      Number(fallbackPrices?.long_call || 0) +
+      Number(fallbackPrices?.long_put || 0)
+    ) * safeQty;
+    sellCreditReceived = (
+      Number(fallbackPrices?.short_call || 0) +
+      Number(fallbackPrices?.short_put || 0)
+    ) * safeQty;
+  }
+
+  const netCreditAmount = sellCreditReceived - buyPremiumPaid;
+  const strikes = trade?.strikes || {};
+  const callWidth = Math.abs(Number(strikes.long_call || 0) - Number(strikes.short_call || 0));
+  const putWidth = Math.abs(Number(strikes.short_put || 0) - Number(strikes.long_put || 0));
+  const spreadWidth = Math.max(callWidth, putWidth, 0);
+  const entryPremium = Number(trade?.entry_price || 0);
+  const maxRiskEstimate = spreadWidth > 0 && safeQty > 0
+    ? Math.max((spreadWidth - entryPremium) * safeQty, 0)
+    : 0;
+  const configuredMargin = Number(data?.ic_margin_required || 0);
+  const marginRequired = Math.max(configuredMargin, maxRiskEstimate);
+
+  return {
+    legCount,
+    qtyPerLeg: safeQty,
+    totalLegQty: legCount * safeQty,
+    buyPremiumPaid,
+    sellCreditReceived,
+    netCreditAmount,
+    maxRiskEstimate,
+    marginRequired,
+  };
 }
 
 function buildLegMap(legs) {
@@ -720,6 +876,7 @@ function renderPayoff(trade, spot) {
 }
 
 async function loadICStats() {
+  if (!shouldPollBackend()) return;
   if (icPollInFlight) return;
   icPollInFlight = true;
   try {
@@ -1013,6 +1170,7 @@ function formatStrikeFromTrade(trade) {
 }
 
 async function loadAnalytics() {
+  if (!shouldPollBackend()) return;
   if (analyticsPollInFlight) return;
   analyticsPollInFlight = true;
   const grid = document.getElementById('analytics-grid');
@@ -1206,6 +1364,16 @@ function fmtNum(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function formatMoney(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '&#8377;0';
+
+  return `&#8377;${Math.abs(number).toLocaleString('en-IN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function fmtPnl(value) {

@@ -487,6 +487,55 @@ body::before {
   margin-bottom: 14px;
 }
 
+.ic-investment-section {
+  margin-bottom: 14px;
+  padding: 10px;
+  border: 1px solid rgba(37, 53, 72, 0.85);
+  border-radius: var(--radius);
+  background: rgba(16, 24, 39, 0.45);
+}
+
+.ic-investment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.investment-cell {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(11, 15, 23, 0.75);
+}
+
+.investment-cell span {
+  display: block;
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  margin-bottom: 3px;
+}
+
+.investment-cell strong {
+  display: block;
+  font-family: var(--font-disp);
+  font-size: 18px;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}
+
+.investment-cell--primary {
+  border-color: rgba(0, 229, 204, 0.55);
+  background: rgba(0, 229, 204, 0.055);
+}
+
+.investment-cell--primary strong {
+  color: var(--accent);
+}
+
 .decay-track {
   position: relative;
   height: 9px;
@@ -921,6 +970,10 @@ body::before {
   .analytics-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .ic-investment-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
@@ -965,6 +1018,10 @@ body::before {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .ic-investment-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .ic-legs {
     grid-template-columns: 1fr;
   }
@@ -1003,6 +1060,10 @@ body::before {
   }
 
   .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ic-investment-grid {
     grid-template-columns: 1fr;
   }
 
