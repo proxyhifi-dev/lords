@@ -32,6 +32,8 @@ configure_logging()
 logger = get_logger("main")
 settings = get_settings()
 IST = ZoneInfo("Asia/Kolkata")
+_IC_QUOTE_FALLBACK_LOG_TS: dict[str, datetime] = {}
+_IC_QUOTE_FALLBACK_LOG_INTERVAL_SECONDS = 30
 
 
 def _safe_number(value: Any) -> Any:
@@ -583,6 +585,22 @@ def _extract_pnl_series(trades: list[dict[str, Any]]) -> list[float]:
     return pnl_series
 
 
+def _warn_ic_cached_snapshot_once(symbol: str, message: str | None = None) -> None:
+    now = datetime.now(timezone.utc)
+    last = _IC_QUOTE_FALLBACK_LOG_TS.get(symbol)
+    if last and (now - last).total_seconds() < _IC_QUOTE_FALLBACK_LOG_INTERVAL_SECONDS:
+        return
+
+    _IC_QUOTE_FALLBACK_LOG_TS[symbol] = now
+    if message:
+        logger.warning(message)
+    else:
+        logger.warning(
+            "Live IC quote invalid for %s; using active_trade cached snapshot",
+            symbol,
+        )
+
+
 async def _get_live_iron_condor_snapshot(engine, trade: dict[str, Any]) -> dict[str, Any]:
     broker = getattr(engine, "broker", None)
     if broker is None:
@@ -617,11 +635,12 @@ async def _get_live_iron_condor_snapshot(engine, trade: dict[str, Any]) -> dict[
         if close_price <= 0:
             cached = _safe_cached_ic_snapshot(trade)
             if cached:
-                logger.warning(
-                    "Live IC quote invalid for %s; using active_trade cached snapshot",
-                    symbol,
-                )
-                return cached
+                _warn_ic_cached_snapshot_once(symbol)
+                return {
+                    **cached,
+                    "quote_warning": "cached_quote_warning",
+                    "invalid_quote_symbol": symbol,
+                }
 
             raise RuntimeError(
                 f"Invalid live quote for {symbol}: bid={bid} ask={ask} ltp={ltp}"
@@ -774,6 +793,10 @@ async def dashboard():
                 "daily_pnl": round(state.daily_pnl, 2),
                 "live_pnl": round(state.live_pnl, 2),
                 "max_daily_loss": float(getattr(settings, "max_daily_loss", 0.0) or 0.0),
+                "capital": float(getattr(settings, "capital", 0.0) or 0.0),
+                "order_qty": int(getattr(settings, "order_qty", 0) or 0),
+                "ic_margin_required": float(getattr(settings, "ic_margin_required", 0.0) or 0.0),
+                "ic_max_loss_per_trade": float(getattr(settings, "ic_max_loss_per_trade", 0.0) or 0.0),
                 "trade_count": state.trade_count,
                 "closed_trade_count": trade_counts["closed_trade_count"],
                 "active_trade_count": trade_counts["active_trade_count"],
@@ -798,6 +821,7 @@ async def dashboard():
                 "one_ic_per_day_enabled": bool(getattr(settings, "ic_one_per_day", True)),
                 "expiry_day_entry_blocked": bool(getattr(settings, "ic_skip_expiry_day_entry", True)),
                 "scheduler_status": scheduler.get_status_summary(),
+                "live_readiness": scheduler.get_live_readiness_report(state),
                 "reconciliation_status": scheduler._reconciler.last_result,
                 "paper_readiness_summary": _load_paper_readiness_summary(),
                 "strategy_validation_summary": _load_strategy_validation_summary(),
@@ -1062,14 +1086,21 @@ async def get_iron_condor_stats():
         current_premium = float(snapshot["current_premium"])
         current_legs = snapshot.get("current_legs", [])
         premium_source = snapshot.get("pricing_source", "broker_quote_snapshot")
+        quote_warning = str(snapshot.get("quote_warning") or "")
+        invalid_quote_symbol = snapshot.get("invalid_quote_symbol")
     except Exception as exc:
         cached = _safe_cached_ic_snapshot(trade)
 
         if cached:
-            logger.warning("Live IC snapshot failed; using active_trade cache: %s", exc)
+            _warn_ic_cached_snapshot_once(
+                "snapshot_failure",
+                "Live IC snapshot failed; using active_trade cached snapshot",
+            )
             current_premium = float(cached["current_premium"])
             current_legs = cached["current_legs"]
             premium_source = cached["pricing_source"]
+            quote_warning = "cached_quote_warning"
+            invalid_quote_symbol = None
         else:
             logger.warning("Live IC snapshot failed, falling back to model pricing: %s", exc)
             current_premium = engine.iron_condor_strategy.estimate_current_premium(
@@ -1079,6 +1110,8 @@ async def get_iron_condor_stats():
             )
             current_legs = []
             premium_source = "model_fallback"
+            quote_warning = "stale_quote_alert"
+            invalid_quote_symbol = None
 
     entry_premium = float(trade["entry_price"])
     qty = int(trade["qty"])
@@ -1149,12 +1182,16 @@ async def get_iron_condor_stats():
             "display_pnl_is_estimated": bool(trade.get("display_pnl_is_estimated", False)),
             "requires_manual_review": bool(trade.get("requires_manual_review", False)),
             "quote_warning": (
-                "stale_quote_alert"
-                if premium_source == "model_fallback"
-                else "cached_quote_warning"
-                if premium_source == "broker_quote_snapshot_cached"
-                else ""
+                quote_warning
+                or (
+                    "stale_quote_alert"
+                    if premium_source == "model_fallback"
+                    else "cached_quote_warning"
+                    if premium_source == "broker_quote_snapshot_cached"
+                    else ""
+                )
             ),
+            "invalid_quote_symbol": invalid_quote_symbol,
         }
     )
 
