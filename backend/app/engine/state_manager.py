@@ -758,6 +758,107 @@ class StateManager:
         finally:
             self._redis = None
 
+    async def get_trade_history(self, limit: int = 50) -> list[dict[str, Any]]:
+        """
+        Return trade-related journal entries (STATE_UPDATE entries that touched
+        active_trade or daily_pnl, plus DAILY_RESET checkpoints).
+
+        Use this to audit what the bot has done without reading raw SQL.
+        """
+        try:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT timestamp, event_type, data
+                    FROM journal
+                    WHERE event_type IN ('DAILY_RESET', 'TRADE_ENTRY', 'TRADE_EXIT', 'STATE_UPDATE')
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (max(_safe_int(limit, 50), 1),),
+                ).fetchall()
+
+            events: list[dict[str, Any]] = []
+            for row in rows:
+                try:
+                    data = json.loads(row["data"])
+                except Exception:
+                    continue
+
+                event_type = row["event_type"]
+                if event_type in ("DAILY_RESET", "TRADE_ENTRY", "TRADE_EXIT"):
+                    events.append(
+                        {"timestamp": row["timestamp"], "event_type": event_type, "data": data}
+                    )
+                    continue
+
+                # STATE_UPDATE: only surface entries that changed trade state
+                updates = data.get("updates", {})
+                if "active_trade" in updates or "daily_pnl" in updates or "trade_count" in updates:
+                    events.append(
+                        {"timestamp": row["timestamp"], "event_type": event_type, "data": updates}
+                    )
+
+            return events
+        except Exception as exc:
+            logger.error("Trade history read failed: %s", exc)
+            return []
+
+    async def get_uncertain_orders(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Return recently flagged uncertain orders from the uncertain_orders table."""
+        try:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT order_id, state, filled_qty, avg_price, reason, created_at
+                    FROM uncertain_orders
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (max(_safe_int(limit, 20), 1),),
+                ).fetchall()
+
+            return [
+                {
+                    "order_id": row["order_id"],
+                    "state": row["state"],
+                    "filled_qty": row["filled_qty"],
+                    "avg_price": row["avg_price"],
+                    "reason": row["reason"],
+                    "created_at": row["created_at"],
+                }
+                for row in rows
+            ]
+        except Exception as exc:
+            logger.error("Uncertain orders read failed: %s", exc)
+            return []
+
+    async def get_trade_summary(self) -> dict[str, Any]:
+        """
+        Return a snapshot of current trading activity and date guards.
+
+        Useful for dashboards and health checks — shows trade_count, P&L,
+        any active position, and all one-per-day guard date fields.
+        """
+        async with self._lock:
+            s = self._state
+            return {
+                "trade_date": s.trade_date,
+                "trade_count": s.trade_count,
+                "daily_pnl": round(s.daily_pnl, 2),
+                "live_pnl": round(s.live_pnl, 2),
+                "active_trade": s.active_trade,
+                "trading_enabled": s.trading_enabled,
+                "last_risk_breach": s.last_risk_breach,
+                "circuit_breaker_open": s.circuit_breaker_open,
+                "consecutive_losses": s.consecutive_losses,
+                "last_iron_condor_date": s.last_iron_condor_date,
+                "last_trade_date": s.last_trade_date,
+                "last_ic_trade_date": s.last_ic_trade_date,
+                "iron_condor_trade_date": s.iron_condor_trade_date,
+                "last_iron_condor_month": s.last_iron_condor_month,
+            }
+
     @property
     def lock(self) -> asyncio.Lock:
         return self._lock
