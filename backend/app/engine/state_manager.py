@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+import time as _time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -297,6 +298,9 @@ class StateManager:
         self._lock = asyncio.Lock()
         self._state = RuntimeState()
 
+        self._last_backup_ts: float = 0.0
+        self._BACKUP_INTERVAL: float = 300.0  # backup at most once per 5 minutes
+
         self._init_database()
         self._init_redis()
         self._state = self._load_state()
@@ -477,6 +481,15 @@ class StateManager:
                 self._state.normalize()
                 self._state = self._apply_day_rollover_if_needed(self._state, persist=False)
 
+                # Keep peak_equity as the high-water mark of total equity.
+                # Without this it stays at settings.capital forever and the
+                # soft-drawdown gate in trading_engine always measures from
+                # the wrong baseline.
+                capital = float(getattr(settings, "capital", 0.0) or 0.0)
+                current_equity = capital + self._state.daily_pnl
+                if current_equity > self._state.peak_equity:
+                    self._state.peak_equity = round(current_equity, 2)
+
                 if not self._state.validate():
                     logger.error("State update validation failed")
                     return
@@ -551,6 +564,11 @@ class StateManager:
                     )
                     """
                 )
+                # Expire idempotency keys older than 24 hours so the table
+                # doesn't grow unbounded in production.
+                conn.execute(
+                    "DELETE FROM idempotency_keys WHERE created_at < datetime('now', '-1 day')"
+                )
         except Exception as exc:
             logger.warning("Journal cleanup failed: %s", exc)
 
@@ -622,10 +640,19 @@ class StateManager:
 
         if state.active_trade:
             logger.warning(
-                "Trade date rollover detected with active_trade present | old=%s new=%s",
+                "Trade date rollover detected with active_trade present | old=%s new=%s "
+                "carry_over_daily_pnl=%.2f",
                 state.trade_date,
                 today,
+                state.daily_pnl,
             )
+            # Snapshot yesterday's P&L into the trade so the close records it
+            # against the correct day, then zero out daily_pnl so that
+            # max_daily_loss checks on the new day start from ₹0.
+            if isinstance(state.active_trade, dict):
+                state.active_trade["carry_over_daily_pnl"] = round(state.daily_pnl, 2)
+            state.daily_pnl = 0.0
+            state.live_pnl = 0.0
             state.trade_date = today
             state.last_updated = _now_iso()
             state.normalize()
@@ -738,12 +765,16 @@ class StateManager:
             logger.error("Uncertain order write failed: %s", exc)
 
     def _safe_backup(self) -> None:
+        now = _time.monotonic()
+        if now - self._last_backup_ts < self._BACKUP_INTERVAL:
+            return
         try:
             if self._db_path.exists():
                 self._backup_path.parent.mkdir(parents=True, exist_ok=True)
                 with sqlite3.connect(str(self._db_path)) as src:
                     with sqlite3.connect(str(self._backup_path)) as dst:
                         src.backup(dst)
+            self._last_backup_ts = now
         except Exception as exc:
             logger.warning("State backup skipped: %s", exc)
 
