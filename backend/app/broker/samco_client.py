@@ -177,6 +177,9 @@ class SamcoClient:
         self._samco = None
         self._auth_failed_until = 0.0
         self._last_auth_error = ""
+        self._last_login_at = 0.0
+        self._last_successful_api_at = 0.0
+        self._consecutive_auth_failures = 0
 
     @staticmethod
     def _looks_like_auth_error(payload: Any) -> bool:
@@ -287,6 +290,7 @@ class SamcoClient:
                 msg = str(resp.get("statusMessage") or resp)
                 self._last_auth_error = msg
                 self._session_live = False
+                self._consecutive_auth_failures += 1
                 self._auth_failed_until = time.time() + max(
                     float(settings.reconnect_base_delay), 30.0
                 )
@@ -302,12 +306,36 @@ class SamcoClient:
             self._chain_cache.clear()
             self._auth_failed_until = 0.0
             self._last_auth_error = ""
+            self._last_login_at = time.time()
+            self._last_successful_api_at = self._last_login_at
+            self._consecutive_auth_failures = 0
             logger.info("SAMCO login successful")
             return resp
 
     async def ensure_session(self) -> None:
         if not self._session_live:
             await self.login()
+
+    def get_session_status(self) -> dict[str, Any]:
+        now_ts = time.time()
+        cooldown_remaining = max(0.0, self._auth_failed_until - now_ts)
+        return {
+            "session_live": bool(self._session_live),
+            "circuit_open": not self._breaker.allow_request(),
+            "auth_cooldown_remaining_sec": round(cooldown_remaining, 2),
+            "last_auth_error": self._last_auth_error or None,
+            "consecutive_auth_failures": int(self._consecutive_auth_failures),
+            "last_login_age_sec": (
+                round(max(0.0, now_ts - self._last_login_at), 2)
+                if self._last_login_at
+                else None
+            ),
+            "last_successful_api_age_sec": (
+                round(max(0.0, now_ts - self._last_successful_api_at), 2)
+                if self._last_successful_api_at
+                else None
+            ),
+        }
 
     async def healthcheck(self) -> bool:
         try:
@@ -939,19 +967,24 @@ class SamcoClient:
                 result = await asyncio.to_thread(fn)
                 resp = self._parse_response(result)
                 self._breaker.record_success()
+                self._last_successful_api_at = time.time()
 
                 if self._looks_like_auth_error(resp):
                     logger.warning("SAMCO %s auth/session issue detected. Re-logging in.", api_name)
                     self._session_live = False
+                    self._consecutive_auth_failures += 1
                     await self.login()
                     result = await asyncio.to_thread(fn)
                     resp = self._parse_response(result)
+                    self._breaker.record_success()
+                    self._last_successful_api_at = time.time()
 
                 return resp
             except RuntimeError as exc:
                 self._breaker.record_failure()
                 if self._looks_like_auth_error(exc) and attempt < attempts:
                     self._session_live = False
+                    self._consecutive_auth_failures += 1
                     logger.warning(
                         "SAMCO %s runtime auth/session exception detected. Re-logging in before retry.",
                         api_name,
@@ -970,6 +1003,7 @@ class SamcoClient:
                 )
                 if self._looks_like_auth_error(exc):
                     self._session_live = False
+                    self._consecutive_auth_failures += 1
                     if attempt < attempts:
                         logger.warning(
                             "SAMCO %s auth/session exception detected. Re-logging in before retry.",
