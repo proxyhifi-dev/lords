@@ -1076,7 +1076,10 @@ class IronCondorStrategy:
             excess = move_pct - trend_threshold_pct
             trend = entry_premium * 0.35 * (1.0 + excess * 90.0)
 
-        friction = entry_premium * 0.035
+        # Scale friction by session progress so it is 0 at entry (progress=0) and
+        # reaches 3.5% of entry_premium only at end-of-day (progress=1).  Without
+        # this the model shows >100% of entry immediately, causing false P&L readings.
+        friction = entry_premium * 0.035 * progress
         current = theta + direction + gamma + iv + breach + trend + friction
 
         return round(max(0.1, current), 2)
