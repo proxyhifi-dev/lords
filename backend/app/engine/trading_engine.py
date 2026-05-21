@@ -873,12 +873,24 @@ class TradingEngine:
             self.iron_condor_strategy.min_premium,
         )
 
+        # Deduct estimated bid-ask slippage (per leg × 4 legs) from the quoted
+        # net premium so viability checks reflect realistic fill prices.
+        slippage_per_leg = float(getattr(settings, "ic_slippage_per_leg", 3.0) or 3.0)
+        slippage_adjusted_premium = snapshot_net_premium - (4 * slippage_per_leg)
+        logger.info(
+            "IC entry: raw_premium=%.2f slippage_adj=%.2f (slippage/leg=%.1f)",
+            snapshot_net_premium,
+            slippage_adjusted_premium,
+            slippage_per_leg,
+        )
+
         abs_min_premium = max(self.iron_condor_strategy.min_premium, 10.0)
-        if snapshot_net_premium < abs_min_premium:
+        if slippage_adjusted_premium < abs_min_premium:
             logger.warning(
-                "Iron Condor premium too low: %.2f < %.2f (floor=10.0 config=%.2f)",
-                snapshot_net_premium,
+                "Iron Condor premium too low after slippage: %.2f < %.2f (raw=%.2f floor=10.0 config=%.2f)",
+                slippage_adjusted_premium,
                 abs_min_premium,
+                snapshot_net_premium,
                 self.iron_condor_strategy.min_premium,
             )
             return
@@ -888,7 +900,7 @@ class TradingEngine:
             int(strikes.get("put_width") or 0),
         )
         viable, viability_reason, viability_diag = self.iron_condor_strategy.is_entry_credit_viable(
-            entry_premium=snapshot_net_premium,
+            entry_premium=slippage_adjusted_premium,
             qty=settings.order_qty,
             spread_width=spread_width or None,
         )
@@ -2444,10 +2456,46 @@ class TradingEngine:
             return True
 
         if trade.get("strategy") == "IRON_CONDOR":
+            # Attempt a fresh quote fetch so exit P&L uses current prices,
+            # not a potentially minutes-old cached value.
             current_premium = _to_float(
                 trade.get("current_premium") or trade.get("entry_price"),
                 0.0,
             )
+            if self._broker_available() and trade.get("legs"):
+                try:
+                    fresh_premium = 0.0
+                    for leg in trade.get("legs", []):
+                        sym = leg.get("symbol")
+                        side = str(leg.get("side", "")).upper()
+                        if not sym or side not in {"BUY", "SELL"}:
+                            raise ValueError(f"bad leg {leg}")
+                        quote = await asyncio.wait_for(
+                            self._fetch_nfo_quote(sym),
+                            timeout=float(getattr(settings, "broker_quote_timeout_seconds", 3)),
+                        )
+                        bid, ask = self.broker.parse_bid_ask(quote)
+                        ltp = self.broker.parse_ltp(quote)
+                        # close price: buy-back shorts at ask, sell longs at bid
+                        close_price = (ask or ltp or 0.0) if side == "SELL" else (bid or ltp or 0.0)
+                        if side == "SELL":
+                            fresh_premium += float(close_price or 0.0)
+                        else:
+                            fresh_premium -= float(close_price or 0.0)
+                    if fresh_premium > 0:
+                        logger.info(
+                            "Emergency exit: fresh premium=%.2f (was cached=%.2f)",
+                            fresh_premium,
+                            current_premium,
+                        )
+                        current_premium = fresh_premium
+                except Exception as quote_exc:
+                    logger.warning(
+                        "Emergency exit: fresh quote failed, using cached premium=%.2f err=%s",
+                        current_premium,
+                        quote_exc,
+                    )
+
             closed = await self._exit_iron_condor_trade(trade, reason, current_premium)
             return closed is not None
 
@@ -2469,23 +2517,62 @@ class TradingEngine:
         return closed
 
     async def _health_loop(self):
+        _consecutive_broker_failures = 0
+        _MAX_BROKER_FAILURES_BEFORE_ALERT = 3
+
         while True:
-            await asyncio.sleep(60)
+            # Check more frequently when a trade is open — broker failure during
+            # an active position needs to surface faster than every 60 seconds.
+            state = await self.state_manager.snapshot()
+            sleep_secs = 10 if state.active_trade else 60
+            await asyncio.sleep(sleep_secs)
 
             if not self._broker_available():
                 continue
 
             try:
                 if not await self.broker.healthcheck():
-                    logger.warning("Healthcheck failed — re-login")
-                    await self.broker.login()
-                    state = await self.state_manager.snapshot()
+                    logger.warning("Healthcheck failed — attempting re-login")
+                    try:
+                        await self.broker.login()
+                        _consecutive_broker_failures = 0
+                        logger.info("Re-login successful after healthcheck failure")
+                    except Exception as login_exc:
+                        _consecutive_broker_failures += 1
+                        logger.error(
+                            "Re-login failed consecutive=%d: %s",
+                            _consecutive_broker_failures,
+                            login_exc,
+                        )
 
-                    if state.active_trade and not self._is_paper_mode():
-                        raise RuntimeError("Broker healthcheck failed during active trade")
+                    # Only disable trading + alert when broker is persistently down.
+                    # Do NOT emergency-exit the position — the broker being
+                    # temporarily unreachable is NOT a position breach.  Blindly
+                    # exiting would realise a loss for a transient network blip.
+                    if _consecutive_broker_failures >= _MAX_BROKER_FAILURES_BEFORE_ALERT:
+                        fresh_state = await self.state_manager.snapshot()
+                        if fresh_state.active_trade and not self._is_paper_mode():
+                            logger.critical(
+                                "Broker unreachable for %d consecutive checks with active trade "
+                                "— disabling new entries, manual intervention required",
+                                _consecutive_broker_failures,
+                            )
+                            await self.state_manager.update(
+                                trading_enabled=False,
+                                last_risk_breach=f"broker_unreachable_{_consecutive_broker_failures}",
+                                manual_intervention_required=True,
+                            )
+                            await self.event_bus.publish(
+                                "BROKER_UNREACHABLE",
+                                {
+                                    "consecutive_failures": _consecutive_broker_failures,
+                                    "active_trade": True,
+                                },
+                            )
+                else:
+                    _consecutive_broker_failures = 0
             except Exception as exc:
-                logger.error("Health loop: %s", exc)
-                await self._handle_fatal_exception("health_loop", exc)
+                logger.error("Health loop error: %s", exc)
 
     def _get_qty(self, size_label: str) -> int:
         base = settings.order_qty
