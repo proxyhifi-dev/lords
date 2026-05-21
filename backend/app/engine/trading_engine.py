@@ -811,8 +811,29 @@ class TradingEngine:
             )
             return
 
-        strikes = self.iron_condor_strategy.calculate_strikes(spot, live_iv=live_iv)
-        logger.info("IC strikes=%s iv_adaptive=%s", strikes, bool(live_iv))
+        # Resolve expiry early so DTE is available for delta-based strike selection.
+        expiry = self.iron_condor_strategy.resolve_entry_expiry(current_time).isoformat()
+        dte_days = self._days_to_expiry(expiry)
+        if dte_days is None or dte_days <= 0:
+            logger.warning("IC entry: unable to compute DTE for expiry=%s", expiry)
+            dte_days = None
+
+        # Use delta-targeting when live IV + DTE are both known (professional grade).
+        # Fall back to fixed-distance + IV-adaptive widening when either is missing.
+        if live_iv and dte_days:
+            strikes = self.iron_condor_strategy.calculate_strikes_by_delta(
+                spot, live_iv, float(dte_days)
+            )
+            logger.info(
+                "IC delta-strikes spot=%.2f iv=%.4f dte=%s strikes=%s",
+                spot, live_iv, dte_days, strikes,
+            )
+        else:
+            strikes = self.iron_condor_strategy.calculate_strikes(spot, live_iv=live_iv)
+            logger.info(
+                "IC fixed-distance strikes spot=%.2f iv=%s strikes=%s",
+                spot, f"{live_iv:.4f}" if live_iv else "N/A", strikes,
+            )
 
         if not strikes:
             logger.error("Invalid strikes calculated - skipping entry")
@@ -836,10 +857,6 @@ class TradingEngine:
             return
 
         logger.info("IC expected-move filter passed diag=%s", em_diag)
-
-        # Always resolve expiry via the strategy helper so expiry-day next-week logic
-        # is consistent between the quote snapshot and symbol resolution (BUG-9).
-        expiry = self.iron_condor_strategy.resolve_entry_expiry(current_time).isoformat()
         logger.info("IC entry using expiry=%s", expiry)
         snapshot_legs, snapshot_premiums, snapshot_net_premium = await self._build_iron_condor_snapshot_legs(
             strikes,
@@ -856,10 +873,12 @@ class TradingEngine:
             self.iron_condor_strategy.min_premium,
         )
 
-        if snapshot_net_premium < self.iron_condor_strategy.min_premium:
+        abs_min_premium = max(self.iron_condor_strategy.min_premium, 10.0)
+        if snapshot_net_premium < abs_min_premium:
             logger.warning(
-                "Iron Condor premium too low: %.2f < %.2f",
+                "Iron Condor premium too low: %.2f < %.2f (floor=10.0 config=%.2f)",
                 snapshot_net_premium,
+                abs_min_premium,
                 self.iron_condor_strategy.min_premium,
             )
             return
@@ -1078,7 +1097,13 @@ class TradingEngine:
                 or leg.get("entry_price"),
                 0.0,
             )
-            actual_exit_price = _to_float(result.avg_price, fallback_exit_price)
+            # _to_float(0.0, fallback) returns 0.0 — use explicit guard so a
+            # zero avg_price (broker quote failure / paper mode) triggers fallback.
+            actual_exit_price = (
+                result.avg_price
+                if result.avg_price is not None and result.avg_price > 0
+                else fallback_exit_price
+            )
 
             exit_legs.append(
                 {
@@ -1148,10 +1173,13 @@ class TradingEngine:
             latest_trade = {**trade, **active_trade}
             if latest_trade.get("status") == "CLOSED":
                 return dict(latest_trade)
-            if latest_trade.get("exit_in_progress"):
+            if latest_trade.get("exit_in_progress") or latest_trade.get("status") == "CLOSING":
                 logger.warning("IRON_CONDOR exit ignored inside lock; exit already in progress reason=%s", reason)
                 return None
+            # Mark CLOSING immediately and persist — prevents any concurrent caller
+            # that reads fresh state from also entering this path.
             latest_trade["exit_in_progress"] = True
+            latest_trade["status"] = "CLOSING"
             await self.state_manager.update(active_trade=latest_trade)
 
             logger.info(
@@ -1244,6 +1272,7 @@ class TradingEngine:
                     state.consecutive_losses,
                     net_pnl,
                 ),
+                last_iron_condor_date=today_ist,
                 last_iron_condor_month=datetime.now(IST).month,
                 last_trade_date=today_ist,
                 last_ic_trade_date=today_ist,
@@ -1767,6 +1796,25 @@ class TradingEngine:
         }
 
         if pricing_source not in allowed_exit_sources:
+            # Time-based EOD exits must fire even when broker quotes are unavailable.
+            # Check for those before blocking on pricing source.
+            _time_reason = self.iron_condor_strategy.get_exit_reason(
+                entry_time,
+                current_time,
+                updated_trade["entry_price"],
+                current_premium,
+                int(updated_trade.get("qty", 0) or 0),
+            )
+            _eod_reasons = {"EOD", "EOD_PROFIT_LOCK", "EOD_NO_POSITIVE_TARGET", "EOD_LOSS_CUT"}
+            if _time_reason in _eod_reasons:
+                logger.warning(
+                    "IC time-based exit %s firing despite degraded pricing_source=%s current_premium=%.2f",
+                    _time_reason,
+                    pricing_source,
+                    current_premium,
+                )
+                await self._exit_iron_condor_trade(updated_trade, _time_reason, current_premium)
+                return
             self._log_throttled(
                 f"ic_auto_exit_blocked:{pricing_source}",
                 30,
