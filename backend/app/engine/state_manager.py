@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
 import sqlite3
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -709,7 +708,9 @@ class StateManager:
         try:
             if self._db_path.exists():
                 self._backup_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(str(self._db_path), str(self._backup_path))
+                with sqlite3.connect(str(self._db_path)) as src:
+                    with sqlite3.connect(str(self._backup_path)) as dst:
+                        src.backup(dst)
         except Exception as exc:
             logger.warning("State backup skipped: %s", exc)
 
