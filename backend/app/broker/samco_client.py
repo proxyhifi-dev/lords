@@ -372,6 +372,23 @@ class SamcoClient:
         self._quote_cache[key] = {"ts": time.time(), "data": result}
         return result
 
+    async def get_india_vix(self) -> float | None:
+        """
+        Fetch India VIX from NSE via the broker and return as a decimal IV.
+        India VIX = 15.0 means 15% annualised vol → returns 0.15.
+        Returns None on any failure so callers can fall back to assumed_iv.
+        """
+        try:
+            quote = await self.get_index_quote("INDIA VIX")
+            raw = SamcoClient.parse_spot(quote)
+            if raw and raw > 0:
+                iv = round(raw / 100.0, 4)
+                logger.debug("India VIX=%.2f → iv=%.4f", raw, iv)
+                return iv
+        except Exception as exc:
+            logger.warning("India VIX fetch failed: %s", exc)
+        return None
+
     async def get_index_intraday_candles(
         self,
         index_name: str,
