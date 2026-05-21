@@ -181,6 +181,7 @@ class Settings:
     ic_min_live_iv: float = 0.12
     ic_max_live_iv: float = 0.24
 
+    ic_slippage_per_leg: float = 3.0  # pts deducted per leg for bid-ask slippage
     ic_brokerage_per_order: float = 20.0
     ic_entry_order_count: int = 4
     ic_exit_order_count: int = 4
@@ -430,6 +431,7 @@ def get_settings() -> Settings:
         ic_min_live_iv=_parse_float(_get(combined, "IC_MIN_LIVE_IV", default=0.12), 0.12),
         ic_max_live_iv=_parse_float(_get(combined, "IC_MAX_LIVE_IV", default=0.24), 0.24),
 
+        ic_slippage_per_leg=_parse_float(_get(combined, "IC_SLIPPAGE_PER_LEG", default=3.0), 3.0),
         ic_brokerage_per_order=_parse_float(_get(combined, "IC_BROKERAGE_PER_ORDER", default=20.0), 20.0),
         ic_entry_order_count=_parse_int(_get(combined, "IC_ENTRY_ORDER_COUNT", default=4), 4),
         ic_exit_order_count=_parse_int(_get(combined, "IC_EXIT_ORDER_COUNT", default=4), 4),
