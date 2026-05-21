@@ -130,17 +130,18 @@ The bot uses **BSM delta targeting** when live IV is available (default 10Δ). `
 ### Exit thresholds
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `IC_TARGET_PROFIT_PCT` | `0.50` | Exit when current premium = 50% of entry (collect 50% of credit) |
-| `IC_STOP_LOSS_MULTIPLE` | `2.00` | Exit when premium = 2× entry credit |
+| `IC_TARGET_PROFIT_PCT` | `0.70` | Exit when current premium = 30% of entry (collect 70% of credit) |
+| `IC_STOP_LOSS_MULTIPLE` | `1.50` | Exit when premium = 1.5× entry credit |
 | `IC_EXTREME_LOSS_MULTIPLE` | `3.00` | Immediate exit when premium = 3× entry credit |
 
 ### IV & model
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `IC_ASSUMED_IV` | `0.15` | Fallback IV (15%) when live data unavailable |
+| `IC_HIGH_PROBABILITY_MODE` | `true` | Enforce VIX sweet-spot filter on entry |
 | `IC_REQUIRE_LIVE_IV` | `false` | If `true`, block entry when live IV unavailable |
-| `IC_MIN_LIVE_IV` | `0.12` | Block entry if IV < 12% (no premium available) |
-| `IC_MAX_LIVE_IV` | `0.24` | Block entry if IV > 24% (regime too volatile) |
+| `IC_MIN_LIVE_IV` | `0.14` | Block entry if India VIX < 14% — not enough premium |
+| `IC_MAX_LIVE_IV` | `0.20` | Block entry if India VIX > 20% — regime too volatile for IC |
 | `IC_DAYS_TO_EXPIRY` | `1` | Model DTE assumption; `1` for same-day/weekly |
 
 ### Safety & connectivity
