@@ -83,13 +83,16 @@ class ExecutionManager:
                     symbol, side, exc,
                 )
 
-        if avg_price is None:
-            avg_price = 0.0
+        # Return None (not 0.0) when price is unavailable so callers using
+        # "result.avg_price > 0" guards can fall back to their own snapshot price.
+        if avg_price is not None and avg_price <= 0:
+            avg_price = None
 
         paper_order_id = f"PAPER-{side}-{symbol}-{qty}"
         logger.info(
-            "PAPER MODE: simulated order symbol=%s side=%s qty=%d avg_price=%.2f",
-            symbol, side, qty, avg_price,
+            "PAPER MODE: simulated order symbol=%s side=%s qty=%d avg_price=%s",
+            symbol, side, qty,
+            f"{avg_price:.2f}" if avg_price is not None else "N/A (fallback will apply)",
         )
         return ExecutionResult(
             order_id=paper_order_id,
