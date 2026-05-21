@@ -106,18 +106,8 @@ class ExecutionManager:
         qty = int(request.get("quantity") or 0)
         side = str(request.get("side") or "").upper()
 
-        key = self._idempotency_key(signal, symbol, ts)
-        if await self.state_manager.has_idempotency_key(key):
-            logger.warning("Idempotent skip key=%s symbol=%s side=%s", key, symbol, side)
-            return ExecutionResult(
-                order_id=None,
-                filled_qty=0,
-                avg_price=None,
-                state=OrderState.ABORTED,
-            )
-
-        await self.state_manager.add_idempotency_key(key)
-
+        # Validate before touching persistent idempotency storage so a bad request
+        # cannot "poison" the key and block a corrected retry at the same timestamp.
         if qty <= 0 or not symbol or side not in {"BUY", "SELL"}:
             logger.error(
                 "Invalid order request symbol=%s side=%s qty=%s",
@@ -129,6 +119,18 @@ class ExecutionManager:
                 avg_price=None,
                 state=OrderState.ABORTED,
             )
+
+        key = self._idempotency_key(signal, symbol, ts)
+        if await self.state_manager.has_idempotency_key(key):
+            logger.warning("Idempotent skip key=%s symbol=%s side=%s", key, symbol, side)
+            return ExecutionResult(
+                order_id=None,
+                filled_qty=0,
+                avg_price=None,
+                state=OrderState.ABORTED,
+            )
+
+        await self.state_manager.add_idempotency_key(key)
 
         if self._is_paper_mode():
             return await self._simulate_paper_order(symbol=symbol, side=side, qty=qty)
@@ -164,28 +166,25 @@ class ExecutionManager:
                         self._transition(exec_ctx, OrderState.PARTIAL_FILL)
                         await self._mark_uncertain(exec_ctx, reason="partial_fill_not_resolved")
                         return ExecutionResult(
-                            oid,
-                            fqty,
-                            avg,
-                            OrderState.ORDER_UNCERTAIN,
-                            True,
+                            oid, fqty, avg, OrderState.ORDER_UNCERTAIN, True,
                         )
                     if fill_state == "FAILED":
                         self._transition(exec_ctx, OrderState.FAILED)
                     else:
                         await self._mark_uncertain(exec_ctx, reason="fill_unknown")
                         return ExecutionResult(
-                            oid,
-                            fqty,
-                            avg,
-                            OrderState.ORDER_UNCERTAIN,
-                            True,
+                            oid, fqty, avg, OrderState.ORDER_UNCERTAIN, True,
                         )
             except Exception as exc:
                 logger.error(
                     "execute_order broker exception attempt=%d/%d symbol=%s side=%s err=%s",
                     attempt, self.max_retries, symbol, side, exc,
                 )
+                # Retry transient errors; only mark uncertain after all attempts exhausted.
+                if attempt < self.max_retries:
+                    self._transition(exec_ctx, OrderState.RETRY)
+                    await asyncio.sleep(self.base_backoff * (2 ** (attempt - 1)))
+                    continue
                 await self._mark_uncertain(exec_ctx, reason="broker_api_error")
                 return ExecutionResult(
                     exec_ctx.get("order_id"),
