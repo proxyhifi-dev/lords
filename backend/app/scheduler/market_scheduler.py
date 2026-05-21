@@ -202,6 +202,129 @@ class MarketScheduler:
             "scheduler_stall_hard_seconds": setting_float("scheduler_stall_hard_seconds"),
         }
 
+    def _reconciliation_age_seconds(self) -> float | None:
+        result = self._reconciler.last_result
+        if not isinstance(result, dict):
+            return None
+
+        raw_ts = result.get("timestamp")
+        if not raw_ts:
+            return None
+
+        try:
+            reconciled_at = datetime.fromisoformat(str(raw_ts))
+            if reconciled_at.tzinfo is None:
+                reconciled_at = reconciled_at.replace(tzinfo=IST)
+            return max(0.0, (now_ist() - reconciled_at.astimezone(IST)).total_seconds())
+        except (TypeError, ValueError):
+            return None
+
+    def get_live_readiness_report(self, state: Any | None = None) -> dict[str, Any]:
+        """
+        One production gate for live entries. Paper mode can continue proving the
+        strategy, but live mode must have clean broker/session/reconciliation
+        telemetry before a new position is allowed.
+        """
+        blockers: list[str] = []
+        warnings: list[str] = []
+        scheduler_status = self.get_status_summary()
+        broker_status = (
+            self.broker.get_session_status()
+            if hasattr(self.broker, "get_session_status")
+            else {"session_live": False, "status": "unavailable"}
+        )
+        reconciliation_status = self._reconciler.last_result
+        reconciliation_age = self._reconciliation_age_seconds()
+
+        if not settings.is_live:
+            return {
+                "mode": str(settings.mode).upper(),
+                "ready_for_live_entry": False,
+                "gate_active": False,
+                "blockers": ["paper_mode"],
+                "warnings": warnings,
+                "broker_session": broker_status,
+                "scheduler_status": scheduler_status,
+                "reconciliation_status": reconciliation_status,
+                "reconciliation_age_sec": reconciliation_age,
+            }
+
+        if not bool(broker_status.get("session_live")):
+            blockers.append("broker_session_not_live")
+        if bool(broker_status.get("circuit_open")):
+            blockers.append("broker_circuit_open")
+        if float(broker_status.get("auth_cooldown_remaining_sec") or 0.0) > 0:
+            blockers.append("broker_auth_cooldown_active")
+        if int(broker_status.get("consecutive_auth_failures") or 0) >= 2:
+            blockers.append("broker_repeated_auth_failures")
+
+        if not isinstance(reconciliation_status, dict):
+            blockers.append("reconciliation_not_run")
+        else:
+            if reconciliation_status.get("status") != "ok":
+                blockers.append("reconciliation_not_ok")
+            if int(reconciliation_status.get("issues_found") or 0) > 0:
+                blockers.append("reconciliation_issues_found")
+
+        max_reconcile_age = max(30, self.reconciliation_interval_seconds * 2)
+        if reconciliation_age is None:
+            blockers.append("reconciliation_timestamp_missing")
+        elif reconciliation_age > max_reconcile_age:
+            blockers.append("reconciliation_stale")
+
+        quote_age = float(scheduler_status.get("last_good_quote_age_sec") or 0.0)
+        if quote_age > max(3.0, float(settings.deadman_timeout) / 2.0):
+            blockers.append("market_quote_stale")
+        if int(scheduler_status.get("consecutive_quote_failures") or 0) > 0:
+            blockers.append("recent_market_quote_failures")
+
+        if state is not None:
+            if getattr(state, "manual_intervention_required", False):
+                blockers.append("manual_intervention_required")
+            if getattr(state, "circuit_breaker_open", False):
+                blockers.append("bot_circuit_breaker_open")
+            if getattr(state, "last_order_failed", False):
+                blockers.append("last_order_failed")
+            if getattr(state, "emergency_flatten_unclosed_symbols", []):
+                blockers.append("previous_flatten_unverified")
+            if getattr(state, "emergency_flatten_last_error", None):
+                blockers.append("previous_flatten_error")
+            reconstructed = getattr(state, "reconstructed_ic_status", None)
+            if reconstructed and reconstructed not in {"flat", "none", "cleared_verified_flat"}:
+                blockers.append("broker_reconstructed_state_requires_review")
+            if getattr(state, "broker_position_count", 0) and not getattr(state, "active_trade", None):
+                blockers.append("broker_positions_without_local_trade")
+
+        ready = not blockers
+        return {
+            "mode": str(settings.mode).upper(),
+            "ready_for_live_entry": ready,
+            "gate_active": True,
+            "blockers": blockers,
+            "warnings": warnings,
+            "broker_session": broker_status,
+            "scheduler_status": scheduler_status,
+            "reconciliation_status": reconciliation_status,
+            "reconciliation_age_sec": reconciliation_age,
+        }
+
+    async def _block_live_entry_if_not_ready(self, state: Any) -> bool:
+        report = self.get_live_readiness_report(state)
+        if not report["gate_active"] or report["ready_for_live_entry"]:
+            return False
+
+        reason = "live_readiness_blocked:" + ",".join(report["blockers"])
+        logger.critical("IC live entry blocked by readiness gate: %s", report)
+        await self.state.update(
+            trading_enabled=False,
+            circuit_breaker_open=True,
+            last_order_failed=True,
+            last_risk_breach=reason[:240],
+            manual_intervention_required=True,
+        )
+        await self.event_bus.publish("LIVE_READINESS_BLOCKED", report)
+        return True
+
     def _update_candle(self, price: float, timestamp: datetime) -> dict[str, Any] | None:
         """
         Build completed 1-minute candles from tick prices.
@@ -577,7 +700,7 @@ class MarketScheduler:
         self._last_closed_log_time = current_ts
 
     async def _tick(self) -> None:
-        logger.info("TICK FUNCTION ENTERED")
+        logger.debug("TICK FUNCTION ENTERED")
 
         self._last_tick_time = wall_time.time()
 
@@ -609,7 +732,7 @@ class MarketScheduler:
             self._consecutive_quote_failures += 1
             return
 
-        logger.info("TICK: spot=%.2f", spot)
+        logger.debug("TICK: spot=%.2f", spot)
 
         closed_candle = self._update_candle(spot, now_ist())
         if closed_candle:
@@ -641,6 +764,9 @@ class MarketScheduler:
 
         state = await self.state.snapshot()
         current_time = now_ist()
+
+        if settings.is_live and await self._block_live_entry_if_not_ready(state):
+            return
 
         if not self._iron_condor_can_enter(current_time, spot, state):
             return
@@ -674,7 +800,7 @@ class MarketScheduler:
             return False
 
         if state.active_trade:
-            logger.info("IC gate blocked: active trade already open")
+            logger.debug("IC gate blocked: active trade already open")
             return False
 
         if current_time.weekday() >= 5:
@@ -696,6 +822,12 @@ class MarketScheduler:
         if not state.trading_enabled:
             logger.info("IC gate blocked: trading_enabled=False")
             return False
+
+        if settings.is_live:
+            report = self.get_live_readiness_report(state)
+            if not report["ready_for_live_entry"]:
+                logger.critical("IC gate blocked: live readiness report=%s", report)
+                return False
 
         if self._last_manual_flatten_time:
             flatten_age = wall_time.time() - self._last_manual_flatten_time
