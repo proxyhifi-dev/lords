@@ -271,6 +271,19 @@ class IronCondorStrategy:
             "IC_MAX_IV_RANK_ENTRY", "ic_max_iv_rank_entry", 75.0,
         )
 
+        # ── Cached runtime-hot config values ────────────────────────────────
+        # Loaded once here so they are not re-parsed on every tick.
+        self.ic_breach_noise_buffer = self._cfg_float(
+            "IC_BREACH_NOISE_BUFFER", "ic_breach_noise_buffer", 3.0,
+        )
+        _eod_loss_cut_raw = self._cfg_float(
+            "IC_EOD_LOSS_CUT", "ic_eod_loss_cut", 0.0,
+        )
+        # 0 means "use default" = 60% of max_loss_per_trade
+        self.ic_eod_loss_cut = (
+            _eod_loss_cut_raw if _eod_loss_cut_raw > 0 else self.max_loss_per_trade * 0.6
+        )
+
         logger.info(
             (
                 "IronCondorStrategy initialized | entry=%s-%s exit=%s "
@@ -534,6 +547,50 @@ class IronCondorStrategy:
             "vega": vega,
         }
 
+    def implied_vol(
+        self,
+        market_price: float,
+        spot: float,
+        strike: float,
+        dte_days: float,
+        opt_type: str,
+        tol: float = 1e-5,
+        max_iter: int = 60,
+    ) -> float | None:
+        """
+        Newton-Raphson implied volatility solver.
+
+        Uses the BSM vega as the derivative.  The vega returned by _bsm() is
+        "₹ per 1 vol-point (1% IV change)", so the derivative with respect to
+        sigma in decimal form is vega_code × 100.
+
+        Returns None when the solver fails to converge (e.g. deep ITM/OTM with
+        no time value) so callers can fall back to assumed_iv gracefully.
+        """
+        if market_price <= 0 or spot <= 0 or strike <= 0 or dte_days <= 0:
+            return None
+
+        intrinsic = (
+            max(0.0, spot - strike) if opt_type == "CE" else max(0.0, strike - spot)
+        )
+        if market_price < intrinsic:
+            return None  # below intrinsic — no real solution
+
+        sigma = 0.20  # starting guess: 20% IV
+        for _ in range(max_iter):
+            res = self._bsm(spot, strike, sigma, dte_days, opt_type)
+            diff = res["price"] - market_price
+            if abs(diff) < tol:
+                return round(max(0.01, min(sigma, 2.0)), 4)
+            # vega_code = ΔP per 1 vol-point; ∂P/∂sigma_decimal = vega_code * 100
+            dv = res["vega"] * 100.0
+            if dv < 1e-8:
+                break
+            sigma -= diff / dv
+            sigma = max(0.005, min(sigma, 2.0))
+
+        return None
+
     def bsm_price(
         self, spot: float, strike: float, iv: float, dte_days: float, opt_type: str
     ) -> float:
@@ -646,7 +703,10 @@ class IronCondorStrategy:
                 )
                 return False
         except Exception as exc:
-            logger.warning("Failed to evaluate pre-expiry entry cutoff: %s", exc)
+            logger.warning(
+                "Failed to evaluate pre-expiry entry cutoff — blocking entry fail-closed: %s", exc
+            )
+            return False
 
         monthly_only = bool(getattr(self.settings, "ic_monthly_only", False))
 
@@ -1073,9 +1133,7 @@ class IronCondorStrategy:
 
         # Require spot to be tick_buffer points past the short strike before calling a
         # confirmed breach — prevents a single noisy tick AT the strike from triggering.
-        tick_buffer = self._cfg_float(
-            "IC_BREACH_NOISE_BUFFER", "ic_breach_noise_buffer", 3.0
-        )
+        tick_buffer = self.ic_breach_noise_buffer
         if distance_to_call < -tick_buffer:
             logger.warning(
                 "IC proximity exit: spot breached short_call spot=%.2f short_call=%.2f",
@@ -1105,7 +1163,9 @@ class IronCondorStrategy:
 
         return None
 
-    def estimate_dynamic_entry_credit(self, spot: float) -> float:
+    def estimate_dynamic_entry_credit(
+        self, spot: float, dte_days: float | None = None
+    ) -> float:
         if not spot or spot <= 0:
             return 0.0
 
@@ -1131,6 +1191,16 @@ class IronCondorStrategy:
             credit *= 0.92
         elif mode == "aggressive":
             credit *= 1.06
+
+        # DTE scaling: premium is proportional to sqrt(T) — 30 DTE is the baseline.
+        # 7 DTE → 0.48×, 1 DTE → 0.18×, 60 DTE → capped at 1.25×.
+        if dte_days is not None and dte_days > 0:
+            dte_scale = min(math.sqrt(dte_days / 30.0), 1.25)
+            credit *= dte_scale
+            logger.debug(
+                "DTE-scaled credit dte=%.1f scale=%.3f credit_after=%.2f",
+                dte_days, dte_scale, credit,
+            )
 
         return round(max(4.0, min(credit, spot * 0.006)), 2)
 
@@ -1398,7 +1468,7 @@ class IronCondorStrategy:
         }
 
     def estimate_net_premium(self, spot: float, days: int = 30) -> float:
-        net = self.estimate_dynamic_entry_credit(spot)
+        net = self.estimate_dynamic_entry_credit(spot, dte_days=float(days))
 
         if net <= 0:
             logger.warning("Invalid net credit: %.2f", net)
@@ -1625,9 +1695,7 @@ class IronCondorStrategy:
                 return "EOD_NO_POSITIVE_TARGET"
 
             # Position is in loss during EOD window — cut if loss exceeds threshold
-            eod_loss_cut = -abs(
-                self._cfg_float("IC_EOD_LOSS_CUT", "ic_eod_loss_cut", self.max_loss_per_trade * 0.6)
-            )
+            eod_loss_cut = -abs(self.ic_eod_loss_cut)
             if net_pnl <= eod_loss_cut:
                 logger.warning(
                     "EOD_LOSS_CUT net_pnl=%.2f threshold=%.2f current=%.2f entry=%.2f",
