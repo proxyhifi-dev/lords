@@ -147,6 +147,7 @@ class RuntimeState:
     broker_position_count: int = 0
 
     last_iron_condor_month: int | None = None
+    last_iron_condor_date: str | None = None
     last_trade_date: str | None = None
     last_ic_trade_date: str | None = None
     iron_condor_trade_date: str | None = None
@@ -207,6 +208,7 @@ class RuntimeState:
         month_value = _safe_int(self.last_iron_condor_month, 0)
         self.last_iron_condor_month = month_value if 1 <= month_value <= 12 else None
 
+        self.last_iron_condor_date = _safe_str(self.last_iron_condor_date)
         self.last_trade_date = _safe_str(self.last_trade_date)
         self.last_ic_trade_date = _safe_str(self.last_ic_trade_date)
         self.iron_condor_trade_date = _safe_str(self.iron_condor_trade_date)
