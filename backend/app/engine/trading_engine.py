@@ -136,6 +136,7 @@ class TradingEngine:
         self._fatal_lock = asyncio.Lock()
         self._ltp_history: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=20))
         self._ic_quote_cache: dict[str, dict[str, Any]] = {}
+        self._throttled_log_times: dict[str, datetime] = {}
 
         self._ic_fallback_streak = 0
         self._ic_fallback_alert_level = 0
@@ -251,6 +252,22 @@ class TradingEngine:
     def _is_valid_quote_prices(self, bid: float, ask: float, ltp: float) -> bool:
         return bid > 0 or ask > 0 or ltp > 0
 
+    def _log_throttled(
+        self,
+        key: str,
+        seconds: float,
+        level: str,
+        message: str,
+        *args: Any,
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        last = self._throttled_log_times.get(key)
+        if last and (now - last).total_seconds() < seconds:
+            return
+
+        self._throttled_log_times[key] = now
+        getattr(logger, level)(message, *args)
+
     def _remember_ic_quote(
         self,
         symbol: str,
@@ -282,7 +299,10 @@ class TradingEngine:
         age = (datetime.now(timezone.utc) - timestamp).total_seconds()
         ttl = self._ic_quote_cache_ttl_seconds()
         if age > ttl:
-            logger.error(
+            self._log_throttled(
+                f"ic_cached_quote_stale:{symbol}",
+                30,
+                "warning",
                 "IC cached quote stale symbol=%s age=%.2fs ttl=%ss — not reusing",
                 symbol,
                 age,
@@ -470,7 +490,10 @@ class TradingEngine:
                 quote, bid, ask, ltp, quote_age_sec = cached
                 price_source = "broker_quote_snapshot_cached"
                 used_cached_quote = True
-                logger.warning(
+                self._log_throttled(
+                    f"ic_zero_quote_cache_reused:{symbol}",
+                    30,
+                    "warning",
                     "IC zero quote reused fresh last-good cache symbol=%s age=%.2fs bid=%.2f ask=%.2f ltp=%.2f",
                     symbol,
                     quote_age_sec,
@@ -1608,7 +1631,13 @@ class TradingEngine:
         try:
             current_premium, current_legs, pricing_source = await self._get_live_iron_condor_close_snapshot(trade)
         except Exception as exc:
-            logger.warning("IC live snapshot failed; using model fallback: %s", exc)
+            self._log_throttled(
+                "ic_live_snapshot_model_fallback",
+                30,
+                "warning",
+                "IC live snapshot failed; using model fallback: %s",
+                exc,
+            )
             current_premium = self.iron_condor_strategy.estimate_current_premium(
                 trade["entry_price"],
                 entry_time,
@@ -1674,7 +1703,10 @@ class TradingEngine:
         }
 
         if pricing_source not in allowed_exit_sources:
-            logger.warning(
+            self._log_throttled(
+                f"ic_auto_exit_blocked:{pricing_source}",
+                30,
+                "warning",
                 "IC auto-exit blocked because pricing_source=%s current_premium=%.2f",
                 pricing_source,
                 current_premium,
