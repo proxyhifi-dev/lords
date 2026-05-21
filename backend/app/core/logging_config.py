@@ -52,7 +52,12 @@ def configure_root_logging(level: int = DEFAULT_LEVEL) -> None:
     root = logging.getLogger()
     root.setLevel(level)
 
-    if not any(isinstance(handler, SafeUnicodeStreamHandler) for handler in root.handlers):
+    has_console_handler = any(
+        isinstance(handler, logging.StreamHandler)
+        and not isinstance(handler, logging.FileHandler)
+        for handler in root.handlers
+    )
+    if not has_console_handler:
         console_handler = SafeUnicodeStreamHandler(sys.stdout)
         console_handler.setLevel(level)
         console_handler.setFormatter(_formatter())
