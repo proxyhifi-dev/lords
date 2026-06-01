@@ -1,0 +1,186 @@
+# Iron Condor Strategy — Complete Guide (Basics to Advanced)
+
+*A practical, honest reference for trading iron condors on Nifty / Bank Nifty.*
+
+---
+
+## 0. One honest note before you start
+
+There is **no configuration that gives a guaranteed high success rate.** Anyone who tells you otherwise is selling something. Index options are efficiently priced, so a clean iron condor is roughly break-even *before* costs and slightly negative *after* costs. The edge does not come from "selling premium and hoping." It comes from three things this guide focuses on:
+
+1. **Strike placement** — so your probability of profit is high.
+2. **Regime and volatility selection** — so you only trade when conditions favor the strategy.
+3. **Cost control** — so fees don't eat the small edge.
+
+This document gives you the configuration that maximizes *sustainable expectancy*, which is the real meaning of "max success." A high win rate that loses money is worthless; a moderate win rate that is profitable after costs is the goal.
+
+---
+
+## 1. What an iron condor is
+
+An iron condor is a **four-leg, defined-risk, premium-selling** options strategy. You build it by combining two credit spreads — one on the call side, one on the put side:
+
+| Leg | Action | Position |
+|---|---|---|
+| 1 | **Sell** | Out-of-the-money (OTM) call (short call) |
+| 2 | **Buy** | Further OTM call (long call — the "wing") |
+| 3 | **Sell** | OTM put (short put) |
+| 4 | **Buy** | Further OTM put (long put — the "wing") |
+
+You **collect a net credit** (premium) upfront. The two short options are where you earn; the two long options are insurance that caps your maximum loss.
+
+### The payoff shape
+- You keep the full credit if the underlying expires **between the two short strikes**.
+- You lose money if the underlying moves **beyond a short strike**.
+- Your maximum loss is capped at **(wing width − net credit) × lot size**, because the long wings limit how far the loss can run.
+
+This is the "tent with a flat top" payoff: a wide profit plateau in the middle, capped losses on both sides.
+
+---
+
+## 2. How it makes and loses money
+
+You are acting like an **insurance company**. You collect a premium and profit if "nothing dramatic happens" — i.e., the underlying stays range-bound. Two forces work in your favor:
+
+- **Theta (time decay):** options lose value as expiry approaches. Since you are net short options, that decay is your profit.
+- **Volatility contraction:** if implied volatility falls after you enter, your short options cheapen, helping you.
+
+Two forces work against you:
+
+- **A large directional move** in either direction pushes the underlying past a short strike.
+- **A volatility spike (rising IV)** inflates your short options against you, even without a big price move.
+
+The strategy wins often (small, frequent gains) and loses rarely but larger. Managing that asymmetry is the entire skill.
+
+---
+
+## 3. The core math you must understand
+
+### Probability of profit (POP) vs. breakeven win rate
+This is the single most important concept. Two numbers must line up:
+
+- **Probability of profit (POP):** set by *how far out your strikes are*. Strikes far from price → high POP.
+- **Breakeven win rate:** set by your *profit target and stop loss ratio* plus costs. The smaller your target relative to your stop, the higher the win rate you need just to break even.
+
+**Rule: your POP must be HIGHER than your breakeven win rate.** If it isn't, the strategy is mathematically designed to lose, no matter how good your software is.
+
+### Breakeven win rate formula
+If you win `+T` (target) and lose `−S` (stop) per trade, the win rate `p` needed to break even is:
+
+```
+p × T = (1 − p) × S
+p = S / (T + S)
+```
+
+Examples (ignoring costs):
+| Target | Stop | Breakeven win rate |
+|---|---|---|
+| 25% of credit | 160% | ~87% (very hard — avoid) |
+| 50% of credit | 100% (1×) | ~67% (achievable) |
+| 50% of credit | 200% (2×) | ~80% (hard) |
+
+The 50%-target / 1×-stop combination is the realistic sweet spot.
+
+### Expectancy (the only number that matters)
+```
+Expectancy = (win rate × avg win) − (loss rate × avg loss) − costs
+```
+A strategy is only worth trading if expectancy is **positive after costs.** Win rate alone tells you nothing.
+
+---
+
+## 4. The Greeks that matter
+
+- **Delta:** directional exposure. You want the position near delta-neutral at entry. Short-strike delta (~0.15) also approximates the probability that strike finishes in the money.
+- **Theta:** your friend — positive theta means you earn as time passes.
+- **Vega:** your enemy when IV rises. You are short vega, so you want to enter when IV is *high* (so it can fall) and avoid entering in dead-low IV.
+- **Gamma:** risk that accelerates near expiry and near your strikes. Closer to expiry = higher gamma risk = faster losses if breached.
+
+---
+
+## 5. Configuration parameters — recommended ranges and why
+
+This is the "1 to 100" setup. Values are starting points to validate, not promises.
+
+| Parameter | Recommended | Why |
+|---|---|---|
+| **Underlying** | Nifty 50 (most liquid) | Tight spreads, deep liquidity reduce slippage |
+| **Expiry / DTE** | 2–7 days to expiry | Weekly expiries decay fast (good theta) but watch gamma; further DTE = lower gamma risk |
+| **Entry time** | ~09:45–11:00 IST | Let the opening volatility settle; avoid the first 15 min |
+| **Short strike delta** | **~0.15–0.20** each side | ≈ 80–85% chance each short finishes OTM → high POP. THE key setting |
+| **Strike distance (alt.)** | ≈ 1 expected move (≈ ATM straddle price) | Equivalent way to place strikes by volatility, not a fixed point count |
+| **Wing width** | 100–200 pts (Nifty) | Wide enough for meaningful credit; defines max loss. Avoid tiny 50-pt wings (poor risk-reward) |
+| **Profit target** | **50% of net credit** | Take profit early; don't squeeze the last rupee where gamma risk is highest |
+| **Stop loss** | **1×–1.5× net credit**, or exit if a short strike is breached | Keeps the loss controlled so breakeven win rate stays ~67–75% |
+| **IV filter** | Enter only when IV is elevated (e.g. IV Rank > 30–50) | You sell premium — richer premium = better edge. Don't sell in low IV |
+| **Trend filter** | Skip strongly trending days | Condors get run over in trends. Use ADX or an open-range/gap check |
+| **Gap filter** | Skip if overnight gap > ~1% | Big gaps blow past strikes before you can react |
+| **Position size** | Risk **1–2% of capital** per trade (by max loss) | One worst-case loss shouldn't dent the account |
+| **Max trades/day** | 1–3 | Quality over quantity; avoid overtrading |
+| **Max daily loss** | 2–3% of capital → hard stop | Survive bad days |
+| **Max consecutive losses** | 3 → pause | Forces a reset when the regime turns against you |
+
+### Adjustment rules (keep them mechanical)
+- If one side is tested (price approaches a short strike), either **close the whole trade at your stop** (simplest, recommended for beginners) or **roll the untested side closer** to collect more credit (advanced).
+- Never "average down" or add to a losing condor hoping it recovers — that's how small losses become account-ending ones.
+- Always exit before expiry day's final gamma spike if profit isn't already taken.
+
+---
+
+## 6. The recommended "best practice" configuration (summary)
+
+A solid, validate-this starting setup for a Nifty iron condor:
+
+- **Strikes:** short legs at ~0.15 delta both sides; wings 150 points out.
+- **Profit target:** close at 50% of credit collected.
+- **Stop loss:** close at 1× credit lost, or immediately if a short strike is breached.
+- **Entry filter:** only when IV Rank > 30 **and** the day is range-bound (no strong trend, gap < 1%).
+- **Entry window:** ~09:45–11:00 IST.
+- **Sizing:** quantity set so max loss = 1–2% of capital.
+- **Limits:** max 2 trades/day, daily loss stop at 2–3%, pause after 3 losses.
+
+With ~0.15-delta strikes, POP is roughly 68–72%; with a 50%/1× target/stop, breakeven win rate is ~67%. That gives a **thin positive edge before costs** — which is exactly why cost control (step 8) and IV selection are decisive.
+
+---
+
+## 7. Honest expectations (read this twice)
+
+- A well-built index iron condor typically wins **65–80%** of trades — but the losses are bigger than the wins, so a high win rate does **not** mean profit.
+- After costs (STT, exchange fees, GST, stamp duty — and brokerage if any), expectancy on a vanilla condor is **near zero or slightly negative.** Your job is to push it positive through IV timing, regime selection, and minimizing costs.
+- There is **no win rate target of 90%+** that is both real and survivable. If a backtest shows it, you have overfit and it will fail live.
+- The realistic, professional goal is a **steady positive expectancy with controlled drawdowns**, not a perfect strategy.
+
+---
+
+## 8. Cost control (often the difference between win and loss)
+
+- Use a **zero/low-brokerage broker** — brokerage of ₹100/trade can turn a winning condor into a loser. Statutory charges (STT, GST, exchange, stamp) still apply and can't be avoided.
+- **Cost-aware entry rule:** before entering, compute `profit at target − all round-trip charges`. If that isn't clearly positive, skip the trade.
+- Fewer, higher-quality trades beat many marginal ones, because each trade carries fixed costs.
+
+---
+
+## 9. Validation protocol (do this before risking money)
+
+1. **Backtest on real option prices** (not synthetic/model prices) across many expiries and different market regimes — trending, ranging, high-IV, low-IV.
+2. Confirm **positive expectancy after all costs** over hundreds of trades.
+3. **Paper trade** the exact config live for several uninterrupted sessions.
+4. Only then trade small real size; scale up only after consistent results.
+5. **Monitor for edge decay** — if win rate or expectancy drifts down over time, stop and re-evaluate. Edges don't last forever.
+
+---
+
+## 10. How iron condors blow up (avoid these)
+
+- **Strikes too close to price** → frequent breaches, low POP.
+- **Tiny profit target with huge stop** → needs an impossible win rate to break even.
+- **No regime filter** → selling condors into a trending or news-driven day.
+- **Oversizing** → one breached condor wipes out months of small wins.
+- **Holding into expiry-day gamma** → a late move turns a winner into a large loser in minutes.
+- **Selling in low IV** → thin premium, poor reward for the risk taken.
+- **Revenge trading / averaging down** → turning a controlled loss into a catastrophic one.
+
+---
+
+### Final word
+The configuration above is the closest honest thing to a "max success" setup: it aligns probability of profit with breakeven win rate, sells premium only when it's rich, avoids the regimes that destroy condors, and controls costs and size. But the configuration is only a hypothesis until **your own backtest on real data proves positive expectancy after costs.** Build it, test it honestly, keep it if it works, and replace it if it doesn't. That discipline — not any single setting — is what separates traders who last from those who don't.
