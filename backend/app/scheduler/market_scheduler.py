@@ -770,6 +770,10 @@ class MarketScheduler:
             logger.error("state.update spot_price failed: %s", exc, exc_info=True)
             return
 
+        # Feed spot + IV into the engine's trend / IV-rank tracker.
+        if self.engine is not None:
+            self.engine.record_market_tick(spot, iv)
+
         await self.event_bus.publish(
             "TICK",
             {
