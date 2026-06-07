@@ -975,13 +975,16 @@ class MarketScheduler:
         Used only when India VIX is unavailable.
         Caps at 2 API calls; returns None on any failure.
         """
-        from backend.app.strategy.iron_condor_strategy import IronCondorStrategy
         from backend.app.broker.samco_client import get_weekly_expiry
         from datetime import date as _date
 
         try:
-            strategy = IronCondorStrategy()
-            rounding = int(getattr(strategy, "strike_rounding", 50))
+            strategy = (
+                self.engine.iron_condor_strategy
+                if self.engine and getattr(self.engine, "iron_condor_strategy", None)
+                else None
+            )
+            rounding = int(getattr(strategy, "strike_rounding", 50)) if strategy else 50
             atm = int(round(spot / rounding) * rounding)
             expiry = get_weekly_expiry(_date.today()).strftime("%Y-%m-%d")
             dte_days = (
