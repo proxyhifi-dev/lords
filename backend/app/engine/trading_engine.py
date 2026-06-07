@@ -1214,6 +1214,150 @@ class TradingEngine:
 
         return round(close_premium, 2)
 
+    async def _check_and_execute_leg_roll(
+        self,
+        trade: dict[str, Any],
+        current_time: datetime,
+    ) -> bool:
+        """Check if any short leg should be rolled and execute the roll if so.
+
+        Returns True if a roll was executed (caller should skip normal exit logic
+        for this tick and re-evaluate next cycle with updated strikes).
+        """
+        legs = trade.get("legs") or []
+        spot = trade.get("current_spot") or trade.get("spot_at_entry") or 0.0
+        spot = float(spot)
+        if spot == 0.0:
+            return False
+
+        # Only check short legs (the ones that can be threatened).
+        short_legs = [l for l in legs if str(l.get("side", "")).upper() == "SELL"]
+        if not short_legs:
+            return False
+
+        iv = float(trade.get("iv_at_entry") or self.iron_condor_strategy.assumed_iv)
+        dte_days = int(trade.get("dte_at_entry") or self.iron_condor_strategy.ic_days_to_expiry)
+        original_credit = float(trade.get("entry_price") or 0.0)
+
+        # Per-trade roll tracker — max 1 roll per leg per calendar day.
+        rolls_today: dict[str, str] = trade.get("rolls_today") or {}
+        today_str = current_time.date().isoformat()
+
+        rolled_any = False
+        for leg in short_legs:
+            leg_name = leg.get("name") or leg.get("symbol") or ""
+            opt_type = str(leg.get("option_type") or leg.get("opt_type") or "CE").upper()
+            strike = float(leg.get("strike") or leg.get("entry_price") or 0.0)
+
+            # Skip if this leg was already rolled today.
+            if rolls_today.get(leg_name) == today_str:
+                continue
+
+            roll_signal = self.iron_condor_strategy.should_roll_leg(
+                spot=spot,
+                threatened_strike=strike,
+                opt_type=opt_type,
+                iv=iv,
+                dte_days=dte_days,
+                original_credit=original_credit,
+            )
+            if not roll_signal.get("should_roll"):
+                continue
+
+            new_strike = roll_signal.get("new_strike")
+            if not new_strike:
+                continue
+
+            # Determine new symbol.
+            expiry_raw = str(trade.get("expiry") or "")
+            expiry_tag = expiry_raw.replace("-", "")  # e.g. "20260612"
+            new_symbol = f"NIFTY{expiry_tag}{int(new_strike)}{opt_type}"
+            old_symbol = str(leg.get("symbol") or leg.get("name") or "")
+
+            logger.info(
+                "IC leg roll: %s strike=%.0f → %s new_strike=%.0f roll_cost=%.2f",
+                old_symbol,
+                strike,
+                new_symbol,
+                new_strike,
+                roll_signal.get("roll_cost", 0.0),
+            )
+
+            # Step 1: BUY back the threatened short.
+            buy_result = await self.broker_client.place_order(
+                symbol=old_symbol,
+                exchange="NFO",
+                side="BUY",
+                qty=int(trade.get("qty") or 1),
+                order_type="MARKET",
+            )
+            if not buy_result or not getattr(buy_result, "success", True) is not False:
+                if hasattr(buy_result, "success") and buy_result.success is False:
+                    logger.error("IC leg roll BUY-back failed for %s — aborting roll", old_symbol)
+                    continue
+
+            buy_price = float(getattr(buy_result, "avg_price", None) or roll_signal.get("current_price", 0.0))
+
+            # Step 2: SELL the new further-OTM short.
+            sell_result = await self.broker_client.place_order(
+                symbol=new_symbol,
+                exchange="NFO",
+                side="SELL",
+                qty=int(trade.get("qty") or 1),
+                order_type="MARKET",
+            )
+            if not sell_result or (hasattr(sell_result, "success") and sell_result.success is False):
+                # Emergency rollback: re-sell the old strike to restore the hedge.
+                logger.error(
+                    "IC leg roll SELL failed for %s — rolling back: re-selling %s",
+                    new_symbol,
+                    old_symbol,
+                )
+                await self.broker_client.place_order(
+                    symbol=old_symbol,
+                    exchange="NFO",
+                    side="SELL",
+                    qty=int(trade.get("qty") or 1),
+                    order_type="MARKET",
+                )
+                continue
+
+            sell_price = float(getattr(sell_result, "avg_price", None) or 0.0)
+
+            # Step 3: Update the leg in the trade dict.
+            leg["symbol"] = new_symbol
+            leg["name"] = new_symbol
+            leg["strike"] = new_strike
+            leg["entry_price"] = sell_price  # new credit received for this leg
+            leg["rolled_from"] = old_symbol
+            leg["rolled_buy_price"] = buy_price
+
+            # Adjust overall entry_price by the net roll debit/credit.
+            roll_net = sell_price - buy_price  # positive = credit, negative = debit
+            old_entry = float(trade.get("entry_price") or 0.0)
+            trade["entry_price"] = round(old_entry + roll_net, 2)
+
+            # Record roll for today so we don't roll the same leg again.
+            rolls_today[leg_name] = today_str
+            rolled_any = True
+
+            logger.info(
+                "IC leg roll complete: %s→%s buy_back=%.2f new_sell=%.2f net=%.2f new_entry_price=%.2f",
+                old_symbol,
+                new_symbol,
+                buy_price,
+                sell_price,
+                roll_net,
+                trade["entry_price"],
+            )
+
+        if rolled_any:
+            trade["rolls_today"] = rolls_today
+            trade["legs"] = legs
+            await self.state_manager.update(active_trade=trade)
+
+        return rolled_any
+
     async def _exit_iron_condor_trade(
         self,
         trade: dict[str, Any],
@@ -1271,6 +1415,8 @@ class TradingEngine:
                 float(latest_trade["entry_price"]),
                 float(actual_exit_premium),
                 int(latest_trade["qty"]),
+                entry_legs=latest_trade.get("legs") or [],
+                exit_legs=exit_legs,
             )
 
             gross_pnl = round(float(pnl.get("gross_pnl", 0.0)), 2)
@@ -1907,6 +2053,17 @@ class TradingEngine:
             )
             return
 
+        # Ratchet stop: once 50% profit was locked in, exit if premium retraces to breakeven.
+        if updated_trade.get("ratchet_breakeven_active"):
+            if current_premium >= float(updated_trade["entry_price"]):
+                logger.warning(
+                    "IC ratchet stop triggered: premium=%.2f retraced to entry=%.2f",
+                    current_premium,
+                    float(updated_trade["entry_price"]),
+                )
+                await self._exit_iron_condor_trade(updated_trade, "RATCHET_STOP", current_premium)
+                return
+
         reason = self.iron_condor_strategy.get_exit_reason(
             entry_time,
             current_time,
@@ -1933,13 +2090,26 @@ class TradingEngine:
             action = partial.get("action", "hold")
             if action in ("scale_exit_75pct", "scale_exit_eod_lock"):
                 reason = action
-            elif action != "hold":
+            elif action == "scale_exit_50pct":
+                if not updated_trade.get("ratchet_breakeven_active"):
+                    updated_trade["ratchet_breakeven_active"] = True
+                    await self.state_manager.update(active_trade=updated_trade)
+                    logger.info(
+                        "IC ratchet stop activated at 50%% profit=%.1f%% — stop moved to breakeven entry=%.2f",
+                        partial.get("profit_pct", 0.0),
+                        float(updated_trade["entry_price"]),
+                    )
+            elif action == "scale_exit_25pct":
                 logger.info(
-                    "IC partial scale-out signal action=%s profit=%.1f%% elapsed=%.0f%% — informational",
-                    action,
+                    "IC partial 25%% signal profit=%.1f%% elapsed=%.0f%% — holding",
                     partial.get("profit_pct", 0.0),
                     elapsed_pct * 100,
                 )
+
+        if not reason:
+            rolled = await self._check_and_execute_leg_roll(updated_trade, current_time)
+            if rolled:
+                return  # re-evaluate next tick with updated strikes
 
         if reason:
             logger.info(
