@@ -859,11 +859,18 @@ class TradingEngine:
         logger.info("IC expected-move filter passed diag=%s", em_diag)
 
         effective_iv = live_iv or float(getattr(self.iron_condor_strategy, "assumed_iv", 0.15))
-        if dte_days and effective_iv:
+        effective_dte = dte_days
+        if not effective_dte:
+            effective_dte = float(getattr(settings, "ic_days_to_expiry", 7))
+            logger.warning(
+                "IC score gate: dte_days unavailable, falling back to ic_days_to_expiry=%.0f",
+                effective_dte,
+            )
+        if effective_dte and effective_iv:
             entry_score = self.iron_condor_strategy.score_entry(
                 spot=spot,
                 iv=effective_iv,
-                dte_days=float(dte_days),
+                dte_days=float(effective_dte),
             )
             if not entry_score.get("entry_ok", True):
                 logger.warning(
