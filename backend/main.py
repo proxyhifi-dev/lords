@@ -12,16 +12,24 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+_API_SECRET = os.getenv("API_SECRET_KEY", "")
+
+
+async def _require_api_key(x_api_key: str = Header(default="")) -> None:
+    if _API_SECRET and x_api_key != _API_SECRET:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 from backend.app.core.config_loader import get_settings
 from backend.app.core.math_engine import full_analytics
@@ -713,10 +721,13 @@ app = FastAPI(title="Lords Bot", version="6.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
 )
 
 frontend_path = Path(settings.frontend_dir)
@@ -946,7 +957,7 @@ async def trades():
 
 
 @app.post("/api/start")
-async def start():
+async def start(_: None = Depends(_require_api_key)):
     from backend.app.scheduler.market_scheduler import scheduler
 
     if scheduler.running:
@@ -957,7 +968,7 @@ async def start():
 
 
 @app.post("/api/stop")
-async def stop():
+async def stop(_: None = Depends(_require_api_key)):
     from backend.app.scheduler.market_scheduler import scheduler
 
     if not scheduler.running:
@@ -968,13 +979,15 @@ async def stop():
 
 
 @app.post("/api/trading-mode")
-async def set_mode(body: dict):
+async def set_mode(body: dict, _: None = Depends(_require_api_key)):
     from backend.app.scheduler.market_scheduler import scheduler
 
-    if body.get("mode", "").upper() == "LIVE":
+    requested = body.get("mode", "").upper()
+    if requested == "LIVE":
         return _safe_json_response(
             {
                 "status": "error",
+                "mode": "PAPER",
                 "message": "LIVE mode cannot be enabled via API. Set MODE=live in .env and restart.",
             },
             status_code=400,
@@ -985,7 +998,7 @@ async def set_mode(body: dict):
 
 
 @app.post("/api/trading-enabled")
-async def set_trading(body: dict):
+async def set_trading(body: dict, _: None = Depends(_require_api_key)):
     from backend.app.scheduler.market_scheduler import scheduler
 
     enabled = bool(body.get("enabled", True))
@@ -995,7 +1008,7 @@ async def set_trading(body: dict):
 
 
 @app.post("/api/trade/flatten")
-async def flatten():
+async def flatten(_: None = Depends(_require_api_key)):
     from backend.app.scheduler.market_scheduler import scheduler
 
     return _safe_json_response(await scheduler.flatten_position())
@@ -1010,7 +1023,7 @@ async def reconciliation_status():
 
 
 @app.post("/api/reconcile")
-async def reconcile_now():
+async def reconcile_now(_: None = Depends(_require_api_key)):
     from backend.app.scheduler.market_scheduler import scheduler
 
     result = await scheduler._reconciler.run_once()
@@ -1018,7 +1031,7 @@ async def reconcile_now():
 
 
 @app.post("/api/emergency-flatten")
-async def emergency_flatten():
+async def emergency_flatten(_: None = Depends(_require_api_key)):
     from backend.app.scheduler.market_scheduler import scheduler
 
     flatten_result = await scheduler.flatten_position()
