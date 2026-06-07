@@ -226,7 +226,6 @@ class Settings:
     nifty_exchange: str = "NSE"
 
     poll_seconds: int = 1
-    signal_cooldown: int = 86400
     gap_threshold: float = 5.0
     trend_filter_enabled: bool = False
     skip_first_candle: bool = True
@@ -485,7 +484,6 @@ def get_settings() -> Settings:
         nifty_exchange=_strip_value(_get(combined, "NIFTY_EXCHANGE", default="NSE")),
 
         poll_seconds=_parse_int(_get(combined, "POLL_SECONDS", default=1), 1),
-        signal_cooldown=_parse_int(_get(combined, "SIGNAL_COOLDOWN", default=86400), 86400),
         gap_threshold=_parse_float(_get(combined, "GAP_THRESHOLD", default=5.0), 5.0),
         trend_filter_enabled=_parse_bool(_get(combined, "TREND_FILTER_ENABLED", default=False), False),
         skip_first_candle=_parse_bool(_get(combined, "SKIP_FIRST_CANDLE", default=True), True),
