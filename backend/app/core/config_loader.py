@@ -187,8 +187,8 @@ class Settings:
     ic_exit_order_count: int = 4
     ic_platform_charges: float = 100.0
     ic_stt_rate: float = 0.0015
-    ic_stt_sell_rate: float = 0.0005
-    ic_exchange_txn_rate: float = 0.00053
+    ic_stt_sell_rate: float = 0.0015
+    ic_exchange_txn_rate: float = 0.00035
     ic_sebi_rate: float = 0.000001
     ic_gst_rate: float = 0.18
     ic_stamp_duty_rate: float = 0.00003
@@ -437,10 +437,10 @@ def get_settings() -> Settings:
         ic_platform_charges=_parse_float(_get(combined, "IC_PLATFORM_CHARGES", default=100.0), 100.0),
         ic_stt_rate=_parse_float(_get(combined, "IC_STT_RATE", default=0.0015), 0.0015),
         ic_stt_sell_rate=_parse_float(
-            _get(combined, "IC_STT_SELL_RATE", "IC_STT_RATE", default=0.0005),
-            0.0005,
+            _get(combined, "IC_STT_SELL_RATE", "IC_STT_RATE", default=0.0015),
+            0.0015,
         ),
-        ic_exchange_txn_rate=_parse_float(_get(combined, "IC_EXCHANGE_TXN_RATE", default=0.00053), 0.00053),
+        ic_exchange_txn_rate=_parse_float(_get(combined, "IC_EXCHANGE_TXN_RATE", default=0.00035), 0.00035),
         ic_sebi_rate=_parse_float(_get(combined, "IC_SEBI_RATE", default=0.000001), 0.000001),
         ic_gst_rate=_parse_float(_get(combined, "IC_GST_RATE", default=0.18), 0.18),
         ic_stamp_duty_rate=_parse_float(_get(combined, "IC_STAMP_DUTY_RATE", default=0.00003), 0.00003),
