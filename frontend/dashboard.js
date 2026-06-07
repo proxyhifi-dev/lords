@@ -515,7 +515,7 @@ function updateICPosition(data) {
       <div class="ic-field">
         <div class="ic-field-label">REQ GROSS</div>
         <div class="ic-field-value ${targetRequiredGross > 0 ? 'accent' : 'neutral'}">
-          ${targetRequiredGross > 0 ? `â‚¹${targetRequiredGross.toFixed(2)}` : 'â€”'}
+          ${targetRequiredGross > 0 ? `₹${targetRequiredGross.toFixed(2)}` : '—'}
         </div>
       </div>
     </div>
@@ -1292,12 +1292,17 @@ async function stopBot() {
 }
 
 async function setMode(mode) {
-  await apiPost('/api/trading-mode', { mode });
+  const data = await apiPost('/api/trading-mode', { mode });
+  if (data.status !== 'ok') {
+    showAlert(data.message || 'Mode switch failed', 'error');
+    return;
+  }
 
-  document.getElementById('btn-paper').className = mode === 'PAPER' ? 'btn btn--active' : 'btn';
-  document.getElementById('btn-live').className = mode === 'LIVE' ? 'btn btn--active' : 'btn';
+  const active = (data.mode || mode).toUpperCase();
+  document.getElementById('btn-paper').className = active === 'PAPER' ? 'btn btn--active' : 'btn';
+  document.getElementById('btn-live').className = active === 'LIVE' ? 'btn btn--active' : 'btn';
 
-  showAlert(`Mode set to ${mode}`, mode === 'LIVE' ? 'error' : 'info');
+  showAlert(`Mode set to ${active}`, active === 'LIVE' ? 'error' : 'info');
 }
 
 async function toggleTrading() {
@@ -1338,7 +1343,10 @@ async function apiPost(endpoint, body = {}) {
   try {
     const res = await fetch(`${API}${endpoint}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': localStorage.getItem('lords_api_key') || '',
+      },
       body: JSON.stringify(body),
     });
 
