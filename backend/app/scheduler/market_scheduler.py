@@ -796,7 +796,6 @@ class MarketScheduler:
             "signal": "IRON_CONDOR",
             "spot_price": spot,
             "size_label": "FULL",
-            "trend_score": 0,
         }
 
         await self.state.update(signal="IRON_CONDOR", signal_meta=payload)
@@ -838,6 +837,18 @@ class MarketScheduler:
                 )
             elif bool(getattr(settings, "ic_skip_expiry_day_entry", True)):
                 logger.info("IC gate blocked: expiry day %s", current_day.isoformat())
+                return False
+
+        # Block entry on binary-event blackout dates (RBI, Budget, Fed, elections).
+        # Configure IC_BLACKOUT_DATES as a comma-separated list of YYYY-MM-DD strings.
+        _blackout_raw = str(getattr(settings, "ic_blackout_dates", "") or "")
+        if _blackout_raw.strip():
+            _today_iso = current_day.isoformat()
+            _blackout_set = {d.strip() for d in _blackout_raw.split(",") if d.strip()}
+            if _today_iso in _blackout_set:
+                logger.warning(
+                    "IC gate blocked: today %s is a blackout date (binary event)", _today_iso
+                )
                 return False
 
         if not state.trading_enabled:
