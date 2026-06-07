@@ -1094,6 +1094,9 @@ class TradingEngine:
             "entry_ltp": round(actual_net_premium, 2),
             "quote_net_premium": round(snapshot_net_premium, 2),
             "entry_time": datetime.now(timezone.utc).isoformat(),
+            "spot_at_entry": float(spot),
+            "iv_at_entry": float(live_iv or 0.0),
+            "dte_at_entry": int(dte_days or getattr(settings, "ic_days_to_expiry", 7)),
             "status": "OPEN",
             "size_label": payload.get("size_label", "FULL"),
             "order_ids": order_ids,
@@ -1270,7 +1273,7 @@ class TradingEngine:
             return False
 
         iv = float(trade.get("iv_at_entry") or self.iron_condor_strategy.assumed_iv)
-        dte_days = int(trade.get("dte_at_entry") or self.iron_condor_strategy.ic_days_to_expiry)
+        dte_days = int(trade.get("dte_at_entry") or self.iron_condor_strategy.days_to_expiry_value)
         original_credit = float(trade.get("entry_price") or 0.0)
 
         # Per-trade roll tracker — max 1 roll per leg per calendar day.
@@ -1302,61 +1305,65 @@ class TradingEngine:
             if not new_strike:
                 continue
 
-            # Determine new symbol.
             expiry_raw = str(trade.get("expiry") or "")
-            expiry_tag = expiry_raw.replace("-", "")  # e.g. "20260612"
-            new_symbol = f"NIFTY{expiry_tag}{int(new_strike)}{opt_type}"
             old_symbol = str(leg.get("symbol") or leg.get("name") or "")
 
-            logger.info(
-                "IC leg roll: %s strike=%.0f → %s new_strike=%.0f roll_cost=%.2f",
-                old_symbol,
-                strike,
-                new_symbol,
-                new_strike,
-                roll_signal.get("roll_cost", 0.0),
-            )
-
-            # Step 1: BUY back the threatened short.
-            buy_result = await self.broker_client.place_order(
-                symbol=old_symbol,
-                exchange="NFO",
-                side="BUY",
-                qty=int(trade.get("qty") or 1),
-                order_type="MARKET",
-            )
-            if not buy_result or not getattr(buy_result, "success", True) is not False:
-                if hasattr(buy_result, "success") and buy_result.success is False:
-                    logger.error("IC leg roll BUY-back failed for %s — aborting roll", old_symbol)
-                    continue
-
-            buy_price = float(getattr(buy_result, "avg_price", None) or roll_signal.get("current_price", 0.0))
-
-            # Step 2: SELL the new further-OTM short.
-            sell_result = await self.broker_client.place_order(
-                symbol=new_symbol,
-                exchange="NFO",
-                side="SELL",
-                qty=int(trade.get("qty") or 1),
-                order_type="MARKET",
-            )
-            if not sell_result or (hasattr(sell_result, "success") and sell_result.success is False):
-                # Emergency rollback: re-sell the old strike to restore the hedge.
+            # Resolve new symbol via broker chain lookup — never construct manually.
+            new_symbol = await self._resolve_option_symbol(int(new_strike), opt_type, expiry_raw)
+            if not new_symbol:
                 logger.error(
-                    "IC leg roll SELL failed for %s — rolling back: re-selling %s",
-                    new_symbol,
-                    old_symbol,
-                )
-                await self.broker_client.place_order(
-                    symbol=old_symbol,
-                    exchange="NFO",
-                    side="SELL",
-                    qty=int(trade.get("qty") or 1),
-                    order_type="MARKET",
+                    "IC leg roll: could not resolve symbol for new_strike=%s type=%s expiry=%s — skipping",
+                    new_strike, opt_type, expiry_raw,
                 )
                 continue
 
-            sell_price = float(getattr(sell_result, "avg_price", None) or 0.0)
+            logger.info(
+                "IC leg roll: %s strike=%.0f -> %s new_strike=%.0f roll_cost=%.2f",
+                old_symbol, strike, new_symbol, new_strike,
+                roll_signal.get("roll_cost", 0.0),
+            )
+
+            # Step 1: BUY back the threatened short via execution_manager (handles retries + paper mode).
+            buy_exec = await self.execution_manager.execute_order({
+                "signal": "IRON_CONDOR_ROLL",
+                "symbol": old_symbol,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "quantity": int(trade.get("qty") or 1),
+                "side": "BUY",
+            })
+            if buy_exec.is_uncertain or buy_exec.state != OrderState.FILLED:
+                logger.error(
+                    "IC leg roll BUY-back failed for %s state=%s — aborting roll",
+                    old_symbol, buy_exec.state,
+                )
+                continue
+
+            buy_price = float(buy_exec.avg_price or roll_signal.get("current_price", 0.0))
+
+            # Step 2: SELL the new further-OTM short.
+            sell_exec = await self.execution_manager.execute_order({
+                "signal": "IRON_CONDOR_ROLL",
+                "symbol": new_symbol,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "quantity": int(trade.get("qty") or 1),
+                "side": "SELL",
+            })
+            if sell_exec.is_uncertain or sell_exec.state != OrderState.FILLED:
+                # Emergency rollback: re-sell the old strike to restore the hedge.
+                logger.error(
+                    "IC leg roll SELL failed for %s state=%s — rolling back: re-selling %s",
+                    new_symbol, sell_exec.state, old_symbol,
+                )
+                await self.execution_manager.execute_order({
+                    "signal": "IRON_CONDOR_ROLL_ROLLBACK",
+                    "symbol": old_symbol,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "quantity": int(trade.get("qty") or 1),
+                    "side": "SELL",
+                })
+                continue
+
+            sell_price = float(sell_exec.avg_price or 0.0)
 
             # Step 3: Update the leg in the trade dict.
             leg["symbol"] = new_symbol
@@ -1963,12 +1970,12 @@ class TradingEngine:
                 continue
 
             if trade.get("strategy") == "IRON_CONDOR":
-                await self._monitor_iron_condor_trade(trade)
+                await self._monitor_iron_condor_trade(trade, spot=float(state.spot_price or 0.0))
                 continue
 
             await self._monitor_directional_trade(trade)
 
-    async def _monitor_iron_condor_trade(self, trade: dict[str, Any]) -> None:
+    async def _monitor_iron_condor_trade(self, trade: dict[str, Any], spot: float = 0.0) -> None:
         if not self.iron_condor_strategy:
             return
 
@@ -2013,6 +2020,7 @@ class TradingEngine:
             "current_premium": round(float(current_premium), 2),
             "current_legs": current_legs,
             "current_pricing_source": pricing_source,
+            "current_spot": spot or float(trade.get("spot_at_entry") or 0.0),
         }
 
         await self.state_manager.update(active_trade=updated_trade, live_pnl=live_pnl)
@@ -2983,7 +2991,6 @@ class TradingEngine:
 
     def record_market_tick(self, spot: float, iv: float | None) -> None:
         """Called by the scheduler every tick to feed trend and IV-rank tracking."""
-        from datetime import date as _date
         today = datetime.now(IST).date()
         if self._session_open_date != today:
             self._session_open_date = today
