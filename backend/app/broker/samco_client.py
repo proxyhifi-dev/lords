@@ -137,7 +137,7 @@ class PaperBridge:
         center = int(round(center / step) * step)
 
         rows = []
-        for offset in range(-5, 6):
+        for offset in range(-12, 13):
             k = center + offset * step
             rows.append({
                 "tradingSymbol": f"{search_symbol}{expiry_tag}{k}{option_type}",
