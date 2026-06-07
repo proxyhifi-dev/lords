@@ -120,7 +120,36 @@ class PaperBridge:
         }
 
     def get_option_chain(self, **kwargs) -> dict:
-        return {"status": "Success", "optionChainDetails": []}
+        search_symbol = str(kwargs.get("search_symbol_name") or "NIFTY").replace(" ", "")
+        expiry_date = str(kwargs.get("expiry_date") or "")
+        strike_raw = str(kwargs.get("strike_price") or "0").strip()
+        option_type = str(kwargs.get("option_type") or "CE").upper()
+        expiry_tag = expiry_date.replace("-", "")
+
+        try:
+            center = int(float(strike_raw)) if strike_raw not in ("0", "", "None") else 25000
+        except (ValueError, TypeError):
+            center = 25000
+        if center <= 0:
+            center = 25000
+
+        step = 50
+        center = int(round(center / step) * step)
+
+        rows = []
+        for offset in range(-5, 6):
+            k = center + offset * step
+            rows.append({
+                "tradingSymbol": f"{search_symbol}{expiry_tag}{k}{option_type}",
+                "strikePrice": str(k),
+                "optionType": option_type,
+                "expiryDate": expiry_date,
+                "lastTradedPrice": "50.00",
+                "bestBidPrice": "49.50",
+                "bestAskPrice": "50.50",
+            })
+
+        return {"status": "Success", "optionChainDetails": rows}
 
     def place_order(self, body: dict | None = None) -> dict:
         return {"status": "Success", "orderNumber": _next_paper_id(), "body": body or {}}
