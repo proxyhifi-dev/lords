@@ -59,7 +59,7 @@ class IronCondorStrategy:
         )
 
         self.short_distance = self._cfg_int("IC_SHORT_DISTANCE", "ic_short_distance", 250)
-        self.wing_width = self._cfg_int("IC_WING_WIDTH", "ic_wing_width", 100)
+        self.wing_width = self._cfg_int("IC_WING_WIDTH", "ic_wing_width", 150)
         self.strike_rounding = max(
             1,
             self._cfg_int("IC_STRIKE_ROUNDING", "ic_strike_rounding", 50),
@@ -247,8 +247,8 @@ class IronCondorStrategy:
 
         # ── Quantitative / advanced strategy ────────────────────────────────
         self.target_short_delta = self._cfg_float(
-            "IC_TARGET_SHORT_DELTA", "ic_target_short_delta", 0.10,
-        )  # 10-delta ≈ 85% PoP; lower = safer OTM, less credit
+            "IC_TARGET_SHORT_DELTA", "ic_target_short_delta", 0.16,
+        )  # 16-delta ≈ 80% PoP; better premium/charge ratio than 10-delta
         self.min_entry_score = self._cfg_float(
             "IC_MIN_ENTRY_SCORE", "ic_min_entry_score", 60.0,
         )  # gate: don't enter if composite score < this
