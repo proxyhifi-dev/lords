@@ -138,6 +138,12 @@ class TradingEngine:
         self._ic_quote_cache: dict[str, dict[str, Any]] = {}
         self._throttled_log_times: dict[str, datetime] = {}
 
+        # Rolling market-tick history for trend and IV-rank computation.
+        self._spot_history: deque[float] = deque(maxlen=60)   # ~60 s at 1-s poll
+        self._engine_iv_history: deque[float] = deque(maxlen=120)  # ~2 min
+        self._session_open_spot: float | None = None
+        self._session_open_date: object | None = None  # datetime.date
+
         self._ic_fallback_streak = 0
         self._ic_fallback_alert_level = 0
         self._directional_bad_quote_streak = 0
@@ -755,6 +761,23 @@ class TradingEngine:
             logger.warning("Cannot enter Iron Condor: spot_price missing")
             return
 
+        # Gap / opening-range filter: skip if spot has moved too far from session open.
+        if self._session_open_spot and self._session_open_spot > 0:
+            gap_pct = abs(spot - self._session_open_spot) / self._session_open_spot
+            skip_gap_threshold = float(getattr(settings, "ic_skip_gap_pct", 0.007))
+            if gap_pct > skip_gap_threshold:
+                logger.warning(
+                    "IC entry blocked by gap filter: spot moved %.3f%% from session open"
+                    " (threshold %.3f%%) — likely a trend or gap day",
+                    gap_pct * 100,
+                    skip_gap_threshold * 100,
+                )
+                await self.event_bus.publish(
+                    "IC_ENTRY_REJECTED",
+                    {"reason": "gap_filter", "gap_pct": round(gap_pct, 5)},
+                )
+                return
+
         current_time = datetime.now(IST)
         live_iv = getattr(state, "current_iv", None)
         logger.info(
@@ -867,17 +890,28 @@ class TradingEngine:
                 effective_dte,
             )
         if effective_dte and effective_iv:
+            trend_strength = self._compute_trend_strength()
+            iv_rank = self._compute_session_iv_rank(effective_iv)
+            logger.info(
+                "IC score gate inputs: trend_strength=%.3f iv_rank=%s",
+                trend_strength,
+                f"{iv_rank:.3f}" if iv_rank is not None else "N/A (insufficient history)",
+            )
             entry_score = self.iron_condor_strategy.score_entry(
                 spot=spot,
                 iv=effective_iv,
                 dte_days=float(effective_dte),
+                iv_rank=iv_rank,
+                trend_strength=trend_strength,
             )
             if not entry_score.get("entry_ok", True):
                 logger.warning(
-                    "IC entry rejected by score gate score=%.1f verdict=%s pop=%.1f%%",
+                    "IC entry rejected by score gate score=%.1f verdict=%s pop=%.1f%% trend=%.3f iv_rank=%s",
                     entry_score.get("score", 0.0),
                     entry_score.get("verdict", "unknown"),
                     entry_score.get("pop", 0.0),
+                    trend_strength,
+                    f"{iv_rank:.3f}" if iv_rank is not None else "N/A",
                 )
                 await self.event_bus.publish(
                     "IC_ENTRY_REJECTED",
@@ -2946,6 +2980,36 @@ class TradingEngine:
     def clear_cache(self):
         self._symbol_cache.clear()
         self._ic_quote_cache.clear()
+
+    def record_market_tick(self, spot: float, iv: float | None) -> None:
+        """Called by the scheduler every tick to feed trend and IV-rank tracking."""
+        from datetime import date as _date
+        today = datetime.now(IST).date()
+        if self._session_open_date != today:
+            self._session_open_date = today
+            self._session_open_spot = spot
+        self._spot_history.append(spot)
+        if iv and iv > 0:
+            self._engine_iv_history.append(iv)
+
+    def _compute_trend_strength(self) -> float:
+        """Directional efficiency ratio: 0 = choppy, 1 = strong trend."""
+        prices = list(self._spot_history)
+        if len(prices) < 5:
+            return 0.0
+        price_range = max(prices) - min(prices)
+        net_move = abs(prices[-1] - prices[0])
+        return round(net_move / price_range, 3) if price_range > 1.0 else 0.0
+
+    def _compute_session_iv_rank(self, current_iv: float) -> float | None:
+        """Session-based IV rank (0–1). Returns None if insufficient history."""
+        ivs = list(self._engine_iv_history)
+        if len(ivs) < 10:
+            return None
+        iv_min, iv_max = min(ivs), max(ivs)
+        if iv_max <= iv_min:
+            return None
+        return round(max(0.0, min(1.0, (current_iv - iv_min) / (iv_max - iv_min))), 3)
 
     async def _await_fill_confirmation(
         self,
