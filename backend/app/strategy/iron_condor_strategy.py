@@ -235,7 +235,7 @@ class IronCondorStrategy:
         self.exchange_txn_rate = self._cfg_float(
             "IC_EXCHANGE_TXN_RATE",
             "ic_exchange_txn_rate",
-            0.00053,
+            0.00035,
         )
         self.sebi_rate = self._cfg_float("IC_SEBI_RATE", "ic_sebi_rate", 0.000001)
         self.gst_rate = self._cfg_float("IC_GST_RATE", "ic_gst_rate", 0.18)
@@ -823,6 +823,7 @@ class IronCondorStrategy:
         *,
         spot: float,
         live_iv: float | None = None,
+        iv_rank: float | None = None,
     ) -> tuple[bool, str, dict[str, float | bool | None]]:
         """
         Entry regime filter for Iron Condor.
@@ -870,6 +871,16 @@ class IronCondorStrategy:
         if iv is not None and iv > self.max_live_iv:
             diagnostics["threshold"] = round(float(self.max_live_iv), 4)
             return False, "iv_too_high_for_high_probability_entry", diagnostics
+
+        # IV Rank gate: only sell premium when IV is in the upper half of its
+        # recent range (rank >= 0.50). Below this the credit is historically thin
+        # and reward/risk is poor for short-premium strategies.
+        if iv_rank is not None:
+            min_iv_rank = float(getattr(settings, "ic_min_iv_rank", 0.50))
+            diagnostics["iv_rank"] = round(iv_rank, 3)
+            diagnostics["min_iv_rank"] = round(min_iv_rank, 3)
+            if iv_rank < min_iv_rank:
+                return False, "iv_rank_too_low_for_premium_selling", diagnostics
 
         return True, "ok", diagnostics
 
@@ -1637,9 +1648,21 @@ class IronCondorStrategy:
         qty: int = 0,
         current_spot: float | None = None,
         strikes: dict[str, Any] | None = None,
+        dte_days: float | None = None,
     ) -> str | None:
         if not entry_premium or entry_premium <= 0:
             return None
+
+        # Force exit when within 1 DTE to avoid expiry-day gamma risk.
+        # Weekly NIFTY Tuesday expiry concentrates extreme gamma Monday-Tuesday;
+        # holding through this window is the leading cause of condor blow-ups.
+        if dte_days is not None:
+            force_exit_dte = float(getattr(settings, "ic_force_exit_dte", 1.0))
+            if dte_days < force_exit_dte:
+                logger.warning(
+                    "GAMMA_RISK_EXIT: dte_days=%.2f < threshold=%.2f", dte_days, force_exit_dte
+                )
+                return "GAMMA_RISK_EXIT"
 
         current_time = self._to_ist(current_time)
         current_t = current_time.time()
