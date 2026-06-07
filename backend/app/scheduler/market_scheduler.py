@@ -604,6 +604,7 @@ class MarketScheduler:
                 self._last_manual_flatten_time = 0.0
                 self._latest_iv = None
                 self._iv_history.clear()
+                self._last_iv_update_ts = 0.0
                 self._current_candle_minute = None
                 self._current_candle = None
 
@@ -641,7 +642,11 @@ class MarketScheduler:
                 if reason in persistent_risk_reasons:
                     _extend("RISK_BLOCKED", reason)
 
-        await asyncio.gather(_watch_ic(), _watch_risk())
+        try:
+            await asyncio.gather(_watch_ic(), _watch_risk())
+        finally:
+            self.event_bus.unsubscribe(ic_queue)
+            self.event_bus.unsubscribe(risk_queue)
 
     async def _loop(self) -> None:
         logger.info("MARKET LOOP TASK STARTED")
@@ -990,9 +995,6 @@ class MarketScheduler:
         Used only when India VIX is unavailable.
         Caps at 2 API calls; returns None on any failure.
         """
-        from backend.app.broker.samco_client import get_weekly_expiry
-        from datetime import date as _date
-
         try:
             strategy = (
                 self.engine.iron_condor_strategy
@@ -1001,18 +1003,36 @@ class MarketScheduler:
             )
             rounding = int(getattr(strategy, "strike_rounding", 50)) if strategy else 50
             atm = int(round(spot / rounding) * rounding)
-            expiry = get_weekly_expiry(_date.today()).strftime("%Y-%m-%d")
-            dte_days = (
-                (_date.fromisoformat(expiry) - _date.today()).days
-            )
+            today_ist = now_ist().date()
+            expiry = get_weekly_expiry(today_ist).strftime("%Y-%m-%d")
+            from datetime import date as _date
+            dte_days = (_date.fromisoformat(expiry) - today_ist).days
             if dte_days <= 0:
                 return None
 
-            ce_quote = await asyncio.wait_for(
-                self.broker.get_quote(
-                    symbol_name=f"NIFTY{expiry.replace('-', '')}{atm}CE",
-                    exchange="NFO",
+            # Use the broker's option chain lookup to resolve the tradingSymbol
+            # rather than constructing it manually (manual format doesn't match SAMCO).
+            chain = await asyncio.wait_for(
+                self.broker.get_option_chain(
+                    search_symbol=settings.nifty_symbol,
+                    expiry=expiry,
+                    strike=atm,
                 ),
+                timeout=self.broker_quote_timeout_seconds,
+            )
+            ce_symbol = next(
+                (
+                    row.get("tradingSymbol")
+                    for row in (chain or [])
+                    if str(row.get("optionType") or "").upper() == "CE"
+                    and int(float(row.get("strikePrice") or 0)) == atm
+                ),
+                None,
+            )
+            if not ce_symbol:
+                return None
+            ce_quote = await asyncio.wait_for(
+                self.broker.get_quote(symbol_name=ce_symbol, exchange="NFO"),
                 timeout=self.broker_quote_timeout_seconds,
             )
             ce_price = self.broker.parse_ltp(ce_quote)
