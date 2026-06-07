@@ -177,9 +177,12 @@ class Settings:
     ic_long_otm_pct: float = 0.036
     ic_assumed_iv: float = 0.15
     ic_high_probability_mode: bool = True
-    ic_require_live_iv: bool = False
+    ic_require_live_iv: bool = True
     ic_min_live_iv: float = 0.12
     ic_max_live_iv: float = 0.24
+    ic_min_iv_rank: float = 0.50
+    ic_force_exit_dte: float = 1.0
+    ic_blackout_dates: str = ""
 
     ic_target_short_delta: float = 0.16  # 16-delta ≈ 80% PoP; better premium vs 10-delta
     ic_slippage_per_leg: float = 3.0  # pts deducted per leg for bid-ask slippage
@@ -427,9 +430,12 @@ def get_settings() -> Settings:
             _get(combined, "IC_HIGH_PROBABILITY_MODE", default=True),
             True,
         ),
-        ic_require_live_iv=_parse_bool(_get(combined, "IC_REQUIRE_LIVE_IV", default=False), False),
+        ic_require_live_iv=_parse_bool(_get(combined, "IC_REQUIRE_LIVE_IV", default=True), True),
         ic_min_live_iv=_parse_float(_get(combined, "IC_MIN_LIVE_IV", default=0.12), 0.12),
         ic_max_live_iv=_parse_float(_get(combined, "IC_MAX_LIVE_IV", default=0.24), 0.24),
+        ic_min_iv_rank=_parse_float(_get(combined, "IC_MIN_IV_RANK", default=0.50), 0.50),
+        ic_force_exit_dte=_parse_float(_get(combined, "IC_FORCE_EXIT_DTE", default=1.0), 1.0),
+        ic_blackout_dates=_strip_value(_get(combined, "IC_BLACKOUT_DATES", default="")),
 
         ic_target_short_delta=_parse_float(_get(combined, "IC_TARGET_SHORT_DELTA", default=0.16), 0.16),
         ic_slippage_per_leg=_parse_float(_get(combined, "IC_SLIPPAGE_PER_LEG", default=3.0), 3.0),
