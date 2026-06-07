@@ -857,6 +857,38 @@ class TradingEngine:
             return
 
         logger.info("IC expected-move filter passed diag=%s", em_diag)
+
+        effective_iv = live_iv or float(getattr(self.iron_condor_strategy, "assumed_iv", 0.15))
+        if dte_days and effective_iv:
+            entry_score = self.iron_condor_strategy.score_entry(
+                spot=spot,
+                iv=effective_iv,
+                dte_days=float(dte_days),
+            )
+            if not entry_score.get("entry_ok", True):
+                logger.warning(
+                    "IC entry rejected by score gate score=%.1f verdict=%s pop=%.1f%%",
+                    entry_score.get("score", 0.0),
+                    entry_score.get("verdict", "unknown"),
+                    entry_score.get("pop", 0.0),
+                )
+                await self.event_bus.publish(
+                    "IC_ENTRY_REJECTED",
+                    {
+                        "reason": "entry_score_too_low",
+                        "score": entry_score.get("score"),
+                        "verdict": entry_score.get("verdict"),
+                        "pop": entry_score.get("pop"),
+                    },
+                )
+                return
+            logger.info(
+                "IC entry score passed score=%.1f verdict=%s pop=%.1f%%",
+                entry_score.get("score", 0.0),
+                entry_score.get("verdict", "ok"),
+                entry_score.get("pop", 0.0),
+            )
+
         logger.info("IC entry using expiry=%s", expiry)
         snapshot_legs, snapshot_premiums, snapshot_net_premium = await self._build_iron_condor_snapshot_legs(
             strikes,
@@ -1875,6 +1907,32 @@ class TradingEngine:
             current_premium,
             int(updated_trade.get("qty", 0) or 0),
         )
+
+        if not reason:
+            exit_dt = entry_time.replace(
+                hour=self.iron_condor_strategy.exit_time.hour,
+                minute=self.iron_condor_strategy.exit_time.minute,
+                second=0,
+                microsecond=0,
+            )
+            session_secs = max(1.0, (exit_dt - entry_time).total_seconds())
+            elapsed_pct = max(0.0, min(1.0, (current_time - entry_time).total_seconds() / session_secs))
+            partial = self.iron_condor_strategy.get_partial_exit_signal(
+                entry_premium=float(updated_trade["entry_price"]),
+                current_premium=float(current_premium),
+                qty=int(updated_trade.get("qty", 0) or 0),
+                elapsed_pct=elapsed_pct,
+            )
+            action = partial.get("action", "hold")
+            if action in ("scale_exit_75pct", "scale_exit_eod_lock"):
+                reason = action
+            elif action != "hold":
+                logger.info(
+                    "IC partial scale-out signal action=%s profit=%.1f%% elapsed=%.0f%% — informational",
+                    action,
+                    partial.get("profit_pct", 0.0),
+                    elapsed_pct * 100,
+                )
 
         if reason:
             logger.info(
