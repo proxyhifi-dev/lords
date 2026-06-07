@@ -793,9 +793,12 @@ class TradingEngine:
             logger.warning("IC entry blocked by can_enter_cycle()")
             return
 
+        _regime_iv = live_iv or float(getattr(self.iron_condor_strategy, "assumed_iv", 0.15))
+        regime_iv_rank = self._compute_session_iv_rank(_regime_iv)
         regime_ok, regime_reason, regime_diag = self.iron_condor_strategy.evaluate_entry_regime(
             spot=spot,
             live_iv=live_iv,
+            iv_rank=regime_iv_rank,
         )
         if not regime_ok:
             logger.warning(
@@ -2025,11 +2028,20 @@ class TradingEngine:
 
         await self.state_manager.update(active_trade=updated_trade, live_pnl=live_pnl)
 
+        # Compute live DTE from the trade's stored expiry so get_exit_reason can
+        # trigger the 1-DTE gamma-risk force exit (Gap 4 fix).
+        _trade_expiry = str(updated_trade.get("expiry") or "")
+        current_dte: float | None = None
+        if _trade_expiry:
+            _raw_dte = self._days_to_expiry(_trade_expiry)
+            if _raw_dte is not None:
+                current_dte = float(_raw_dte)
+
         try:
             should_force_exit, reason = self.expiry_safety.should_force_exit(
                 current_time,
                 entry_time,
-                trade_expiry=str(updated_trade.get("expiry") or ""),
+                trade_expiry=_trade_expiry,
             )
         except TypeError:
             should_force_exit, reason = self.expiry_safety.should_force_exit(current_time, entry_time)
@@ -2074,6 +2086,7 @@ class TradingEngine:
                 updated_trade["entry_price"],
                 current_premium,
                 int(updated_trade.get("qty", 0) or 0),
+                dte_days=current_dte,
             )
             _eod_reasons = {"EOD", "EOD_PROFIT_LOCK", "EOD_NO_POSITIVE_TARGET", "EOD_LOSS_CUT"}
             if _time_reason in _eod_reasons:
@@ -2112,6 +2125,7 @@ class TradingEngine:
             updated_trade["entry_price"],
             current_premium,
             int(updated_trade.get("qty", 0) or 0),
+            dte_days=current_dte,
         )
 
         if not reason:
