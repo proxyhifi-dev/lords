@@ -1866,6 +1866,8 @@ class IronCondorStrategy:
         entry_premium: float,
         exit_premium: float,
         qty: int,
+        entry_legs: list[dict] | None = None,
+        exit_legs: list[dict] | None = None,
     ) -> dict[str, float]:
         if entry_premium <= 0 or exit_premium < 0 or qty <= 0:
             return self._zero_charges()
@@ -1875,11 +1877,28 @@ class IronCondorStrategy:
         total_turnover = entry_turnover + exit_turnover
 
         brokerage = self.brokerage_per_order * (self.entry_order_count + self.exit_order_count)
-        # STT applies to sell-side only (NSE options: 0.05% of premium on sell leg).
-        # At entry: selling short_call + short_put → gross shorts ≈ net * qty * 1.6
-        # At exit (closing): selling long_call + long_put → gross longs ≈ exit_net * qty * 0.4
-        # Using net turnover for both is the best approximation without per-leg prices.
-        stt = (entry_turnover + exit_turnover) * self.stt_sell_rate
+
+        # STT: NSE charges on the sell side only.
+        # Per-leg basis (accurate): at entry we SELL shorts; at exit we SELL longs (to close).
+        # Net-premium basis (approximation): used when leg data unavailable.
+        if entry_legs and exit_legs:
+            entry_sell = sum(
+                float(l.get("fill_price") or l.get("entry_price") or l.get("price") or 0.0)
+                for l in entry_legs
+                if str(l.get("side", "")).upper() == "SELL"
+            )
+            # At exit: legs where exit_side==SELL (the longs we sell back to close)
+            exit_sell = sum(
+                float(l.get("exit_price") or l.get("current_close_price") or l.get("current_price") or 0.0)
+                for l in exit_legs
+                if str(l.get("exit_side", "")).upper() == "SELL"
+                or (not l.get("exit_side") and str(l.get("side", "")).upper() == "BUY")
+            )
+            stt = (entry_sell + exit_sell) * qty * self.stt_sell_rate
+        else:
+            # Approximation without leg prices — understates entry STT, overstates exit STT
+            stt = (entry_turnover + exit_turnover) * self.stt_sell_rate
+
         exchange_txn = total_turnover * self.exchange_txn_rate
         sebi = total_turnover * self.sebi_rate
         stamp_duty = entry_turnover * self.stamp_duty_rate
@@ -1970,6 +1989,8 @@ class IronCondorStrategy:
         entry_premium: float,
         exit_premium: float,
         qty: int,
+        entry_legs: list[dict] | None = None,
+        exit_legs: list[dict] | None = None,
     ) -> dict[str, float | bool]:
         if not entry_premium or entry_premium <= 0:
             logger.error("Invalid entry premium: %s", entry_premium)
@@ -1990,6 +2011,8 @@ class IronCondorStrategy:
             entry_premium=entry_premium,
             exit_premium=exit_premium,
             qty=qty,
+            entry_legs=entry_legs,
+            exit_legs=exit_legs,
         )
         platform_fee = float(getattr(self.settings, "ic_platform_charges", 0.0) or 0.0)
         total_charges = float(charges["total_charges"]) + platform_fee
