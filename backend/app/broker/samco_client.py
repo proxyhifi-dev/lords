@@ -305,7 +305,8 @@ class SamcoClient:
                     "SAMCO credentials are placeholders. Update .env before live/data mode."
                 )
 
-            logger.info("SAMCO login user=%s", settings.samco_user_id)
+            _uid = str(settings.samco_user_id or "")
+            logger.info("SAMCO login user=%s", _uid[:3] + "***" if len(_uid) > 3 else "***")
             body: dict[str, Any] = {
                 "userId": settings.samco_user_id,
                 "password": settings.samco_password,
@@ -588,6 +589,9 @@ class SamcoClient:
 
                 if status in {"COMPLETE", "FILLED", "TRADED", "EXECUTED"}:
                     avg = await self.get_actual_fill_price(order_id)
+                    if avg is not None and avg < 0:
+                        logger.error("Invalid negative fill price=%.4f order=%s", avg, order_id)
+                        avg = None
                     return "FILLED", requested_qty, avg
 
                 if status in {"REJECTED", "CANCELLED", "CANCELED"}:
