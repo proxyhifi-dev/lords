@@ -57,6 +57,7 @@ class ExecutionManager:
         self.reconciliation = reconciliation
         self.max_retries = max_retries
         self.base_backoff = base_backoff
+        self._paper_order_seq = 0
 
     def _is_paper_mode(self) -> bool:
         return str(getattr(settings, "mode", "paper")).strip().lower() == "paper"
@@ -88,7 +89,8 @@ class ExecutionManager:
         if avg_price is not None and avg_price <= 0:
             avg_price = None
 
-        paper_order_id = f"PAPER-{side}-{symbol}-{qty}"
+        self._paper_order_seq += 1
+        paper_order_id = f"PAPER-{side}-{symbol}-{qty}-{self._paper_order_seq}"
         logger.info(
             "PAPER MODE: simulated order symbol=%s side=%s qty=%d avg_price=%s",
             symbol, side, qty,
