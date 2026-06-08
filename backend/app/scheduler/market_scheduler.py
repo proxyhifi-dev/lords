@@ -980,11 +980,19 @@ class MarketScheduler:
                 self.broker.get_india_vix(),
                 timeout=self.broker_quote_timeout_seconds,
             )
-            if iv and 0.05 <= iv <= 1.00:  # sanity: VIX between 5% and 100%
+            # Issue #19: bounds are configurable; defaults 5%–100% cover all realistic regimes
+            _iv_min = float(getattr(settings, "ic_min_live_iv", 0.05) or 0.05)
+            _iv_max = float(getattr(settings, "ic_max_live_iv", 1.00) or 1.00)
+            if iv and _iv_min <= iv <= _iv_max:
                 self._vix_cache = iv
                 self._vix_cache_ts = now_ts
-                logger.debug("India VIX refreshed iv=%.4f", iv)
+                logger.debug("India VIX refreshed iv=%.4f (bounds=%.2f-%.2f)", iv, _iv_min, _iv_max)
                 return iv
+            if iv:
+                logger.warning(
+                    "India VIX %.4f rejected: outside configured bounds [%.2f, %.2f]",
+                    iv, _iv_min, _iv_max,
+                )
         except Exception as exc:
             logger.debug("India VIX fetch skipped: %s", exc)
         return None
@@ -1004,9 +1012,9 @@ class MarketScheduler:
             rounding = int(getattr(strategy, "strike_rounding", 50)) if strategy else 50
             atm = int(round(spot / rounding) * rounding)
             today_ist = now_ist().date()
-            expiry = get_weekly_expiry(today_ist).strftime("%Y-%m-%d")
-            from datetime import date as _date
-            dte_days = (_date.fromisoformat(expiry) - today_ist).days
+            expiry_date = get_weekly_expiry(today_ist)
+            expiry = expiry_date.strftime("%Y-%m-%d")
+            dte_days = (expiry_date - today_ist).days
             if dte_days <= 0:
                 return None
 
@@ -1041,9 +1049,17 @@ class MarketScheduler:
                 return None
 
             iv = strategy.implied_vol(ce_price, spot, atm, float(dte_days), "CE")
-            if iv and 0.05 <= iv <= 1.00:
+            # Issue #19: use same configurable bounds as VIX fetch
+            _iv_min = float(getattr(settings, "ic_min_live_iv", 0.05) or 0.05)
+            _iv_max = float(getattr(settings, "ic_max_live_iv", 1.00) or 1.00)
+            if iv and _iv_min <= iv <= _iv_max:
                 logger.debug("ATM implied vol from CE price=%.2f iv=%.4f", ce_price, iv)
                 return iv
+            if iv:
+                logger.warning(
+                    "ATM implied vol %.4f rejected: outside bounds [%.2f, %.2f]",
+                    iv, _iv_min, _iv_max,
+                )
         except Exception as exc:
             logger.debug("ATM implied vol fetch skipped: %s", exc)
         return None
