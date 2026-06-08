@@ -344,7 +344,7 @@ class TradeStore:
             stamp_duty_rate = self._setting_float("stamp_duty_rate", 0.0)
 
         turnover = (entry + exit_) * quantity
-        stt = entry * quantity * stt_rate
+        stt = exit_ * quantity * stt_rate
         exchange_fee = turnover * exchange_rate
         stamp_duty = entry * quantity * stamp_duty_rate
         gst = (brokerage + exchange_fee) * gst_rate
@@ -1026,6 +1026,14 @@ class TradeStore:
                     writer.writerow(row)
                     fh.flush()
                     os.fsync(fh.fileno())
+                try:
+                    dir_fd = os.open(str(self._file.parent), os.O_RDONLY)
+                    try:
+                        os.fsync(dir_fd)
+                    finally:
+                        os.close(dir_fd)
+                except (AttributeError, NotImplementedError, OSError):
+                    pass
             except Exception as exc:
                 logger.error("TradeStore write failed: %s", exc)
 
