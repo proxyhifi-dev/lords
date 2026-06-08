@@ -140,7 +140,7 @@ class TradingEngine:
 
         # Rolling market-tick history for trend and IV-rank computation.
         self._spot_history: deque[float] = deque(maxlen=60)   # ~60 s at 1-s poll
-        self._engine_iv_history: deque[float] = deque(maxlen=120)  # ~2 min
+        self._engine_iv_history: deque[float] = deque(maxlen=21600)  # full 6-hr session at 1-s poll
         self._session_open_spot: float | None = None
         self._session_open_date: object | None = None  # datetime.date
 
@@ -148,6 +148,7 @@ class TradingEngine:
         self._ic_fallback_alert_level = 0
         self._directional_bad_quote_streak = 0
         self._directional_bad_quote_alert_level = 0
+        self._paper_order_seq = 0  # Issue #39: monotonic counter for unique paper order IDs
 
         self.iron_condor_strategy: IronCondorStrategy | None = None
         if settings.strategy_type == "iron_condor":
@@ -325,8 +326,10 @@ class TradingEngine:
         )
 
     def _paper_safe_order_id(self, prefix: str, symbol: str) -> str:
+        # Issue #39: include monotonic seq so two orders in the same second get distinct IDs
+        self._paper_order_seq += 1
         timestamp = int(datetime.now(timezone.utc).timestamp())
-        return f"PAPER-{prefix}-{symbol}-{timestamp}"
+        return f"PAPER-{prefix}-{symbol}-{timestamp}-{self._paper_order_seq}"
 
     async def _paper_quote_price(self, symbol: str, fallback: float = 0.0) -> float:
         if not self._broker_available():
@@ -895,16 +898,19 @@ class TradingEngine:
         if effective_dte and effective_iv:
             trend_strength = self._compute_trend_strength()
             iv_rank = self._compute_session_iv_rank(effective_iv)
+            # Issue #1: _compute_session_iv_rank() returns 0-1 but score_entry()
+            # expects 0-100 scale (thresholds like 30.0, 65.0). Multiply here.
+            iv_rank_pct = (iv_rank * 100.0) if iv_rank is not None else None
             logger.info(
                 "IC score gate inputs: trend_strength=%.3f iv_rank=%s",
                 trend_strength,
-                f"{iv_rank:.3f}" if iv_rank is not None else "N/A (insufficient history)",
+                f"{iv_rank_pct:.1f}" if iv_rank_pct is not None else "N/A (insufficient history)",
             )
             entry_score = self.iron_condor_strategy.score_entry(
                 spot=spot,
                 iv=effective_iv,
                 dte_days=float(effective_dte),
-                iv_rank=iv_rank,
+                iv_rank=iv_rank_pct,
                 trend_strength=trend_strength,
             )
             if not entry_score.get("entry_ok", True):
@@ -914,7 +920,7 @@ class TradingEngine:
                     entry_score.get("verdict", "unknown"),
                     entry_score.get("pop", 0.0),
                     trend_strength,
-                    f"{iv_rank:.3f}" if iv_rank is not None else "N/A",
+                    f"{iv_rank_pct:.1f}" if iv_rank_pct is not None else "N/A",
                 )
                 await self.event_bus.publish(
                     "IC_ENTRY_REJECTED",
@@ -952,12 +958,22 @@ class TradingEngine:
         # Deduct estimated bid-ask slippage (per leg × 4 legs) from the quoted
         # net premium so viability checks reflect realistic fill prices.
         slippage_per_leg = float(getattr(settings, "ic_slippage_per_leg", 3.0) or 3.0)
-        slippage_adjusted_premium = snapshot_net_premium - (4 * slippage_per_leg)
+        total_slippage = 4 * slippage_per_leg
+        if total_slippage >= snapshot_net_premium:
+            # Issue #26: slippage ≥ raw premium would produce zero/negative adjusted value
+            logger.warning(
+                "IC entry aborted: total slippage %.2f >= raw premium %.2f — unrealistic quote",
+                total_slippage,
+                snapshot_net_premium,
+            )
+            return
+        slippage_adjusted_premium = snapshot_net_premium - total_slippage
         logger.info(
-            "IC entry: raw_premium=%.2f slippage_adj=%.2f (slippage/leg=%.1f)",
+            "IC entry: raw_premium=%.2f slippage_adj=%.2f (slippage/leg=%.1f total=%.1f)",
             snapshot_net_premium,
             slippage_adjusted_premium,
             slippage_per_leg,
+            total_slippage,
         )
 
         abs_min_premium = max(self.iron_condor_strategy.min_premium, 10.0)
@@ -1100,6 +1116,7 @@ class TradingEngine:
             "spot_at_entry": float(spot),
             "iv_at_entry": float(live_iv or 0.0),
             "dte_at_entry": int(dte_days or getattr(settings, "ic_days_to_expiry", 7)),
+            "iv_rank_at_entry": round(regime_iv_rank * 100.0, 1) if regime_iv_rank is not None else None,  # Issue #13
             "status": "OPEN",
             "size_label": payload.get("size_label", "FULL"),
             "order_ids": order_ids,
@@ -1468,7 +1485,8 @@ class TradingEngine:
             net_pnl = round(float(pnl.get("net_pnl", gross_pnl - total_charges)), 2)
 
             charge_breakdown = {
-                "brokerage": round(float(pnl.get("platform_charges", 0.0)), 2),
+                "brokerage": round(float(pnl.get("brokerage", 0.0)), 2),           # Issue #22: was incorrectly reading platform_charges
+                "platform_charges": round(float(pnl.get("platform_charges", 0.0)), 2),
                 "stt": round(float(pnl.get("stt", 0.0)), 2),
                 "exchange_txn": round(float(pnl.get("exchange_txn", 0.0)), 2),
                 "sebi": round(float(pnl.get("sebi", 0.0)), 2),
@@ -1478,6 +1496,10 @@ class TradingEngine:
             }
 
             new_daily = round(float(state.daily_pnl or 0.0) + net_pnl, 2)
+            # Issue #6: update high-water mark so soft/hard drawdown gates track real peak
+            _current_peak = float(getattr(state, "peak_equity", 0.0) or settings.capital)
+            _equity_now = settings.capital + new_daily
+            new_peak_equity = max(_current_peak, _equity_now)
             now_utc = datetime.now(timezone.utc).isoformat()
             today_ist = datetime.now(IST).date().isoformat()
             pricing_source = (
@@ -1496,6 +1518,7 @@ class TradingEngine:
                 "exit_time": now_utc,
                 "exit_reason": reason,
                 "reason": reason,
+                "consecutive_losses_before_exit": int(getattr(state, "consecutive_losses", 0)),  # Issue #30
                 "exit_price": round(float(actual_exit_premium), 2),
                 "exit_premium": round(float(actual_exit_premium), 2),
                 "current_premium": round(float(actual_exit_premium), 2),
@@ -1540,6 +1563,7 @@ class TradingEngine:
                 active_trade=None,
                 daily_pnl=new_daily,
                 live_pnl=0.0,
+                peak_equity=new_peak_equity,          # Issue #6: maintain high-water mark
                 consecutive_losses=self._next_consecutive_losses(
                     state.consecutive_losses,
                     net_pnl,
