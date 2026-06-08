@@ -868,7 +868,7 @@ class TradingEngine:
             logger.error("Invalid strikes calculated - skipping entry")
             return
 
-        short_distance_used = abs(int(strikes.get("short_call", 0)) - int(spot))
+        short_distance_used = abs(int(strikes.get("short_call", 0)) - round(spot))
         em_safe, em_diag = self.iron_condor_strategy.is_expected_move_safe(
             spot=spot,
             short_distance=short_distance_used,
@@ -1195,7 +1195,10 @@ class TradingEngine:
         }
 
         for leg in trade.get("legs", []):
-            exit_side = "BUY" if leg["side"] == "SELL" else "SELL"
+            if not isinstance(leg, dict):
+                logger.warning("IC exit: skipping non-dict leg=%r", leg)
+                continue
+            exit_side = "BUY" if leg.get("side") == "SELL" else "SELL"
             qty = _to_int(leg.get("filled_qty") or leg.get("qty"), 0)
 
             result = await self.execution_manager.execute_order(
@@ -1815,7 +1818,7 @@ class TradingEngine:
             settings.mode.upper(),
         )
 
-        t1_qty = filled_qty // 2
+        t1_qty = filled_qty // 2 if filled_qty >= 2 else 0
         t2_qty = filled_qty - t1_qty
 
         trade = {
@@ -2027,8 +2030,9 @@ class TradingEngine:
                 "IC live snapshot failed; using model fallback: %s",
                 exc,
             )
+            _ep = _to_float(trade.get("entry_price"), 0.0)
             current_premium = self.iron_condor_strategy.estimate_current_premium(
-                trade["entry_price"],
+                _ep,
                 entry_time,
                 current_time,
             )
@@ -2036,7 +2040,7 @@ class TradingEngine:
             pricing_source = "model_fallback"
 
         pnl_snapshot = self.iron_condor_strategy.compute_pnl(
-            float(trade["entry_price"]),
+            float(_to_float(trade.get("entry_price"), 0.0)),
             float(current_premium),
             int(trade.get("qty", 0) or 0),
         )
@@ -2050,6 +2054,9 @@ class TradingEngine:
             "current_spot": spot or float(trade.get("spot_at_entry") or 0.0),
         }
 
+        # C1: guard against overwriting CLOSING/CLOSED status set by concurrent exit
+        if updated_trade.get("exit_in_progress") or updated_trade.get("status") in ("CLOSED", "CLOSING"):
+            return
         await self.state_manager.update(active_trade=updated_trade, live_pnl=live_pnl)
 
         # Compute live DTE from the trade's stored expiry so get_exit_reason can
@@ -2226,7 +2233,10 @@ class TradingEngine:
                 context={"symbol": trade.get("symbol")},
             )
 
-            entry = trade["entry_price"]
+            entry = _to_float(trade.get("entry_price"), None)
+            if entry is None:
+                logger.warning("Directional monitor: missing entry_price — skipping tick")
+                return
             t1_booked = trade.get("t1_booked", False)
 
             sl_price = trade.get("sl_price", round(entry * (1 - settings.stop_loss_pct), 2))
