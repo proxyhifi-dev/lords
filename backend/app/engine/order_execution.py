@@ -482,6 +482,11 @@ class ExpiryDaySafetyProtocol:
             return True, reason
 
         safe_deadline = self.get_safe_exit_deadline(entry_time)
+        # Ensure timezone consistency to prevent TypeError on comparison
+        if current_time.tzinfo is not None and safe_deadline.tzinfo is None:
+            safe_deadline = safe_deadline.replace(tzinfo=current_time.tzinfo)
+        elif current_time.tzinfo is None and safe_deadline.tzinfo is not None:
+            safe_deadline = safe_deadline.replace(tzinfo=None)
 
         if current_time >= safe_deadline:
             reason = f"EOD_SAFETY_EXIT deadline reached: {safe_deadline.isoformat()}"
