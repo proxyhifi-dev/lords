@@ -44,22 +44,22 @@ class IronCondorStrategy:
         self.target_profit_pct = self._cfg_float(
             "IC_TARGET_PROFIT_PCT",
             "ic_target_profit_pct",
-            0.25,
+            0.35,                          # Issue #9: align with config_loader default
             aliases=("IC_TARGET_PROFIT",),
         )
         self.stop_loss_multiple = self._cfg_float(
             "IC_STOP_LOSS_MULTIPLE",
             "ic_stop_loss_multiple",
-            1.35,
+            1.60,                          # Issue #10: align with config_loader default
         )
         self.extreme_loss_multiple = self._cfg_float(
             "IC_EXTREME_LOSS_MULTIPLE",
             "ic_extreme_loss_multiple",
-            1.80,
+            2.40,                          # Issue #10: align with config_loader default
         )
 
-        self.short_distance = self._cfg_int("IC_SHORT_DISTANCE", "ic_short_distance", 250)
-        self.wing_width = self._cfg_int("IC_WING_WIDTH", "ic_wing_width", 150)
+        self.short_distance = max(0, self._cfg_int("IC_SHORT_DISTANCE", "ic_short_distance", 250))   # Issue #38
+        self.wing_width = max(0, self._cfg_int("IC_WING_WIDTH", "ic_wing_width", 150))               # Issue #38
         self.strike_rounding = max(
             1,
             self._cfg_int("IC_STRIKE_ROUNDING", "ic_strike_rounding", 50),
@@ -168,16 +168,16 @@ class IronCondorStrategy:
         )
 
         self.assumed_iv = self._cfg_float("IC_ASSUMED_IV", "ic_assumed_iv", 0.15)
-        self.decay_rate = self._cfg_float("IC_DECAY_RATE", "ic_decay_rate", 0.08)
+        self.decay_rate = self._cfg_float("IC_DECAY_RATE", "ic_decay_rate", 0.15)        # Issue #3: align with config_loader default
         self.min_decay_factor = self._cfg_float(
             "IC_MIN_DECAY_FACTOR",
             "ic_min_decay_factor",
-            0.45,
+            0.70,                          # Issue #4: align with config_loader default
         )
         self.max_loss_per_trade = self._cfg_float(
             "IC_MAX_LOSS_PER_TRADE",
             "ic_max_loss_per_trade",
-            2500.0,
+            3000.0,                        # align with config_loader default
         )
         self.eod_decision_time = self._parse_time(
             self._cfg("IC_EOD_DECISION_TIME", "ic_eod_decision_time", "14:35"),
@@ -229,7 +229,7 @@ class IronCondorStrategy:
         self.stt_sell_rate = self._cfg_float(
             "IC_STT_SELL_RATE",
             "ic_stt_sell_rate",
-            0.0005,
+            0.0015,                        # Issue #2: 0.15% sell-side STT from Apr 2026 (Finance Act 2025)
             aliases=("IC_STT_RATE",),
         )
         self.exchange_txn_rate = self._cfg_float(
@@ -434,7 +434,8 @@ class IronCondorStrategy:
             hour, minute = map(int, text.split(":")[:2])
             return time(hour, minute)
         except Exception as exc:
-            logger.error("Failed to parse time %r: %s", value, exc)
+            # Issue #37: warn (not error) so operators notice the bad config value
+            logger.warning("Invalid time config %r — using default %s: %s", value, default, exc)
             return default
 
     def _to_ist(self, value: datetime) -> datetime:
@@ -536,7 +537,9 @@ class IronCondorStrategy:
             delta = nd1 - 1.0
 
         gamma = pdf_d1 / (spot * iv * sqrt_t) if (spot * iv * sqrt_t) > 0 else 0.0
-        vega = spot * pdf_d1 * sqrt_t / 100.0          # ₹ per 1% IV
+        # Issue #32: vega = ₹ per 1 vol-point (1% absolute IV change, i.e. Δsigma_decimal=0.01).
+        # Newton-Raphson in implied_vol() multiplies by 100 to convert to ∂P/∂sigma_decimal.
+        vega = spot * pdf_d1 * sqrt_t / 100.0
         theta_daily = -(spot * pdf_d1 * iv) / (2.0 * sqrt_t) / 365.0  # daily ₹
 
         return {
@@ -1161,7 +1164,10 @@ class IronCondorStrategy:
             )
             return "SPOT_BREACHED_SHORT_PUT"
 
-        nearest = min(distance_to_call, distance_to_put)
+        # Issue #28: use absolute distances so a slight overshoot (negative signed
+        # distance just below tick_buffer) does not produce a negative "nearest"
+        # that always satisfies the danger_points threshold.
+        nearest = min(abs(distance_to_call), abs(distance_to_put))
 
         if nearest <= danger_points:
             logger.warning(
