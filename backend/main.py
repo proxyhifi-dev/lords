@@ -166,12 +166,12 @@ def _derive_exit_premium_from_legs(row: dict[str, Any]) -> float | None:
 
 def _derive_entry_premium_from_legs(row: dict[str, Any]) -> float | None:
     legs = _normalize_legs_for_dashboard(
-        row.get("exit_legs")
+        row.get("legs")
+        or row.get("legs_json")
         or row.get("current_legs")
+        or row.get("exit_legs")
         or row.get("closed_legs")
         or row.get("exit_legs_json")
-        or row.get("legs")
-        or row.get("legs_json")
     )
     if not legs:
         return None
