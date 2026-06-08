@@ -7,6 +7,7 @@ All pure functions — no side effects.
 """
 from __future__ import annotations
 import math
+import statistics
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -17,11 +18,11 @@ def _ncdf(x: float) -> float:
 def bsm_price(S,K,T,r,sigma,opt="CE") -> float:
     if T <= 0:
         intrinsic = max(S-K,0) if opt=="CE" else max(K-S,0)
-        return max(intrinsic, 0.05)
+        return max(intrinsic, 0.01)
     d1 = (math.log(S/K) + (r + 0.5*sigma**2)*T) / (sigma*math.sqrt(T))
     d2 = d1 - sigma*math.sqrt(T)
-    if opt=="CE": return max(S*_ncdf(d1) - K*math.exp(-r*T)*_ncdf(d2), 0.05)
-    return max(K*math.exp(-r*T)*_ncdf(-d2) - S*_ncdf(-d1), 0.05)
+    if opt=="CE": return max(S*_ncdf(d1) - K*math.exp(-r*T)*_ncdf(d2), 0.01)
+    return max(K*math.exp(-r*T)*_ncdf(-d2) - S*_ncdf(-d1), 0.01)
 
 def calibrated_iv(dte: int) -> float:
     if dte<=1: return 0.07
@@ -37,7 +38,7 @@ def bsm_ask(S,K,dte,opt,spread=2.0) -> float:
 
 def bsm_bid(S,K,dte,opt,spread=2.0) -> float:
     T = max(dte/365, 1/365)
-    return round(max(bsm_price(S,K,T,0.065,calibrated_iv(dte),opt)-spread, 0.05), 2)
+    return round(max(bsm_price(S,K,T,0.065,calibrated_iv(dte),opt)-spread, 0.01), 2)
 
 @dataclass
 class Greeks:
@@ -63,10 +64,10 @@ def expected_value(wr,avg_win,avg_loss) -> float:
     return round(wr*avg_win + (1-wr)*avg_loss, 2)
 
 def profit_factor(gross_wins,gross_losses) -> float:
-    return round(abs(gross_wins/gross_losses), 3) if gross_losses else float("inf")
+    return round(abs(gross_wins/gross_losses), 3) if gross_losses else 9999.0
 
 def reward_risk_ratio(avg_win,avg_loss) -> float:
-    return round(avg_win/abs(avg_loss), 3) if avg_loss else float("inf")
+    return round(avg_win/abs(avg_loss), 3) if avg_loss else 9999.0
 
 # ── Kelly Criterion ──────────────────────────────────────
 def kelly_fraction(wr,rr) -> float:
@@ -78,27 +79,25 @@ def half_kelly(wr,rr) -> float:
     return round(kelly_fraction(wr,rr)/2, 4)
 
 def kelly_position_size(capital,wr,avg_win,avg_loss) -> float:
-    if not avg_loss: return 0.0
+    if not avg_loss or abs(avg_loss) < 1e-9: return 0.0
     rr = avg_win/abs(avg_loss)
     k  = half_kelly(wr,rr)
     return round(capital*k, 2)
 
 # ── Sharpe / Sortino ─────────────────────────────────────
 def sharpe_ratio(returns, tpy=50.0, rfr=0.065) -> float:
-    import statistics
     if len(returns)<2: return 0.0
     mu = statistics.mean(returns); sd = statistics.stdev(returns)
-    if sd==0: return 0.0
+    if sd < 1e-8: return 0.0
     return round((mu - rfr/tpy)/sd*math.sqrt(tpy), 3)
 
 def sortino_ratio(returns, tpy=50.0, rfr=0.065) -> float:
-    import statistics
     if len(returns)<2: return 0.0
     mu  = statistics.mean(returns)
     neg = [r for r in returns if r<0]
-    if len(neg)<2: return float("inf")
+    if len(neg)<2: return 0.0
     dsd = statistics.stdev(neg)
-    if dsd==0: return 0.0
+    if dsd < 1e-8: return 0.0
     return round((mu - rfr/tpy)/dsd*math.sqrt(tpy), 3)
 
 # ── Drawdown ─────────────────────────────────────────────
@@ -109,6 +108,8 @@ class DrawdownStats:
 
 def drawdown_analysis(pnl_series, capital=50000.0, months=6.0) -> DrawdownStats:
     if not pnl_series: return DrawdownStats(0,0,0,0)
+    if capital <= 0: capital = 50000.0
+    if months <= 0: months = 6.0
     equity=[0.0]
     for p in pnl_series: equity.append(equity[-1]+p)
     peak=equity[0]; max_dd=0.0
@@ -163,8 +164,8 @@ def full_analytics(pnl_series, capital=50000.0, brokerage=94.4) -> StrategyAnaly
     rr=reward_risk_ratio(aw,al)
     pf=profit_factor(sum(wins),sum(losses))
     sh=sharpe_ratio(list(pnl_series)); so=sortino_ratio(list(pnl_series))
-    kf=kelly_fraction(wr,rr if rr!=float("inf") else 999)
-    hk=half_kelly(wr,rr if rr!=float("inf") else 999)
+    kf=kelly_fraction(wr,rr if rr < 9999.0 else 999)
+    hk=half_kelly(wr,rr if rr < 9999.0 else 999)
     ev=expected_value(wr,aw,al)
     cr=capital_requirement(max_drawdown=abs(dd.max_drawdown))
     return StrategyAnalytics(
