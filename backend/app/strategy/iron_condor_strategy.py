@@ -876,7 +876,7 @@ class IronCondorStrategy:
         # recent range (rank >= 0.50). Below this the credit is historically thin
         # and reward/risk is poor for short-premium strategies.
         if iv_rank is not None:
-            min_iv_rank = float(getattr(settings, "ic_min_iv_rank", 0.50))
+            min_iv_rank = float(getattr(self.settings, "ic_min_iv_rank", 0.50))
             diagnostics["iv_rank"] = round(iv_rank, 3)
             diagnostics["min_iv_rank"] = round(min_iv_rank, 3)
             if iv_rank < min_iv_rank:
@@ -1657,7 +1657,7 @@ class IronCondorStrategy:
         # Weekly NIFTY Tuesday expiry concentrates extreme gamma Monday-Tuesday;
         # holding through this window is the leading cause of condor blow-ups.
         if dte_days is not None:
-            force_exit_dte = float(getattr(settings, "ic_force_exit_dte", 1.0))
+            force_exit_dte = float(getattr(self.settings, "ic_force_exit_dte", 1.0))
             if dte_days < force_exit_dte:
                 logger.warning(
                     "GAMMA_RISK_EXIT: dte_days=%.2f < threshold=%.2f", dte_days, force_exit_dte
@@ -2138,4 +2138,3 @@ class IronCondorStrategy:
             "net_pnl": 0.0,
             "risk_breached": False,
         }
-
