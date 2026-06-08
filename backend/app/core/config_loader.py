@@ -185,6 +185,7 @@ class Settings:
     ic_blackout_dates: str = ""
 
     ic_target_short_delta: float = 0.16  # 16-delta ≈ 80% PoP; better premium vs 10-delta
+    ic_min_entry_score: float = 60.0    # composite entry score gate (0-100); below this = no entry
     ic_slippage_per_leg: float = 3.0  # pts deducted per leg for bid-ask slippage
     ic_brokerage_per_order: float = 20.0
     ic_entry_order_count: int = 4
@@ -438,6 +439,7 @@ def get_settings() -> Settings:
         ic_blackout_dates=_strip_value(_get(combined, "IC_BLACKOUT_DATES", default="")),
 
         ic_target_short_delta=_parse_float(_get(combined, "IC_TARGET_SHORT_DELTA", default=0.16), 0.16),
+        ic_min_entry_score=_parse_float(_get(combined, "IC_MIN_ENTRY_SCORE", default=60.0), 60.0),
         ic_slippage_per_leg=_parse_float(_get(combined, "IC_SLIPPAGE_PER_LEG", default=3.0), 3.0),
         ic_brokerage_per_order=_parse_float(_get(combined, "IC_BROKERAGE_PER_ORDER", default=20.0), 20.0),
         ic_entry_order_count=_parse_int(_get(combined, "IC_ENTRY_ORDER_COUNT", default=4), 4),
