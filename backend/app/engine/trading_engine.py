@@ -417,8 +417,61 @@ class TradingEngine:
             rows = self._extract_chain_rows(chain)
 
         if not rows:
-            logger.error("IC option chain empty: strike=%s type=%s", strike, option_type)
-            return None
+            samco_expiry = self._format_samco_expiry(expiry)
+            if samco_expiry and samco_expiry != expiry:
+                logger.info(
+                    "Retrying IC option chain with SAMCO expiry format: %s -> %s",
+                    expiry,
+                    samco_expiry,
+                )
+                chain = await self.broker.get_option_chain(
+                    search_symbol_name=settings.nifty_symbol,
+                    exchange="NFO",
+                    expiry_date=samco_expiry,
+                    strike_price=str(strike),
+                    option_type=option_type,
+                )
+                rows = self._extract_chain_rows(chain) if chain else []
+
+                if not rows:
+                    chain = await self.broker.get_option_chain(
+                        search_symbol_name=settings.nifty_symbol,
+                        exchange="NFO",
+                        expiry_date=samco_expiry,
+                        strike_price="0",
+                        option_type=option_type,
+                    )
+                    rows = self._extract_chain_rows(chain)
+
+            if not rows:
+                response_keys = list(chain.keys()) if isinstance(chain, dict) else []
+                validation_errors = chain.get("validationErrors") if isinstance(chain, dict) else None
+                response_status = chain.get("status") if isinstance(chain, dict) else None
+                status_message = chain.get("statusMessage") if isinstance(chain, dict) else None
+                logger.error(
+                    "IC option chain empty: strike=%s type=%s expiry=%s response_keys=%s status=%s status_message=%s validation_errors=%s",
+                    strike,
+                    option_type,
+                    expiry,
+                    response_keys,
+                    response_status,
+                    status_message,
+                    validation_errors,
+                )
+
+                synthetic_symbol = self._build_samco_option_symbol(strike, option_type, expiry)
+                if synthetic_symbol:
+                    logger.warning(
+                        "Using synthetic IC option symbol after empty option chain: strike=%s type=%s expiry=%s symbol=%s",
+                        strike,
+                        option_type,
+                        expiry,
+                        synthetic_symbol,
+                    )
+                    self._symbol_cache[key] = synthetic_symbol
+                    return synthetic_symbol
+
+                return None
 
         best_symbol = None
         best_diff = float("inf")
@@ -439,6 +492,32 @@ class TradingEngine:
             logger.error("No valid IC symbol near strike=%s type=%s", strike, option_type)
 
         return best_symbol
+
+    @staticmethod
+    def _format_samco_expiry(expiry: str | None) -> str | None:
+        if not expiry:
+            return None
+        try:
+            return datetime.fromisoformat(str(expiry)).date().strftime("%d-%b-%Y").upper()
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _build_samco_option_symbol(strike: int, option_type: str, expiry: str | None) -> str | None:
+        if not expiry:
+            return None
+        try:
+            expiry_tag = datetime.fromisoformat(str(expiry)).date().strftime("%d%b%y").upper()
+        except ValueError:
+            try:
+                expiry_tag = datetime.strptime(str(expiry).upper(), "%d-%b-%Y").date().strftime("%d%b%y").upper()
+            except ValueError:
+                return None
+
+        root = str(settings.nifty_symbol or "NIFTY").upper().replace(" ", "")
+        if root.startswith("NIFTY"):
+            root = "NIFTY"
+        return f"{root}{expiry_tag}{int(strike)}{str(option_type).upper()}"
 
     async def _get_leg_quote_snapshot(self, symbol: str) -> tuple[dict, float, float, float]:
         if not self._broker_available():
